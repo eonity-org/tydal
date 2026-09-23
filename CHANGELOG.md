@@ -6,7 +6,16 @@ All notable changes to TYDAL are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-09-23
+
+First public release of TYDAL — a multi-tenant, schema-driven semantic knowledge
+system that projects immutable **Resources** through contextual **Vaults** with
+tiered AI-interaction surfaces (REST, MCP, embeddings, graph). Internally this is
+the "v2" architecture (the CDN delivery layer promoted to the Vault projection
+layer); as a shipped product it is version 1.0.0.
+
 ### Added
+
 - **Collection creation provisions its own ES index.** `CollectionService::createCollection`
   now calls the same logic as `search:setup-indices` (mapping + `_chunks`
   companion) the moment a collection is created — through the admin UI, or
@@ -25,7 +34,8 @@ All notable changes to TYDAL are documented here. The format follows
 - **The Basket** — one persistent, inspectable multi-select for the dashboard,
   identical in grid and list, surviving paging, filters and scope changes;
   reviewable at `/basket`, with **Save as workspace** to graduate it. Replaces the
-  list-only transient selection. See [Basket & Bulk Actions](docs/architecture/BASKET_AND_BULK_ACTIONS.md).
+  list-only transient selection. See
+  [Basket & Bulk Actions](docs/architecture/BASKET_AND_BULK_ACTIONS.md).
 - **Bulk actions** — `bulk-attach` / `bulk-detach` workspace membership, bulk
   lifecycle `state`, and additive/subtractive bulk semantic tagging, each capped
   at 200 ids with a partial-success report (`requested` / `applied` / `skipped`)
@@ -43,10 +53,12 @@ All notable changes to TYDAL are documented here. The format follows
   list; controls the role will never grant are hidden, contextual blocks are
   disabled with a reason, and the server 403 remains the backstop.
 - Docs: [Roles & Permissions](docs/architecture/ROLES_AND_PERMISSIONS.md),
-  [Basket & Bulk Actions](docs/architecture/BASKET_AND_BULK_ACTIONS.md); visibility, cloning
-  and editing rules added to [Schema Field Contract](docs/architecture/SCHEMA_FIELDS.md).
+  [Basket & Bulk Actions](docs/architecture/BASKET_AND_BULK_ACTIONS.md); visibility,
+  cloning and editing rules added to
+  [Schema Field Contract](docs/architecture/SCHEMA_FIELDS.md).
 
 ### Changed
+
 - **Migrations re-consolidated to one baseline.** All migrations since the
   2026-06-01 baseline (vault org scoping, vault keys, resource embeddings,
   per-resource link slugs, schema overlays, per-vault indexing, the resource
@@ -79,6 +91,7 @@ All notable changes to TYDAL are documented here. The format follows
   synchronous write was invisible to the next search for up to a second.
 
 ### Fixed
+
 - A scheme field with `storage: column` naming anything other than `name`,
   `description` or `type` had nowhere to be written (mass assignment silently
   dropped it) and never rendered in the resource form — a required field
@@ -123,6 +136,7 @@ All notable changes to TYDAL are documented here. The format follows
   prefers the lowest (oldest) id for a given label.
 
 ### Removed
+
 - `spatie/laravel-permission` — installed but entirely inert (no `HasRoles`, no
   config, no migrations, its `Gate::before` never registered).
 - `CheckOrganizationRole`, `EnsureHasOrganization`, `SetCurrentOrganization` —
@@ -130,15 +144,8 @@ All notable changes to TYDAL are documented here. The format follows
 - The `org-admin` and `org-member` pivot roles, and `config/permissions.php`'s
   unread `resource_actions` block.
 
-## [1.0.0] — 2026-07-10
-
-First public release of TYDAL — a multi-tenant, schema-driven semantic knowledge
-system that projects immutable **Resources** through contextual **Vaults** with
-tiered AI-interaction surfaces (REST, MCP, embeddings, graph). Internally this is
-the "v2" architecture (the CDN delivery layer promoted to the Vault projection
-layer); as a shipped product it is version 1.0.0.
-
 ### Vault system — the projection boundary
+
 - **Vault entity** projecting one or more Workspaces, with five purposes:
   `delivery` (the classic CDN behavior, unchanged), `gallery`, `obsidian`,
   `ai`, and `mixed`.
@@ -159,6 +166,7 @@ layer); as a shipped product it is version 1.0.0.
   unpublished vaults.
 
 ### Schema-driven indexing
+
 - `collection_schemes.fields` as the single field contract driving dynamic
   forms, ES mappings, facets, validation, and MIME gating. Field names are
   charset-constrained (`^[a-z][a-z0-9_]*$`).
@@ -168,6 +176,7 @@ layer); as a shipped product it is version 1.0.0.
   keyword search when an index is absent.
 
 ### AI layer
+
 - **Embeddings**: per-resource mean vectors and per-chunk vectors (provider-
   pluggable — Jina / Voyage / Ollama), with a synthetic metadata chunk so every
   resource (including images) is present in vector space.
@@ -183,6 +192,7 @@ layer); as a shipped product it is version 1.0.0.
   and the vault-scoped read-only consumer surface (`@tydal/vault-mcp`).
 
 ### Experience layer
+
 - **`@tydal/client`** — the framework-agnostic TypeScript SDK that is the single
   transport for every surface (SPA, MCP, apps); no hand-rolled HTTP elsewhere.
 - **Three vault renderer apps**, each an independent build over the public vault
@@ -192,6 +202,7 @@ layer); as a shipped product it is version 1.0.0.
   vaults, keys, and signed-URL minting.
 
 ### Resource & media model
+
 - Three file roles (`canonical` / `component` / `supporting`) with defined
   metadata/text/embedding contribution semantics and audit tooling
   (`resources:audit-roles`).
@@ -199,6 +210,7 @@ layer); as a shipped product it is version 1.0.0.
   auto-tagging/enrichment through an async queue.
 
 ### Operations & tooling
+
 - Artisan lifecycle: `search:setup-indices`, `search:reindex [--vault]`,
   `search:reconcile [--fix]` (resource **and** chunk drift), `search:embed`,
   `schema:validate`, `graph:rebuild`, `mcp:token`.
@@ -206,6 +218,7 @@ layer); as a shipped product it is version 1.0.0.
   `seed-vault.sh`, `reindex.sh`, `loadtest.sh`.
 
 ### Security
+
 - Policy-based authorization with numeric roles; multi-tenant org context
   validated on the `X-Organization-ID` header.
 - Scoped API-key abilities (`read` / `ask` / `write`) with a token-management
@@ -215,6 +228,7 @@ layer); as a shipped product it is version 1.0.0.
   `ROADMAP_MILESTONES.md` §6.1.)
 
 ### Performance
+
 - O(1) query budgets on all vault listing endpoints (index, search, related,
   graph) via batched link resolution and eager snapshot loading — pinned by
   regression tests.
@@ -222,10 +236,13 @@ layer); as a shipped product it is version 1.0.0.
   per ask instead of two.
 
 ### Documentation
-- Canonical [`ARCHITECTURE_AND_ROADMAP.md`](docs/architecture/ARCHITECTURE_AND_ROADMAP.md),
+
+- Canonical
+  [`ARCHITECTURE_AND_ROADMAP.md`](docs/architecture/ARCHITECTURE_AND_ROADMAP.md),
   [`VAULT_SYSTEM.md`](docs/architecture/VAULT_SYSTEM.md),
   [`SCHEMA_FIELDS.md`](docs/architecture/SCHEMA_FIELDS.md),
-  [`MIGRATION_V1_V2.md`](docs/planning/MIGRATION_V1_V2.md), CLI guide, and OpenAPI 3.0
-  spec.
+  [`MIGRATION_V1_V2.md`](docs/planning/MIGRATION_V1_V2.md), CLI guide, and
+  OpenAPI 3.0 spec.
 
+[Unreleased]: https://github.com/eonity-org/tydal/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/eonity-org/tydal/releases/tag/v1.0.0
