@@ -1,0 +1,978 @@
+openapi: 3.0.3
+info:
+  title: TYDAL API
+  version: 1.0.0
+  description: |
+    Public route map for the TYDAL Laravel API.
+
+    The API is mounted under `/api/v1` and uses Laravel Sanctum bearer tokens.
+    Endpoint-specific payloads are validated in `app/Http/Requests` and handled
+    by controllers in `app/Http/Controllers/API`.
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+  - name: Organizations
+  - name: Workspaces
+  - name: Collections
+  - name: Categories
+  - name: Resources
+  - name: Catalogue
+  - name: Semantic Tags
+  - name: Schema
+  - name: Notifications
+  - name: AITY
+  - name: Vault
+  - name: Platform
+paths:
+  /register:
+    post:
+      tags: [Auth]
+      summary: Register a user
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+        "201": { $ref: "#/components/responses/JsonResponse" }
+  /login:
+    post:
+      tags: [Auth]
+      summary: Login and receive an API token
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+        "401": { $ref: "#/components/responses/JsonResponse" }
+  /me:
+    get:
+      tags: [Auth]
+      summary: Get the authenticated user
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /logout:
+    post:
+      tags: [Auth]
+      summary: Revoke the current token
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh the current token
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+
+  /organizations:
+    get:
+      tags: [Organizations]
+      summary: List organizations visible to the current user
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    post:
+      tags: [Organizations]
+      summary: Create an organization
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+        "201": { $ref: "#/components/responses/JsonResponse" }
+  /organizations/{id}:
+    get:
+      tags: [Organizations]
+      summary: Show an organization
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    put:
+      tags: [Organizations]
+      summary: Update an organization
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    delete:
+      tags: [Organizations]
+      summary: Delete an organization
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /organizations/{id}/switch:
+    post:
+      tags: [Organizations]
+      summary: Switch current organization
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /organizations/{id}/users:
+    get:
+      tags: [Organizations]
+      summary: List organization users
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    post:
+      tags: [Organizations]
+      summary: Add a user to an organization
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /organizations/{id}/users/{userId}:
+    put:
+      tags: [Organizations]
+      summary: Update an organization user's role
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - { $ref: "#/components/parameters/UserId" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    delete:
+      tags: [Organizations]
+      summary: Remove a user from an organization
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - { $ref: "#/components/parameters/UserId" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+
+  /workspaces:
+    get:
+      tags: [Workspaces]
+      summary: List workspaces
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    post:
+      tags: [Workspaces]
+      summary: Create a workspace
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /workspaces/aity-batches:
+    get:
+      tags: [Workspaces]
+      summary: List AITY workspace batches
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /workspaces/{id}:
+    get:
+      tags: [Workspaces]
+      summary: Show a workspace
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    put:
+      tags: [Workspaces]
+      summary: Update a workspace
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    delete:
+      tags: [Workspaces]
+      summary: Delete a workspace
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /workspaces/{id}/catalogue:
+    get:
+      tags: [Workspaces]
+      summary: Get workspace catalogue data
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /workspaces/{id}/aity-status:
+    get:
+      tags: [Workspaces]
+      summary: Get workspace AITY status
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /workspaces/{id}/mark-reviewed:
+    post:
+      tags: [Workspaces]
+      summary: Mark workspace AITY suggestions as reviewed
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /workspaces/{id}/ask:
+    post:
+      tags: [Workspaces]
+      summary: Ask a question over workspace resources
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /workspaces/{id}/resources:
+    post:
+      tags: [Workspaces]
+      summary: Add a resource to a workspace
+      description: >-
+        422 if the resource belongs to another organization: workspace
+        membership is what a vault projects, so the edge never crosses orgs.
+        Default ("All Resources") workspaces reject manual membership — theirs
+        is computed from the organization, never stored.
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /workspaces/{id}/resources/{resourceId}:
+    delete:
+      tags: [Workspaces]
+      summary: Remove a resource from a workspace
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - { $ref: "#/components/parameters/ResourceId" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /workspaces/{id}/vaults:
+    get:
+      tags: [Workspaces, Vault]
+      summary: List workspace Vaults
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    post:
+      tags: [Workspaces, Vault]
+      summary: Attach a Vault to a workspace
+      description: >-
+        422 if the vault belongs to another organization. Attaching or
+        detaching rebuilds the vault's projected index for non-delivery
+        purposes, so the membership change is visible to search immediately.
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /workspaces/{id}/vaults/{vaultId}:
+    delete:
+      tags: [Workspaces, Vault]
+      summary: Detach a Vault from a workspace
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - { $ref: "#/components/parameters/VaultId" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+
+  /collections:
+    get:
+      tags: [Collections]
+      summary: List collections
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    post:
+      tags: [Collections]
+      summary: Create a collection
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /collections/{id}:
+    get:
+      tags: [Collections]
+      summary: Show a collection
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    put:
+      tags: [Collections]
+      summary: Update a collection
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    delete:
+      tags: [Collections]
+      summary: Delete a collection
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+
+  /categories:
+    get:
+      tags: [Categories]
+      summary: List categories
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    post:
+      tags: [Categories]
+      summary: Create a category
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /categories/{id}:
+    get:
+      tags: [Categories]
+      summary: Show a category
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    put:
+      tags: [Categories]
+      summary: Update a category
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    delete:
+      tags: [Categories]
+      summary: Delete a category
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+
+  /resources:
+    get:
+      tags: [Resources]
+      summary: List resources
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    post:
+      tags: [Resources]
+      summary: Create a resource
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/aity-status:
+    get:
+      tags: [Resources, AITY]
+      summary: Get bulk resource AITY status
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/trashed:
+    get:
+      tags: [Resources]
+      summary: List trashed resources
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/trashed/purge:
+    delete:
+      tags: [Resources]
+      summary: Permanently purge trashed resources
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/trashed/restore-all:
+    patch:
+      tags: [Resources]
+      summary: Restore all trashed resources
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{id}:
+    get:
+      tags: [Resources]
+      summary: Show a resource
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    put:
+      tags: [Resources]
+      summary: Update a resource
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    delete:
+      tags: [Resources]
+      summary: Move a resource to trash
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{id}/restore:
+    patch:
+      tags: [Resources]
+      summary: Restore a trashed resource
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{id}/force:
+    delete:
+      tags: [Resources]
+      summary: Permanently delete a resource
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{id}/graph:
+    get:
+      tags: [Resources, Graph]
+      summary: Multi-hop relation neighborhood (BFS; ?depth=1..3, ?types=related,derived_from)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{id}/relations:
+    get:
+      tags: [Resources, Graph]
+      summary: List relation edges touching the resource (both directions)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    post:
+      tags: [Resources, Graph]
+      summary: Create a manual relation edge (object_id, type, weight?)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "201": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{id}/relations/{relationId}:
+    delete:
+      tags: [Resources, Graph]
+      summary: Remove a relation edge touching the resource
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{id}/files:
+    post:
+      tags: [Resources]
+      summary: Upload a file to a resource
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{id}/commit-files:
+    post:
+      tags: [Resources]
+      summary: Commit pending uploaded files
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{id}/aity-enrich:
+    post:
+      tags: [Resources, AITY]
+      summary: Trigger full resource AITY enrichment
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{id}/aity-retag:
+    post:
+      tags: [Resources, AITY]
+      summary: Re-run AITY tagging from existing extraction
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{id}/aity-approve:
+    post:
+      tags: [Resources, AITY]
+      summary: Run resource-level AITY approval
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{id}/activity:
+    get:
+      tags: [Resources]
+      summary: Get resource processing activity
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{id}/files/{fid}/aity-enrich:
+    post:
+      tags: [Resources, AITY]
+      summary: Trigger AITY enrichment for a resource file
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - { $ref: "#/components/parameters/FileIdShort" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{id}/files/{fid}/aity-status:
+    get:
+      tags: [Resources, AITY]
+      summary: Get file AITY processing status
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - { $ref: "#/components/parameters/FileIdShort" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{resourceId}/files/{fileId}:
+    patch:
+      tags: [Resources]
+      summary: Update a resource file
+      parameters:
+        - { $ref: "#/components/parameters/ResourceId" }
+        - { $ref: "#/components/parameters/FileId" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    delete:
+      tags: [Resources]
+      summary: Remove a resource file
+      parameters:
+        - { $ref: "#/components/parameters/ResourceId" }
+        - { $ref: "#/components/parameters/FileId" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{resourceId}/files/{fileId}/download:
+    get:
+      tags: [Resources]
+      summary: Download a resource file
+      parameters:
+        - { $ref: "#/components/parameters/ResourceId" }
+        - { $ref: "#/components/parameters/FileId" }
+      responses:
+        "200": { description: File download response }
+  /resources/{resourceId}/files/{fileId}/canonical:
+    patch:
+      tags: [Resources]
+      summary: Mark a file as canonical
+      parameters:
+        - { $ref: "#/components/parameters/ResourceId" }
+        - { $ref: "#/components/parameters/FileId" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{resourceId}/files/{fileId}/snapshot:
+    patch:
+      tags: [Resources]
+      summary: Mark a file as snapshot
+      parameters:
+        - { $ref: "#/components/parameters/ResourceId" }
+        - { $ref: "#/components/parameters/FileId" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{resourceId}/files/{fileId}/ai-suggestions:
+    delete:
+      tags: [Resources, AITY]
+      summary: Clear AI suggestions for a file
+      parameters:
+        - { $ref: "#/components/parameters/ResourceId" }
+        - { $ref: "#/components/parameters/FileId" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{resourceId}/ai-suggestions/restore:
+    post:
+      tags: [Resources, AITY]
+      summary: Restore processed AI suggestions for a resource
+      parameters:
+        - { $ref: "#/components/parameters/ResourceId" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{resourceId}/semantic-tags:
+    put:
+      tags: [Resources, Semantic Tags]
+      summary: Replace semantic tags on a resource
+      parameters:
+        - { $ref: "#/components/parameters/ResourceId" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/{resourceId}/vault-links:
+    get:
+      tags: [Resources, Vault]
+      summary: List or generate Vault links for a resource
+      description: >-
+        Link hashes are the resource's public addresses, so minting and
+        listing them requires membership of the resource's organization.
+        Unknown and foreign resources both answer 404.
+      parameters:
+        - { $ref: "#/components/parameters/ResourceId" }
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+
+  /catalogue/{id}:
+    get:
+      tags: [Catalogue]
+      summary: Get collection catalogue data
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /catalogue/{id}/ask:
+    post:
+      tags: [Catalogue, AITY]
+      summary: Ask a question over a collection catalogue
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+
+  /semantic-tags:
+    get:
+      tags: [Semantic Tags]
+      summary: List semantic tags
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    post:
+      tags: [Semantic Tags]
+      summary: Create a semantic tag
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /semantic-tags/{id}:
+    put:
+      tags: [Semantic Tags]
+      summary: Update a semantic tag
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    delete:
+      tags: [Semantic Tags]
+      summary: Delete a semantic tag
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+
+  /collection-schemes:
+    get:
+      tags: [Schema]
+      summary: List collection schemes
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    post:
+      tags: [Schema]
+      summary: Create a collection scheme (superadmin)
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /collection-schemes/{id}:
+    get:
+      tags: [Schema]
+      summary: Show a collection scheme
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    put:
+      tags: [Schema]
+      summary: Update a collection scheme (superadmin)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    delete:
+      tags: [Schema]
+      summary: Delete a collection scheme (superadmin)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /search-indexes:
+    get:
+      tags: [Schema]
+      summary: List search indexes
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    post:
+      tags: [Schema]
+      summary: Create a search index (superadmin)
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /search-indexes/{id}:
+    get:
+      tags: [Schema]
+      summary: Show a search index
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    put:
+      tags: [Schema]
+      summary: Update a search index (superadmin)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    delete:
+      tags: [Schema]
+      summary: Delete a search index (superadmin)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List notifications
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /notifications/read-all:
+    post:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /notifications/{id}/read:
+    post:
+      tags: [Notifications]
+      summary: Mark a notification as read
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+
+  /aity/chat:
+    post:
+      tags: [AITY]
+      summary: Send a general AITY chat request
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /aity/auto-approve:
+    post:
+      tags: [AITY]
+      summary: Run AITY auto-approval
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /aity/auto-approve/stream:
+    post:
+      tags: [AITY]
+      summary: Stream AITY auto-approval output
+      responses:
+        "200": { description: Streamed response }
+  /aity/auto-approve/dispatch:
+    post:
+      tags: [AITY]
+      summary: Dispatch AITY auto-approval job
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+
+  /vaults:
+    get:
+      tags: [Vault]
+      summary: List reachable Vaults in the caller's organization
+      description: >-
+        Org-scoped (vaults never cross organizations) and limited to identity
+        columns — the signing salt is never serialized. Excludes disabled
+        vaults.
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /vaults/{id}/publish:
+    post:
+      tags: [Vault]
+      summary: Move a Vault between boundary states
+      description: >-
+        Body: state = disabled | private | public. disabled = off (every
+        address 404s, keys and grants included); private = a vault key or
+        signed grant is required; public = the address alone is enough.
+        Org Admin (75)+ within the vault's own organization; the platform
+        surface stays superadmin-only. Used by external products (e.g. Full
+        Frame's opening flow) with an org-scoped service token.
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /vaults/{id}/ask:
+    post:
+      tags: [Vault, AITY]
+      summary: Ask AITY about a vault (question, k?) — vault-scoped RAG, resource-level citations
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/vaults/clusters/rebuild:
+    post:
+      tags: [Platform, Vault, Graph]
+      summary: Materialize graph clusters as auto-created vaults (organization_id, min_size?)
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/vaults:
+    get:
+      tags: [Platform, Vault]
+      summary: List Vault configurations
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    post:
+      tags: [Platform, Vault]
+      summary: Create a Vault configuration
+      description: >-
+        Requires organization_id (vaults are organization-scoped; slug is
+        unique per organization). Optional: purpose
+        (delivery|gallery|obsidian|ai|mixed, default delivery), state,
+        exposure_policy. A globally unique opaque hash is generated at
+        creation.
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/vaults/{id}:
+    get:
+      tags: [Platform, Vault]
+      summary: Show a Vault configuration
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    put:
+      tags: [Platform, Vault]
+      summary: Update a Vault configuration
+      description: >-
+        organization_id is immutable. Changing salt or purpose is a
+        hash-domain change - all existing links are purged and regenerated
+        lazily.
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    delete:
+      tags: [Platform, Vault]
+      summary: Delete a Vault configuration
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+
+  /platform/organizations:
+    get:
+      tags: [Platform]
+      summary: List all organizations
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    post:
+      tags: [Platform]
+      summary: Create an organization as platform admin
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/organizations/{id}:
+    get:
+      tags: [Platform]
+      summary: Show an organization as platform admin
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    put:
+      tags: [Platform]
+      summary: Update an organization as platform admin
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    delete:
+      tags: [Platform]
+      summary: Delete an organization as platform admin
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/organizations/{id}/suspend:
+    post:
+      tags: [Platform]
+      summary: Suspend an organization
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/organizations/{id}/activate:
+    post:
+      tags: [Platform]
+      summary: Activate an organization
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/organizations/{id}/workspaces:
+    get:
+      tags: [Platform]
+      summary: List organization workspaces as platform admin
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/users:
+    get:
+      tags: [Platform]
+      summary: List all users
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    post:
+      tags: [Platform]
+      summary: Create a user as platform admin
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/users/{id}:
+    get:
+      tags: [Platform]
+      summary: Show a user as platform admin
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    put:
+      tags: [Platform]
+      summary: Update a user as platform admin
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    delete:
+      tags: [Platform]
+      summary: Delete a user as platform admin
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/collections:
+    get:
+      tags: [Platform]
+      summary: List all collections
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    post:
+      tags: [Platform]
+      summary: Create a collection as platform admin
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/collections/{id}:
+    get:
+      tags: [Platform]
+      summary: Show a collection as platform admin
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    put:
+      tags: [Platform]
+      summary: Update a collection as platform admin
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    delete:
+      tags: [Platform]
+      summary: Delete a collection as platform admin
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/collections/{id}/duplicate:
+    post:
+      tags: [Platform]
+      summary: Duplicate a collection
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/ai/config:
+    get:
+      tags: [Platform, AITY]
+      summary: Get AI service configuration status
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/ai/ollama/models:
+    get:
+      tags: [Platform, AITY]
+      summary: List available Ollama models
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/ai/test/embedding:
+    post:
+      tags: [Platform, AITY]
+      summary: Test embedding service connectivity
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/ai/test/chat:
+    post:
+      tags: [Platform, AITY]
+      summary: Test chat service connectivity
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/ai/test/vision:
+    post:
+      tags: [Platform, AITY]
+      summary: Test vision service connectivity
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/stats:
+    get:
+      tags: [Platform]
+      summary: Get platform statistics
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /platform/settings:
+    get:
+      tags: [Platform]
+      summary: Get platform settings
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+    put:
+      tags: [Platform]
+      summary: Update platform settings
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string }
+    ResourceId:
+      name: resourceId
+      in: path
+      required: true
+      schema: { type: string }
+    FileId:
+      name: fileId
+      in: path
+      required: true
+      schema: { type: string }
+    FileIdShort:
+      name: fid
+      in: path
+      required: true
+      schema: { type: string }
+    VaultId:
+      name: vaultId
+      in: path
+      required: true
+      schema: { type: string }
+  responses:
+    JsonResponse:
+      description: JSON response
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true

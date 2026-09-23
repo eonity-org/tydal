@@ -1,0 +1,31 @@
+{
+  "_comment": "Claude Desktop MCP config for a host with NO native Node.js — runs each server in a disposable 'node:22' container instead (spawned per session by Claude Desktop, same as the native form; nothing persists between sessions). Uses 'host.docker.internal' to reach the TYDAL backend, which works out of the box on Docker Desktop (macOS/Windows) and OrbStack alike; add --add-host host.docker.internal:host-gateway to the args array on native Linux Docker, which doesn't provide it automatically. See docs/CONNECTING_MCP_CLIENTS.md#no-nodejs-on-your-host-run-via-docker-instead for the full explanation and the mount/working-dir shape below. Build first (works with no Node on the host too): tools/deploy/install_mcp.sh. Copy to: ~/Library/Application Support/Claude/claude_desktop_config.json (macOS) or %APPDATA%\\Claude\\claude_desktop_config.json (Windows).",
+  "_comment_orbstack": "On OrbStack specifically, prefer --net host in args over host.docker.internal, for BOTH servers: it puts the container on the host's own network namespace, so TYDAL_BASE_URL becomes plain http://localhost:8000(/api/v1) — the exact same URL the backend's own APP_URL uses, so every URL the API returns is consistent instead of alternating between host.docker.internal and localhost depending on whether org-mcp/vault-mcp or the backend built it. Docker Desktop for Mac does not support this the same way (its VM networking doesn't expose host ports to --net host containers as localhost), so this is OrbStack-only — keep host.docker.internal there.",
+  "mcpServers": {
+    "tydal-org": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-v", "/absolute/path/to/tydal:/app",
+        "-w", "/app/org-mcp",
+        "-e", "TYDAL_BASE_URL=http://host.docker.internal:8000/api/v1",
+        "-e", "TYDAL_TOKEN=your-sanctum-personal-access-token",
+        "-e", "TYDAL_ORG_ID=your-organisation-uuid",
+        "node:22", "node", "dist/index.js"
+      ]
+    },
+    "tydal-vault": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-v", "/absolute/path/to/tydal:/app",
+        "-w", "/app/vault-mcp",
+        "-e", "TYDAL_BASE_URL=http://host.docker.internal:8000",
+        "-e", "TYDAL_VAULT=acme/press-kit",
+        "-e", "TYDAL_VAULT_KEY=tvk_… (private vaults only)",
+        "-e", "TYDAL_VAULT_WRITE_KEY=tvk_… (optional — enables ingest on ai vaults)",
+        "node:22", "node", "dist/index.js"
+      ]
+    }
+  }
+}

@@ -1,0 +1,190 @@
+services:
+
+  # ── MySQL ─────────────────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: tydal_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: tydal
+      MYSQL_USER: tydal
+      MYSQL_PASSWORD: secret
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-psecret"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ── Elasticsearch ────────────────────────────────────────────────────────────
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.0.0
+    container_name: tydal_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ── Kibana ────────────────────────────────────────────────────────────────────
+  kibana:
+    image: docker.elastic.co/kibana/kibana:9.0.0
+    container_name: tydal_kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Apache Tika ───────────────────────────────────────────────────────────────
+  # Extracts text from PDF, DOCX, XLSX, PPTX, ODT, RTF, HTML, etc.
+  # PHP connects via HTTP: POST /tika with the file binary → plain text response
+  tika:
+    image: apache/tika:latest-full
+    container_name: tydal_tika
+    ports:
+      - "9998:9998"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9998/tika || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Ollama ────────────────────────────────────────────────────────────────────
+  # Ollama runs NATIVELY on the host for Metal GPU acceleration on macOS.
+  # Docker cannot pass through Apple's Metal GPU to containers.
+  #
+  # Setup (native, recommended on macOS — GPU accelerated):
+  #   brew install ollama
+  #   brew services start ollama        # auto-start on login
+  #   ollama pull mxbai-embed-large     # embedding model — 1024-dim (matches EMBEDDING_DIMENSIONS=1024)
+  #   ollama pull llama3.2              # chat model
+  #   ollama pull llama3.2-vision       # vision model (needs ~11 GiB RAM)
+  #   # (nomic-embed-text is 768-dim — if you use it, set EMBEDDING_DIMENSIONS=768)
+  #
+  # OLLAMA_HOST in .env stays http://localhost:11434 (no change needed).
+  #
+  # To run Ollama in Docker instead (CPU only, no GPU): uncomment the block
+  # below AND the `ollama_data:` volume at the bottom of this file, then set
+  # OLLAMA_HOST=http://ollama:11434 in backend/.env. Pull models with:
+  #   docker exec tydal_ollama ollama pull mxbai-embed-large
+  #   docker exec tydal_ollama ollama pull llama3.2
+  #   docker exec tydal_ollama ollama pull llama3.2-vision
+  # `configure.sh ollama-docker docker` enables the service; `install.sh` also
+  # pulls all three configured models automatically.
+  #
+  # >>> TYDAL-TOGGLE: ollama >>> (managed by tools/deploy/configure.sh)
+#  ollama:
+#    image: ollama/ollama:latest
+#    container_name: tydal_ollama
+#    ports:
+#      - "11434:11434"
+#    volumes:
+#      - ollama_data:/root/.ollama
+#    restart: unless-stopped
+  # <<< TYDAL-TOGGLE: ollama <<<
+
+  # ── Redis ─────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: tydal_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ── PHP + nginx (optional full-Docker backend) ────────────────────────────────
+  # By default (the `host` topology) the backend runs on the host:
+  #   php -d upload_max_filesize=300M -d post_max_size=310M artisan serve   (port 8000)
+  #   php artisan queue:work --timeout=360                                  (queue worker)
+  # This keeps the fast edit/reload loop and is the recommended dev path.
+  #
+  # To run the whole backend inside Docker instead, uncomment the two blocks
+  # below. They use the prebuilt webdevops/php-nginx image (php-fpm + nginx +
+  # all required PHP extensions baked in) — no Dockerfile or config files needed.
+  # Or let `configure.sh <cloud|ollama-host|ollama-docker> docker` do it.
+  #
+  # The Docker app needs backend/.env pointed at the Docker network:
+  #   DB_HOST=mysql   REDIS_HOST=redis   ELASTICSEARCH_HOST=http://elasticsearch:9200
+  # The app is served at http://localhost:8000 (same as artisan serve).
+  # First run: docker exec -it tydal_app composer install && \
+  #            docker exec -it tydal_app php artisan key:generate
+  #
+  # >>> TYDAL-TOGGLE: docker-app >>> (managed by tools/deploy/configure.sh)
+  app:
+    # PHP 8.4 to match a modern host: ./backend (incl. vendor/) is bind-mounted,
+    # so the container PHP must satisfy the host-installed dependencies. Bump
+    # this tag if your host PHP is newer than the image.
+    image: webdevops/php-nginx:8.4
+    container_name: tydal_app
+    ports:
+      - "8000:80"
+    environment:
+      WEB_DOCUMENT_ROOT: /var/www/html/public
+      PHP_UPLOAD_MAX_FILESIZE: 300M
+      PHP_POST_MAX_SIZE: 310M
+      PHP_MEMORY_LIMIT: 512M
+      PHP_DISMOD: ioncube   # not bundled in this image; silences a load warning
+    volumes:
+      - ./backend:/var/www/html
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # reach host-side Ollama (ollama-host) on Linux
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+  queue:
+    image: webdevops/php-nginx:8.4
+    container_name: tydal_queue
+    working_dir: /var/www/html
+    command: php artisan queue:work --timeout=360
+    environment:
+      PHP_MEMORY_LIMIT: 512M
+      PHP_DISMOD: ioncube
+    volumes:
+      - ./backend:/var/www/html
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+  # <<< TYDAL-TOGGLE: docker-app <<<
+
+volumes:
+  mysql_data:
+  elasticsearch_data:
+  redis_data:
+  # ollama_data — only used when Ollama runs in Docker; toggled with the
+  # ollama service by `configure.sh ollama docker`. Native Ollama stores
+  # models in ~/.ollama and needs no volume here.
+  # >>> TYDAL-TOGGLE: ollama-volume >>> (managed by tools/deploy/configure.sh)
+#  ollama_data:
+  # <<< TYDAL-TOGGLE: ollama-volume <<<

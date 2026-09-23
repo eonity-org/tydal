@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.css linguist-language=CSS
+*.html linguist-language=HTML
+*.js linguist-language=JavaScript
+*.json linguist-language=JSON
+*.php linguist-language=PHP
+*.md linguist-language=Markdown

@@ -1,0 +1,24 @@
+{
+  "_comment": "Claude Desktop MCP config. 'tydal-org' is the org-wide, write-capable management server — see tydal/org-mcp/README.md. 'tydal-vault' is a vault-scoped, read-only-by-default server for one vault — see tydal/vault-mcp/README.md. Build both first: tools/deploy/install_mcp.sh. Copy to: ~/Library/Application Support/Claude/claude_desktop_config.json (macOS) or %APPDATA%\\Claude\\claude_desktop_config.json (Windows).",
+  "mcpServers": {
+    "tydal-org": {
+      "command": "node",
+      "args": ["/absolute/path/to/tydal/org-mcp/dist/index.js"],
+      "env": {
+        "TYDAL_BASE_URL": "http://localhost:8000/api/v1",
+        "TYDAL_TOKEN":    "your-sanctum-personal-access-token",
+        "TYDAL_ORG_ID":   "your-organisation-uuid"
+      }
+    },
+    "tydal-vault": {
+      "command": "node",
+      "args": ["/absolute/path/to/tydal/vault-mcp/dist/index.js"],
+      "env": {
+        "TYDAL_BASE_URL": "http://localhost:8000",
+        "TYDAL_VAULT": "acme/press-kit",
+        "TYDAL_VAULT_KEY": "tvk_… (private vaults only)",
+        "TYDAL_VAULT_WRITE_KEY": "tvk_… (optional — enables ingest on ai vaults)"
+      }
+    }
+  }
+}

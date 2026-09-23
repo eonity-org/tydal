@@ -1,0 +1,92 @@
+# =====================================================================
+# TYDAL — single root .gitignore for the monorepo
+# backend/ (Laravel/PHP) · frontend/ + mcp/ (Node/TS) · tools/ (Python)
+# Patterns without a leading slash match in EVERY subdirectory.
+# =====================================================================
+
+# ------------------------
+# OS / IDEs
+# ------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+!.vscode/extensions.json
+*.swp
+
+# ------------------------
+# Dependencies (all subprojects)
+# ------------------------
+node_modules/
+vendor/
+composer.phar
+
+# ------------------------
+# Environment files (all subprojects)
+# ------------------------
+.env
+.env.*
+*.local
+!.env.example
+
+# ------------------------
+# Build output (frontend / mcp)
+# ------------------------
+dist/
+dist-ssr/
+build/
+.cache/
+.vite/
+*.tsbuildinfo
+coverage/
+
+# ------------------------
+# Logs
+# ------------------------
+/logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+php*.log
+
+# ------------------------
+# Python tools (tools/)
+# ------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# ------------------------
+# Laravel — backend/ (storage, cache, generated assets)
+# ------------------------
+backend/storage/*.key
+backend/storage/logs/*
+backend/storage/framework/cache/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/storage/framework/testing/*
+backend/storage/semantic/
+backend/storage/media-library/
+backend/storage/app/*
+!backend/storage/app/public/
+backend/storage/app/public/*
+!backend/storage/app/public/.gitignore
+backend/bootstrap/cache/*.php
+backend/public/storage
+backend/resources/views/vendor/media-library/*
+
+# ------------------------
+# PHP test / tooling caches
+# ------------------------
+.phpunit.result.cache
+.phpunit.cache/
+
+# ------------------------
+# Keep required empty directories
+# ------------------------
+!**/.gitkeep

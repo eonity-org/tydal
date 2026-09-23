@@ -1,0 +1,139 @@
+name: CI
+
+# Branch flow: feature branches → develop (PR + merge), then develop → main (PR).
+# So we check feature branches before they land in develop, every develop merge,
+# and the develop → main promotion PR.
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop, main]
+
+# Cancel superseded runs on the same ref (e.g. when a PR is pushed to repeatedly).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4']
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: tydal_test
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:9.0.0
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: 'false'
+          ES_JAVA_OPTS: -Xms512m -Xmx512m
+        ports:
+          - 9200:9200
+        # No health-cmd: the ES image has no curl; we poll from the runner below.
+
+    env:
+      # config/database.php reads these; phpunit.xml only pins DB_CONNECTION=mysql.
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: tydal_test
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      # config/elasticsearch.php — security-disabled container, no auth needed.
+      ELASTICSEARCH_HOST: http://127.0.0.1:9200
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, bcmath, pdo_mysql, gd, zip, intl, fileinfo, curl, dom
+          coverage: none
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: backend/vendor
+          key: composer-${{ matrix.php }}-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: composer-${{ matrix.php }}-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Wait for Elasticsearch
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:9200 >/dev/null; then
+              echo "Elasticsearch is up."; exit 0
+            fi
+            echo "Waiting for Elasticsearch ($i/30)…"; sleep 5
+          done
+          echo "Elasticsearch did not become ready in time." >&2; exit 1
+
+      - name: Code style (Pint)
+        run: vendor/bin/pint --test
+
+      - name: Static analysis (PHPStan)
+        run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
+      - name: Tests (Pest)
+        run: vendor/bin/pest
+
+  frontend:
+    name: Frontend (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    # Runs at the repo root: frontend is one package in an npm workspace, so the
+    # single lockfile lives at the root and `npm ci` installs every workspace.
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install workspace dependencies
+        run: npm ci
+
+      - name: Build shared client SDK
+        # The SPA imports @tydal/client's built dist/, so it must exist first.
+        run: npm run build -w @tydal/client
+
+      - name: Lint
+        run: npm run lint -w frontend
+
+      - name: Tests
+        run: npm run test:run -w frontend
+
+      - name: Build
+        run: npm run build -w frontend

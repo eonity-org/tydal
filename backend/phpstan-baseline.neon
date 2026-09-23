@@ -1,0 +1,541 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Constant App\\Console\\Commands\\AityPurgeStale\:\:STALE_STAGES is unused\.$#'
+			identifier: classConstant.unused
+			count: 1
+			path: app/Console/Commands/AityPurgeStale.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>index_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Console/Commands/DebugCollection.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Console/Commands/DebugCollection.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>index_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Console/Commands/DebugMappings.php
+
+		-
+			message: '#^Offset ''annotationsFailed'' on array\{indexed\: int, skipped\: int, failed\: int\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Console/Commands/SearchReindex.php
+
+		-
+			message: '#^Call to function method_exists\(\) with App\\Enums\\CollectionType\:\:ACTIVITY\|App\\Enums\\CollectionType\:\:ASSESSMENT\|App\\Enums\\CollectionType\:\:AUDIO\|App\\Enums\\CollectionType\:\:BOOK\|App\\Enums\\CollectionType\:\:COURSE\|App\\Enums\\CollectionType\:\:DOCUMENT\|App\\Enums\\CollectionType\:\:IMAGE\|App\\Enums\\CollectionType\:\:MULTIMEDIA\|App\\Enums\\CollectionType\:\:URL\|App\\Enums\\CollectionType\:\:VIDEO and ''label'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Enums/CollectionType.php
+
+		-
+			message: '#^Call to function method_exists\(\) with App\\Enums\\FileRelation\:\:DERIVED\|App\\Enums\\FileRelation\:\:EXTRACTED\|App\\Enums\\FileRelation\:\:RENDITION\|App\\Enums\\FileRelation\:\:TRANSCRIPT\|App\\Enums\\FileRelation\:\:TRANSLATION\|App\\Enums\\FileRelation\:\:VARIANT and ''label'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Enums/FileRelation.php
+
+		-
+			message: '#^Call to function method_exists\(\) with App\\Enums\\FileRole\:\:CANONICAL\|App\\Enums\\FileRole\:\:COMPONENT\|App\\Enums\\FileRole\:\:SUPPORTING and ''label'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Enums/FileRole.php
+
+		-
+			message: '#^Call to function method_exists\(\) with App\\Enums\\ResourceState\:\:ARCHIVED\|App\\Enums\\ResourceState\:\:DRAFT\|App\\Enums\\ResourceState\:\:LIVE and ''label'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Enums/Traits/HasEnumHelpers.php
+
+		-
+			message: '#^Call to function method_exists\(\) with App\\Enums\\VaultState\:\:DISABLED\|App\\Enums\\VaultState\:\:PRIVATE\|App\\Enums\\VaultState\:\:PUBLIC and ''label'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Enums/Traits/HasEnumHelpers.php
+
+		-
+			message: '#^Call to function method_exists\(\) with App\\Enums\\OrganizationRole\:\:ADMIN\|App\\Enums\\OrganizationRole\:\:EDITOR\|App\\Enums\\OrganizationRole\:\:OWNER\|App\\Enums\\OrganizationRole\:\:VIEWER and ''label'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Enums/Traits/HasEnumHelpers.php
+
+		-
+			message: '#^Call to function method_exists\(\) with App\\Enums\\Visibility\:\:GLOBAL\|App\\Enums\\Visibility\:\:RESTRICTED and ''label'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Enums/Traits/HasEnumHelpers.php
+
+		-
+			message: '#^Call to function method_exists\(\) with App\\Enums\\OrganizationType\:\:BUSINESS\|App\\Enums\\OrganizationType\:\:EDUCATIONAL\|App\\Enums\\OrganizationType\:\:GOVERNMENT\|App\\Enums\\OrganizationType\:\:INDIVIDUAL\|App\\Enums\\OrganizationType\:\:NON_PROFIT and ''label'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Enums/OrganizationType.php
+
+		-
+			message: '#^Call to function method_exists\(\) with App\\Enums\\ResourceType\:\:ACTIVITY\|App\\Enums\\ResourceType\:\:ASSESSMENT\|App\\Enums\\ResourceType\:\:AUDIO\|App\\Enums\\ResourceType\:\:BOOK\|App\\Enums\\ResourceType\:\:COURSE\|App\\Enums\\ResourceType\:\:DOCUMENT\|App\\Enums\\ResourceType\:\:IMAGE\|App\\Enums\\ResourceType\:\:MULTIMEDIA\|App\\Enums\\ResourceType\:\:URL\|App\\Enums\\ResourceType\:\:VIDEO and ''label'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Enums/ResourceType.php
+
+		-
+			message: '#^Parameter \#1 \$organization of method App\\Services\\CurrentOrganizationService\:\:setCurrentOrganization\(\) expects App\\Models\\Organization\|string, Illuminate\\Database\\Eloquent\\Model&object\{pivot\: Illuminate\\Database\\Eloquent\\Relations\\Pivot\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/API/AuthController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>fields" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/API/CatalogueController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Notifications\\DatabaseNotification\:\:\$created_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/API/NotificationController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Notifications\\DatabaseNotification\:\:\$data\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/API/NotificationController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Notifications\\DatabaseNotification\:\:\$read_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/API/NotificationController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Notifications\\DatabaseNotification\:\:\$type\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/API/NotificationController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Notifications\\DatabaseNotification\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Http/Controllers/API/NotificationController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\FileChunk\:\:\$chunk_count\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/API/ResourceController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\FileChunk\:\:\$chunked_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/API/ResourceController.php
+
+		-
+			message: '#^Match arm comparison between App\\Enums\\SystemFilePurpose\:\:AI_GENERATED_DESCRIPTION\|App\\Enums\\SystemFilePurpose\:\:AI_GENERATED_NAME\|App\\Enums\\SystemFilePurpose\:\:AI_GENERATED_TAGS\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_DESCRIPTION\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_METADATA\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_NAME\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_TAGS\|App\\Enums\\SystemFilePurpose\:\:EXTRACTED_TEXT\|App\\Enums\\SystemFilePurpose\:\:PREVIEW_SNAPSHOT\|App\\Enums\\SystemFilePurpose\:\:TIKA_METADATA\|App\\Enums\\SystemFilePurpose\:\:TRANSCRIPTION and ''ai_suggested_name'' is always false\.$#'
+			identifier: match.alwaysFalse
+			count: 1
+			path: app/Http/Controllers/API/ResourceController.php
+
+		-
+			message: '#^Match arm comparison between App\\Enums\\SystemFilePurpose\:\:AI_GENERATED_DESCRIPTION\|App\\Enums\\SystemFilePurpose\:\:AI_GENERATED_NAME\|App\\Enums\\SystemFilePurpose\:\:AI_GENERATED_TAGS\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_DESCRIPTION\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_METADATA\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_NAME\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_TAGS\|App\\Enums\\SystemFilePurpose\:\:EXTRACTED_TEXT\|App\\Enums\\SystemFilePurpose\:\:PREVIEW_SNAPSHOT\|App\\Enums\\SystemFilePurpose\:\:TIKA_METADATA\|App\\Enums\\SystemFilePurpose\:\:TRANSCRIPTION and ''ai_suggested_tags'' is always false\.$#'
+			identifier: match.alwaysFalse
+			count: 1
+			path: app/Http/Controllers/API/ResourceController.php
+
+		-
+			message: '#^Match arm comparison between App\\Enums\\SystemFilePurpose\:\:AI_GENERATED_DESCRIPTION\|App\\Enums\\SystemFilePurpose\:\:AI_GENERATED_NAME\|App\\Enums\\SystemFilePurpose\:\:AI_GENERATED_TAGS\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_DESCRIPTION\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_METADATA\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_NAME\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_TAGS\|App\\Enums\\SystemFilePurpose\:\:EXTRACTED_TEXT\|App\\Enums\\SystemFilePurpose\:\:PREVIEW_SNAPSHOT\|App\\Enums\\SystemFilePurpose\:\:TIKA_METADATA\|App\\Enums\\SystemFilePurpose\:\:TRANSCRIPTION and ''ai_suggested…'' is always false\.$#'
+			identifier: match.alwaysFalse
+			count: 1
+			path: app/Http/Controllers/API/ResourceController.php
+
+		-
+			message: '#^Match arm comparison between App\\Enums\\SystemFilePurpose\:\:AI_GENERATED_DESCRIPTION\|App\\Enums\\SystemFilePurpose\:\:AI_GENERATED_NAME\|App\\Enums\\SystemFilePurpose\:\:AI_GENERATED_TAGS\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_DESCRIPTION\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_METADATA\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_NAME\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_TAGS\|App\\Enums\\SystemFilePurpose\:\:EXTRACTED_TEXT\|App\\Enums\\SystemFilePurpose\:\:PREVIEW_SNAPSHOT\|App\\Enums\\SystemFilePurpose\:\:TIKA_METADATA\|App\\Enums\\SystemFilePurpose\:\:TRANSCRIPTION and ''extracted_text'' is always false\.$#'
+			identifier: match.alwaysFalse
+			count: 1
+			path: app/Http/Controllers/API/ResourceController.php
+
+		-
+			message: '#^Match arm comparison between App\\Enums\\SystemFilePurpose\:\:AI_GENERATED_DESCRIPTION\|App\\Enums\\SystemFilePurpose\:\:AI_GENERATED_NAME\|App\\Enums\\SystemFilePurpose\:\:AI_GENERATED_TAGS\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_DESCRIPTION\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_METADATA\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_NAME\|App\\Enums\\SystemFilePurpose\:\:AI_SUGGESTED_TAGS\|App\\Enums\\SystemFilePurpose\:\:EXTRACTED_TEXT\|App\\Enums\\SystemFilePurpose\:\:PREVIEW_SNAPSHOT\|App\\Enums\\SystemFilePurpose\:\:TIKA_METADATA\|App\\Enums\\SystemFilePurpose\:\:TRANSCRIPTION and ''tika_metadata'' is always false\.$#'
+			identifier: match.alwaysFalse
+			count: 1
+			path: app/Http/Controllers/API/ResourceController.php
+
+		-
+			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Support\\Carbon\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/API/ResourceController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>accepted_mimetypes" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/API/ResourceController.php
+
+		-
+			message: '#^Offset ''has_lexical_matches'' on array\{ids\: array, total\: int, facets\: array\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Http/Controllers/API/WorkspaceController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>fields" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/API/WorkspaceController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>language" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Jobs/AnalyzeImageContent.php
+
+		-
+			message: '#^Call to function is_array\(\) with array will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Jobs/AutoTagResource.php
+
+		-
+			message: '#^If condition is always true\.$#'
+			identifier: if.alwaysTrue
+			count: 1
+			path: app/Jobs/AutoTagResource.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>language" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Jobs/AutoTagResource.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\<float\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Jobs/EmbedFileChunks.php
+
+		-
+			message: '#^Variable \$metadata on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.variable
+			count: 2
+			path: app/Jobs/ExtractFileText.php
+
+		-
+			message: '#^Ternary operator condition is always true\.$#'
+			identifier: ternary.alwaysTrue
+			count: 1
+			path: app/Jobs/UpsertResourceMetadataChunk.php
+
+		-
+			message: '#^Using nullsafe property access on non\-nullable type App\\Models\\Collection\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Jobs/UpsertResourceMetadataChunk.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<mixed\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Models/CollectionScheme.php
+
+		-
+			message: '#^Call to an undefined method Spatie\\Image\\Drivers\\ImageDriver\:\:performOnCollections\(\)\.$#'
+			identifier: method.notFound
+			count: 4
+			path: app/Models/Resource.php
+
+		-
+			message: '#^Comparison operation "\>" between int\<1, max\> and 0 is always true\.$#'
+			identifier: greater.alwaysTrue
+			count: 1
+			path: app/Services/AutoApprovalService.php
+
+		-
+			message: '#^If condition is always true\.$#'
+			identifier: if.alwaysTrue
+			count: 1
+			path: app/Services/AutoApprovalService.php
+
+		-
+			message: '#^Method App\\Services\\AutoApprovalService\:\:mergeTagsFromAllFiles\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Services/AutoApprovalService.php
+
+		-
+			message: '#^Offset ''confidence'' on non\-empty\-array\<mixed\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/AutoApprovalService.php
+
+		-
+			message: '#^Offset ''file_id'' on array\{file_id\: string, name\: non\-falsy\-string, description\: string\|null, tags\: array\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/AutoApprovalService.php
+
+		-
+			message: '#^Offset ''file_id'' on array\{file_id\: string, name\: string\|null, description\: non\-falsy\-string, tags\: array\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/AutoApprovalService.php
+
+		-
+			message: '#^Offset ''file_id'' on array\{file_id\: string, name\: string\|null, description\: string\|null, tags\: non\-empty\-array\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Services/AutoApprovalService.php
+
+		-
+			message: '#^Offset ''tags'' on array\{file_id\: string, name\: string\|null, description\: string\|null, tags\: array\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: app/Services/AutoApprovalService.php
+
+		-
+			message: '#^Variable \$perFileApplied in empty\(\) always exists and is not falsy\.$#'
+			identifier: empty.variable
+			count: 1
+			path: app/Services/AutoApprovalService.php
+
+		-
+			message: '#^Variable \$resourceLevelApplied in empty\(\) always exists and is not falsy\.$#'
+			identifier: empty.variable
+			count: 1
+			path: app/Services/AutoApprovalService.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\{0\: ''nullable''\|''required'', 1\?\: non\-falsy\-string, 2\?\: non\-falsy\-string, 3\?\: non\-falsy\-string, 4\?\: non\-falsy\-string, 5\?\: non\-falsy\-string, 6\?\: non\-falsy\-string\}\) to function array_filter does not contain falsy values, the array will always stay the same\.$#'
+			identifier: arrayFilter.same
+			count: 1
+			path: app/Services/CollectionSchemaService.php
+
+		-
+			message: '#^Variable \$rule in empty\(\) always exists and is not falsy\.$#'
+			identifier: empty.variable
+			count: 1
+			path: app/Services/CollectionSchemaService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Relations\\Pivot\:\:\$role\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/CurrentOrganizationService.php
+
+		-
+			message: '#^Left side of && is always true\.$#'
+			identifier: booleanAnd.leftAlwaysTrue
+			count: 1
+			path: app/Services/CurrentOrganizationService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>role" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/CurrentOrganizationService.php
+
+		-
+			message: '#^Call to an undefined method Elastic\\Elasticsearch\\ClientInterface\:\:delete\(\)\.$#'
+			identifier: method.notFound
+			count: 4
+			path: app/Services/ElasticsearchService.php
+
+		-
+			message: '#^Call to an undefined method Elastic\\Elasticsearch\\ClientInterface\:\:deleteByQuery\(\)\.$#'
+			identifier: method.notFound
+			count: 3
+			path: app/Services/ElasticsearchService.php
+
+		-
+			message: '#^Call to an undefined method Elastic\\Elasticsearch\\ClientInterface\:\:index\(\)\.$#'
+			identifier: method.notFound
+			count: 8
+			path: app/Services/ElasticsearchService.php
+
+		-
+			message: '#^Call to an undefined method Elastic\\Elasticsearch\\ClientInterface\:\:indices\(\)\.$#'
+			identifier: method.notFound
+			count: 14
+			path: app/Services/ElasticsearchService.php
+
+		-
+			message: '#^Call to an undefined method Elastic\\Elasticsearch\\ClientInterface\:\:search\(\)\.$#'
+			identifier: method.notFound
+			count: 17
+			path: app/Services/ElasticsearchService.php
+
+		-
+			message: '#^Expression on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.expr
+			count: 1
+			path: app/Services/ElasticsearchService.php
+
+		-
+			message: '#^Method App\\Services\\ElasticsearchService\:\:searchResources\(\) should return array\{hits\: array, total\: int, facets\: array\} but returns array\{ids\: list, total\: mixed, facets\: array\}\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/ElasticsearchService.php
+
+		-
+			message: '#^Offset ''ids'' does not exist on array\{hits\: array, total\: int, facets\: array\}\.$#'
+			identifier: offsetAccess.notFound
+			count: 1
+			path: app/Services/ElasticsearchService.php
+
+		-
+			message: '#^Offset ''ids'' on array\{hits\: array, total\: int, facets\: array\} in empty\(\) does not exist\.$#'
+			identifier: empty.offset
+			count: 1
+			path: app/Services/ElasticsearchService.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Services/ElasticsearchService.php
+
+		-
+			message: '#^Method App\\Services\\FileStorageService\:\:storeDocumentFile\(\) should return array\{path\: string, url\: string, filename\: string, size\: int, mime_type\: string\} but returns array\{path\: non\-falsy\-string, filename\: string, size\: \(int\|false\), mime_type\: string\|null, disk\: string, metadata\: array\{original_filename\: string\}\}\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/FileStorageService.php
+
+		-
+			message: '#^PHPDoc tag @param references unknown parameter\: \$purpose$#'
+			identifier: parameter.notFound
+			count: 1
+			path: app/Services/FileStorageService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/OrganizationService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/OrganizationService.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:users\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Services/OrganizationService.php
+
+		-
+			message: '#^Method App\\Services\\OrganizationService\:\:createOrganization\(\) should return App\\Models\\Organization but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/OrganizationService.php
+
+		-
+			message: '#^Method App\\Services\\OrganizationService\:\:getOrganizationById\(\) should return App\\Models\\Organization\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/OrganizationService.php
+
+		-
+			message: '#^Method App\\Services\\OrganizationService\:\:updateOrganization\(\) should return App\\Models\\Organization\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/OrganizationService.php
+
+		-
+			message: '#^Instanceof between App\\Enums\\SystemFilePurpose and BackedEnum will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: app/Services/ResourceService.php
+
+		-
+			message: '#^Method App\\Services\\ResourceService\:\:pickBestSnapshotCandidate\(\) should return App\\Models\\File\|null but returns Illuminate\\Database\\Eloquent\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/ResourceService.php
+
+		-
+			message: '#^Method App\\Services\\ResourceService\:\:pickBestSnapshotCandidate\(\) should return App\\Models\\File\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/ResourceService.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<\(int\|string\),Illuminate\\Database\\Eloquent\\Model\>\:\:first\(\) expects \(callable\(Illuminate\\Database\\Eloquent\\Model, int\|string\)\: bool\)\|null, Closure\(App\\Models\\File\)\: bool given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/ResourceService.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<\(int\|string\),Illuminate\\Database\\Eloquent\\Model\>\:\:sortBy\(\) expects array\<array\{string, string\}\|\(callable\(Illuminate\\Database\\Eloquent\\Model, Illuminate\\Database\\Eloquent\\Model\)\: mixed\)\|\(callable\(Illuminate\\Database\\Eloquent\\Model, int\|string\)\: mixed\)\|string\>\|\(callable\(Illuminate\\Database\\Eloquent\\Model, int\|string\)\: mixed\)\|string, Closure\(App\\Models\\File\)\: array\{0\|1\|2, string\} given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Services/ResourceService.php
+
+		-
+			message: '#^Class Spatie\\MediaLibraryPro\\Models\\TemporaryUpload not found\.$#'
+			identifier: class.notFound
+			count: 1
+			path: config/media-library.php
+
+		-
+			message: '#^Match expression does not handle remaining value\: mixed$#'
+			identifier: match.unhandled
+			count: 1
+			path: database/factories/FileFactory.php
+
+		-
+			message: '#^Parameter \#1 \$collectionId of method Database\\Factories\\CategoryFactory\:\:forCollection\(\) expects string, int given\.$#'
+			identifier: argument.type
+			count: 2
+			path: database/seeders/DevelopmentSeeder.php
+
+		-
+			message: '#^Parameter \#1 \$collectionId of method Database\\Factories\\ResourceFactory\:\:forCollection\(\) expects string, int given\.$#'
+			identifier: argument.type
+			count: 1
+			path: database/seeders/DevelopmentSeeder.php
+
+		-
+			message: '#^Parameter \#1 \$parentId of method Database\\Factories\\CategoryFactory\:\:withParent\(\) expects string, int given\.$#'
+			identifier: argument.type
+			count: 1
+			path: database/seeders/DevelopmentSeeder.php
+
+		-
+			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
+			identifier: larastan.noEnvCallsOutsideOfConfig
+			count: 3
+			path: database/seeders/MinimalSeeder.php
+
+		-
+			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
+			identifier: larastan.noEnvCallsOutsideOfConfig
+			count: 2
+			path: database/seeders/ProductionSeeder.php
+
+		-
+			message: '#^Method Database\\Seeders\\ResourceImageSeeder\:\:generateVideo\(\) never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: database/seeders/ResourceImageSeeder.php
+
+		-
+			message: '#^Method Database\\Seeders\\ResourceImageSeeder\:\:generateWav\(\) never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: database/seeders/ResourceImageSeeder.php
+
+		-
+			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
+			identifier: larastan.noEnvCallsOutsideOfConfig
+			count: 2
+			path: database/seeders/SuperadminSeeder.php

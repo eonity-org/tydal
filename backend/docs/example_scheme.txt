@@ -1,0 +1,39 @@
+
+        $templates = [
+            [
+                'name' => 'multimedia',
+                'display_name' => 'Multimedia Collection',
+                'description' => 'Template for multimedia collections (images, videos, audio)',
+                'collection_type' => 'multimedia',
+                'suggested_solr_core' => 'multimedia',
+                'compatible_solr_cores' => ['multimedia', 'shared_media'],
+                'accepted_types' => ['image', 'video', 'audio', 'multimedia'],
+                'is_system' => true,
+                'validation_schema' => [
+                    'version' => '1.0',
+                    'required_fields' => ['title', 'description'],
+                    'optional_fields' => ['language'],
+                    'field_validations' => [
+                        'title' => [
+                            'type' => 'string',
+                            'min_length' => 3,
+                            'max_length' => 255,
+                            'required' => true,
+                            'display_name' => 'Title',
+                        ],
+                        'description' => [
+                            'type' => 'string',
+                            'min_length' => 10,
+                            'required' => true,
+                            'display_name' => 'Description',
+                        ],
+                        'language' => [
+                            'type' => 'string',
+                            'max_length' => 10,
+                            'required' => false,
+                            'display_name' => 'Language',
+                        ],
+                    ],
+                ],
+            ]
+        ];

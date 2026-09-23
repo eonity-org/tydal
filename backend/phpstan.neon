@@ -1,0 +1,17 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - phpstan-baseline.neon
+
+parameters:
+    paths:
+        - app
+        - config
+        - database
+        - routes
+
+    # Starting level. Raise incrementally as the baseline shrinks.
+    level: 5
+
+    # Existing violations are captured in phpstan-baseline.neon so CI stays green;
+    # new code is held to the level above. Regenerate the baseline with:
+    #   vendor/bin/phpstan analyse --generate-baseline

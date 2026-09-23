@@ -1,0 +1,286 @@
+/* TYDAL Notes — an obsidian-purpose vault as linked notes.
+   Own design system (Epic 5.2): ink-dark canvas, violet accent, quiet
+   serifs for prose. No component library, no inline styles. */
+
+:root {
+  --bg: #12111a;
+  --panel: #191824;
+  --line: #2a2838;
+  --ink: #d9d6e6;
+  --muted: #8b87a0;
+  --accent: #9d7bff;
+  --accent-soft: #4c3d80;
+  --edge: #3d3a52;
+  --serif: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --sans: 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+}
+
+.notebook {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  /* One explicit row: the canvas/sidebar must inherit a real height for
+     the SVG's height:100% and the list's internal scroll to resolve. */
+  grid-template-rows: 100vh;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────── */
+
+.sidebar {
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 1rem;
+  gap: 0.75rem;
+}
+
+.sidebar header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.sidebar h1 {
+  font-family: var(--serif);
+  font-size: 1.15rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.to-graph {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+}
+
+.to-graph:disabled { color: var(--muted); cursor: default; opacity: 0.5; }
+
+.sidebar input[type='search'] {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  padding: 0.45rem 0.7rem;
+  width: 100%;
+}
+
+.sidebar input[type='search']:focus { border-color: var(--accent-soft); outline: none; }
+
+.note-list {
+  flex: 1 1 0;
+  min-height: 0;
+  list-style: none;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.note-list button {
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  width: 100%;
+}
+
+.note-list button:hover { background: var(--line); }
+.note-list button.active { background: var(--accent-soft); color: #fff; }
+.note-list small { color: var(--muted); }
+
+.sidebar footer { color: var(--muted); font-size: 0.75rem; }
+
+/* ── Canvas / graph ──────────────────────────────────────── */
+
+.canvas { min-height: 0; overflow: hidden; position: relative; }
+
+.graph { display: block; height: 100%; width: 100%; }
+
+.graph .edge {
+  stroke: var(--edge);
+  stroke-width: 1;
+}
+.graph .edge.manual { stroke-width: 1.6; }
+.graph .edge.semantic { stroke-dasharray: 4 3; }
+.graph .edge.active { stroke: var(--accent); }
+.graph .edge.dim { opacity: 0.15; }
+
+.graph .node { cursor: pointer; }
+.graph .node circle {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  transition: fill 120ms ease;
+}
+.graph .node:hover circle,
+.graph .node:focus circle { fill: var(--accent); }
+.graph .node.active circle { fill: var(--accent); }
+.graph .node.dim { opacity: 0.25; }
+
+.graph .node text {
+  fill: var(--muted);
+  font-size: 11px;
+  text-anchor: middle;
+}
+.graph .node.active text,
+.graph .node:hover text { fill: var(--ink); }
+
+/* ── Reading mode ────────────────────────────────────────── */
+
+.reading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 1px;
+  background: var(--line);
+  height: 100%;
+}
+
+.note {
+  background: var(--bg);
+  overflow-y: auto;
+  padding: 2.5rem 3rem;
+}
+
+.note h1 {
+  font-family: var(--serif);
+  font-size: 1.9rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.note .properties {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.3rem;
+  margin-bottom: 1.5rem;
+  padding: 0.8rem 1rem;
+}
+
+.note .properties div { display: flex; gap: 0.75rem; }
+.note .properties dt { color: var(--muted); min-width: 110px; }
+
+.note .summary {
+  color: var(--muted);
+  font-style: italic;
+  margin-bottom: 1.25rem;
+}
+
+.note section {
+  font-family: var(--serif);
+  line-height: 1.65;
+}
+
+.note section p { margin: 0 0 0.9rem; }
+.note section h1, .note section h2, .note section h3, .note section h4 {
+  font-family: var(--sans);
+  margin: 1.4rem 0 0.6rem;
+}
+.note section ul { margin: 0 0 0.9rem 1.2rem; }
+.note section code {
+  background: var(--panel);
+  border-radius: 4px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+}
+.note section pre {
+  background: var(--panel);
+  border-radius: 8px;
+  margin: 0 0 0.9rem;
+  overflow-x: auto;
+  padding: 0.8rem 1rem;
+}
+.note section a { color: var(--accent); }
+
+.note .document-text { border-top: 1px solid var(--line); margin-top: 1.5rem; padding-top: 1.5rem; }
+
+.note .tags { margin-top: 2rem; }
+.note .tags em {
+  background: var(--panel);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-style: normal;
+  margin-right: 0.4rem;
+  padding: 0.2rem 0.7rem;
+}
+
+/* ── Context column ──────────────────────────────────────── */
+
+.context {
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.context .graph { border-bottom: 1px solid var(--line); flex: 0 0 260px; }
+
+.backlinks { padding: 1rem 1.2rem; }
+.backlinks h3 {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  margin: 0.8rem 0 0.4rem;
+  text-transform: uppercase;
+}
+.backlinks ul { list-style: none; padding: 0; }
+.backlinks li { align-items: baseline; display: flex; gap: 0.5rem; justify-content: space-between; }
+.backlinks button {
+  background: none;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0.2rem 0;
+  text-align: left;
+}
+.backlinks button:hover { text-decoration: underline; }
+.backlinks small { color: var(--muted); }
+.backlinks .lonely { color: var(--muted); font-style: italic; padding-top: 1rem; }
+
+/* ── States ──────────────────────────────────────────────── */
+
+.error { color: #e07a7a; padding: 1rem 1.5rem; }
+
+.empty-state {
+  color: var(--muted);
+  margin: 20vh auto 0;
+  max-width: 32rem;
+  text-align: center;
+}
+.empty-state h1 { color: var(--ink); font-family: var(--serif); margin-bottom: 0.8rem; }
+.empty-state code {
+  background: var(--panel);
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+}
+
+@media (max-width: 900px) {
+  .notebook { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .reading { grid-template-columns: 1fr; }
+}

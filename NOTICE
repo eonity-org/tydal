@@ -1,0 +1,19 @@
+TYDAL — the typed Digital Asset Layer
+Schema-Driven Semantic Vaults for AI Agents
+Copyright 2026 John Pree (eonity.org)
+
+This product is licensed under the Apache License, Version 2.0 (the "License");
+you may not use this product except in compliance with the License. A copy of
+the License is provided in the LICENSE file and at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+This product includes third-party open-source software, each distributed under
+its own license. Notable dependencies include the Laravel framework, React,
+Spatie Media Library, and the Elasticsearch PHP client, among others listed in
+backend/composer.json and frontend/package.json. Their respective licenses and
+copyright notices are retained in their distributions.
+
+"TYDAL" and "Eonity" and associated logos are trademarks of Eonity. The Apache
+License 2.0 does not grant permission to use these marks except as required for
+reasonable and customary use in describing the origin of the work.

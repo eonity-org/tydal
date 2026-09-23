@@ -1,0 +1,13 @@
+{
+  "name": "tydal-monorepo",
+  "private": true,
+  "description": "TYDAL JS workspace — shared client SDK consumed by the frontend and the vault renderer apps; org-mcp and vault-mcp are customer-run MCP servers that speak plain HTTP instead.",
+  "workspaces": [
+    "client",
+    "frontend",
+    "org-mcp",
+    "vault-mcp",
+    "vaults/*"
+  ],
+  "version": "1.0.0"
+}
