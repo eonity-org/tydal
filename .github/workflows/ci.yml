@@ -2,10 +2,11 @@ name: CI
 
 # Branch flow: feature branches → develop (PR + merge), then develop → main (PR).
 # So we check feature branches before they land in develop, every develop merge,
-# and the develop → main promotion PR.
+# the develop → main promotion PR, and every push to main (including direct
+# pushes, which otherwise ship untested).
 on:
   push:
-    branches: [develop]
+    branches: [develop, main]
   pull_request:
     branches: [develop, main]
 
