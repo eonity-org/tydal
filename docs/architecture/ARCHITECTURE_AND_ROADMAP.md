@@ -65,7 +65,7 @@ not create an independently edited copy of the underlying resource. See the
 - **TYDAL / Tydal:** the product; use Tydal in website prose and retain TYDAL in
   repository titles and technical documentation.
 - **Eonity:** the umbrella for the open-source product family.
-- **Tydalia:** the website/ecosystem name, not a separate product.
+- **Tydalia:** the existing social identity; the website is published at eonity.org.
 - **Headline:** Control your knowledge flow.
 - **Category:** Open-source Semantic Asset Platform.
 - **Product definition:** The typed Digital Asset Layer.
@@ -95,7 +95,7 @@ scope and behavior of each interface.
 
 - **Public product repository:** [eonity-org/tydal](https://github.com/eonity-org/tydal).
 - **License:** [Apache-2.0](../../LICENSE); the current product has no proprietary-core split.
-- **Intended website:** `tydalia.com`.
+- **Confirmed website domain:** `eonity.org`.
 - **Application SDK:** `@tydal/client` supports the management frontend, Vault
   apps and external integrations. The `org-mcp` and `vault-mcp` adapters use
   their own HTTP wrappers; see [the SDK README](../../client/README.md).
