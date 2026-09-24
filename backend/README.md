@@ -1,5 +1,8 @@
 # TYDAL Backend
 
+*Schema-driven semantic vaults for AI agents.*
+
+
 Laravel API for TYDAL (**the typed Digital Asset Layer**), a multi-tenant, schema-driven semantic knowledge system — schema-driven semantic vaults for AI agents.
 
 
