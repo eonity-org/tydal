@@ -2,10 +2,10 @@
 
 **Schema-Driven Semantic Vaults for AI Agents** — first public release.
 
-TYDAL projects immutable **Resources** through contextual **Vaults** that define
+TYDAL exposes shared **Resources** through contextual **Vaults** that define
 meaning, indexing behavior, and AI-interaction surfaces. One vault, one grammar,
 many faces: the same tier-gated boundary serves a human gallery, an
-Obsidian-style graph, a grounded AI chat, plain file delivery, and read-only MCP
+Obsidian-style graph, a grounded AI chat, plain file delivery, and Vault-scoped MCP
 consumers — each seeing exactly what the vault's purpose and policy expose, and
 nothing more.
 
@@ -20,11 +20,13 @@ nothing more.
   index.
 - **AI-native surfaces** — provider-pluggable embeddings, semantic search over
   resources and chunks, a projected knowledge graph, and a streaming, citation-
-  bearing ask head — all reachable by external agents through a read-only MCP
-  server that hands over data, never our reasoning.
-- **An app suite over one SDK** — `@tydal/client` is the single transport;
-  gallery, obsidian, and AI-chat apps are independent builds on the public
-  grammar.
+  bearing ask head. Vault MCP exposes data for external agents to reason over;
+  it is read-only by default, with supported purpose-defined writes enabled
+  through a write key.
+- **An app suite over one SDK** — `@tydal/client` serves the management SPA,
+  Vault apps and external integrations. Gallery, obsidian and AI-chat apps are
+  independent builds on the public grammar; both MCP adapters use their own
+  HTTP wrappers.
 - **Three access forms** — published, vault keys, and time-limited signed grants
   with one-shot revocation.
 
@@ -47,7 +49,7 @@ one physical step for older development databases. Setup lives in
 ## Notes
 
 - Backend: Laravel 12 · MySQL · Elasticsearch 9+ · Redis/Horizon · S3/MinIO.
-- JS workspace: `@tydal/client`, `@tydal/mcp`, `@tydal/vault-mcp`, and the vault
+- JS workspace: `@tydal/client`, `@tydal/org-mcp`, `@tydal/vault-mcp`, and the vault
   apps.
 - Test coverage: 700+ backend tests; O(1) query budgets and embedding-cache
   behavior are pinned by regression tests.

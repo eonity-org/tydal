@@ -4,7 +4,7 @@ This folder keeps the public documentation index intentionally small. Start with
 
 - [Deployment Guide](../DEPLOYMENT.md) — command-oriented install → configure → start → seed → (optional) plug in org-mcp/vault-mcp, everyday commands and common gotchas, plus production (nginx + PHP-FPM) setup
 - [Connecting an AI Client](CONNECTING_MCP_CLIENTS.md) — for someone connecting *their own* AI (Claude Desktop, Claude Code, Cursor, …) to an already-running TYDAL instance via org-mcp/vault-mcp; no TYDAL deployment steps needed
-- [Architecture & Roadmap](architecture/ARCHITECTURE_AND_ROADMAP.md) — **canonical** architecture, dual naming system, current → v2 roadmap
+- [Architecture & Roadmap](architecture/ARCHITECTURE_AND_ROADMAP.md) — architecture, shared product terminology and the historical v2 roadmap
 - [Vault System Specification](architecture/VAULT_SYSTEM.md) — the Vault entity, boundary `state`, tenancy enforcement points, addressing grammar (hash/slug), projection tiers, and MCP surface (drives Milestone 2)
 - [Vault Write Methods](architecture/VAULT_WRITE_METHODS.md) — the *inbound* boundary: purpose-defined write ops (`gallery` → activate/open/close; `ai` → ingest) gated by write-capable vault keys, one generic `write(op, payload)`; replaces the org-admin token for the Full Frame opening and powers ImageLab / bring-your-own-AI ingest
 - [AI Surfaces](architecture/AI_SURFACES.md) — the three ways to work with AI: server-side AITY enrichment (pluggable LLM drivers, suggestions + review), the org-level MCP agent (works like a user), and vault MCP (publish a projection, bring your own AI)
@@ -26,7 +26,7 @@ This folder keeps the public documentation index intentionally small. Start with
 - [Backend OpenAPI specification](../backend/docs/openapi.yaml)
 - [Org MCP server README](../org-mcp/README.md) — write-capable management surface (uploads, tagging, workspaces)
 - [Vault MCP server README](../vault-mcp/README.md) — vault-scoped consumer surface for external AI; read-only by default, `ingest` write tool with a write key (bring-your-own-AI)
-- [Shared client SDK README](../client/README.md) — `@tydal/client`, the single transport for every surface
+- [Shared client SDK README](../client/README.md) — `@tydal/client`, the TypeScript SDK for applications and integrations; the MCP adapters use their own HTTP wrappers
 - [Bulk uploader README](../tools/bulk_uploader/README.md)
 
 ## Setup & Deployment
