@@ -1,5 +1,12 @@
 # 🗺️ TYDAL → v2 — Milestones, Epics & Issues
 
+> **Reading this historical plan (2026-09-24):** Milestone entries retain the
+> terminology and integration choices used when written. Current Vault MCP is
+> read-only by default, with supported writes enabled through a write key. Both
+> MCP adapters use their own HTTP wrappers; the earlier shared-SDK migration
+> was reversed (see Epic 5.0). For current names and product positioning, see
+> [the architecture terminology](../architecture/ARCHITECTURE_AND_ROADMAP.md).
+
 Issue-ready breakdown of the 6 roadmap phases from
 [`ARCHITECTURE_AND_ROADMAP.md`](../architecture/ARCHITECTURE_AND_ROADMAP.md). Each **Milestone**
 maps to a GitHub milestone; each **Epic** to a tracking issue; each checkbox to a

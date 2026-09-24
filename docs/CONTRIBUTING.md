@@ -1,7 +1,6 @@
 # Contributing to TYDAL
 
-Thanks for your interest in contributing to **TYDAL** — *Schema-Driven Semantic
-Vaults for AI Agents*. This document explains how to set up your environment,
+Thanks for your interest in contributing to **TYDAL** — *the typed Digital Asset Layer*. This document explains how to set up your environment,
 the standards we hold code to, and how to propose changes.
 
 By participating, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
@@ -12,7 +11,7 @@ By participating, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md
 backend/    Laravel 12 REST API
 frontend/   Vite + React + TypeScript web application
 org-mcp/    Org-wide MCP server (write-capable management surface)
-vault-mcp/  Vault-scoped read-only MCP server (customer AI consumer surface)
+vault-mcp/  Vault-scoped MCP server (read-only by default; supported writes with a write key)
 tools/      Supporting tooling (e.g. bulk uploader)
 docs/       Documentation
 ```

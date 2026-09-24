@@ -1,6 +1,9 @@
 # 📘 TYDAL — Architecture & Roadmap
 
-**TYDAL v2 — Schema-Driven Semantic Indexing System**
+**TYDAL — the typed Digital Asset Layer**
+
+This document describes the internal v2 architecture. Product release numbers
+are recorded separately in the [changelog](../../CHANGELOG.md).
 
 > This is the canonical architecture + roadmap reference for the project. It
 > grounds every section in what exists in the codebase.
@@ -26,86 +29,77 @@
 TYDAL evolves from a tagged DAM + workspace system into:
 
 > A **schema-driven semantic knowledge system** where **Vaults** define
-> contextual projections over immutable **Resources**, enabling AI-native
+> contextual projections over shared **Resources**, enabling AI-native
 > interaction via **MCP**, **embeddings**, and **graph** navigation — presented
 > through a graphical UI for Obsidian-style and AI vaults.
 
 ---
 
-## 2. 🏷️ Naming Architecture (Dual Naming System)
+## 2. 🏷️ Product naming and terminology
 
-The single most important governance rule for this project: **engineering names
-and product names are two separate languages and must not be collapsed.**
+Use the same entity names in engineering documentation and product explanations.
+Plain-language descriptions can simplify a concept without changing its meaning.
 
-> **Internal names define behavior. External names define meaning.**
+### 2.1 Resource model
 
-### 2.1 Internal system names (engineering truth — stable, rarely change)
+| Name | Meaning |
+|------|---------|
+| **Resource** | A semantic object with metadata and relationships; it may contain one file, multiple components, or a canonical file with supporting files |
+| **Collection** | Organizes resources with configured schemas and indexing |
+| **Schema** | Defines resource fields, validation, forms and search behavior (`collection_schemes`) |
+| **Workspace** | An organization-scoped curated selection of resources |
+| **Vault** | A contextual view of selected resources, with policy and addressing; it can draw on workspaces without copying the underlying assets |
+| **Experience** | A gallery, knowledge view, AI chat or other application consuming a Vault |
 
-| Name | Meaning (internal) |
-|------|--------------------|
-| **Eonity** | Platform engine / backend ecosystem (umbrella) |
-| **Workspace** | Structural container (org-scoped) |
-| **Vault** | Semantic *projection* layer over a Workspace ✅ |
-| **Resource** | Atomic knowledge unit (canonical + supporting files) |
-| **Schema** | Indexing / validation / meaning rules (`collection_schemes`) |
+A Collection is not a gallery application, and a Vault is not simply a published
+Workspace. Workspaces curate membership; Vaults define the external context and
+access rules. Vaults can be public, private or disabled.
 
-Used by: API contracts, MCP tools, DB concepts, embeddings scope logic, graph
-schema. This is the **truth layer** — it must stay stable as marketing evolves.
+Resources are shared across Vault contexts, not immutable records. Authorized
+operations can update their metadata, files and lifecycle state. Projection does
+not create an independently edited copy of the underlying resource. See the
+[resource model](RESOURCE_MODEL.md) and [Vault specification](VAULT_SYSTEM.md).
 
-### 2.2 External product names (human experience — may evolve freely)
+### 2.2 Brand and message hierarchy
 
-| Name | Meaning (external) |
-|------|--------------------|
-| **TYDAL** | The product / platform users interact with |
-| **Vaults** | Published Workspaces (user-facing concept) |
-| **AITY** | The AI agent / assistant interface |
-| **Collections** | Galleries / Obsidian views / AI spaces |
+- **TYDAL / Tydal:** the product; use Tydal in website prose and retain TYDAL in
+  repository titles and technical documentation.
+- **Eonity:** the umbrella for the open-source product family.
+- **Tydalia:** the website/ecosystem name, not a separate product.
+- **Headline:** Control your knowledge flow.
+- **Category:** Open-source Semantic Asset Platform.
+- **Product definition:** The typed Digital Asset Layer.
+- **Developer explanation:** The semantic layer between your files and your AI.
+- **AI integration description:** Schema-driven semantic Vaults for AI agents.
 
-Used by: UI, marketing, docs, onboarding, domain.
+Use these at different levels rather than stacking them as competing slogans.
+“Typed” refers to schema-defined fields, validation and search behavior, not only
+to file types or the SDK's programming language. People and applications remain
+consumers alongside AI agents.
 
-### 2.3 Internal ⇄ external mapping
+The **TY** signature comes from EONI**TY**; **DAL** means **Digital Asset Layer**.
+Earlier naming proposals such as “Trusted Yield” or “Digital Asset Library” are
+superseded. TYDAM belongs to historical DAM terminology, not the current product
+hierarchy.
 
-| Internal (engine) | External (product) |
-|-------------------|--------------------|
-| Eonity system | TYDAL platform |
-| Workspace | Project / Space |
-| Vault | Vault *(same word, different abstraction)* |
-| Resource | Content item |
+### 2.3 AI interfaces
 
-> ⚠️ **"Vault" appears in both layers but means different things** — internally a
-> *semantic projection over a Workspace*, externally a *published Workspace*.
-> This is acceptable **only if the boundary is enforced** in code and docs.
+Server-side AITY enrichment produces suggestions for review or configured
+automatic approval. Organization MCP lets authorized agents perform management
+operations, applying final values directly. Vault MCP exposes one Vault and is
+read-only by default, with supported writes enabled by a write key. The Aity
+Vault app provides an Ask AI interface. See [AI surfaces](AI_SURFACES.md) for the
+scope and behavior of each interface.
 
-### 2.4 The brand thread
+### 2.4 Source, license and website
 
-The **`TY`** in TYDAL derives from **eoni·TY** — tying the org to the product
-through a shared syllable. `DA_` = *Digital Asset* is the shared spine across the
-family. Qualifier words (Tagged / Semantic / Tracked) are positioning, not hard
-acronym letters (note: TYDAL has no "S", so "Semantic" lives in copy, not the
-acronym).
+- **Public product repository:** [eonity-org/tydal](https://github.com/eonity-org/tydal).
+- **License:** [Apache-2.0](../../LICENSE); the current product has no proprietary-core split.
+- **Intended website:** `tydalia.com`.
+- **Application SDK:** `@tydal/client` supports the management frontend, Vault
+  apps and external integrations. The `org-mcp` and `vault-mcp` adapters use
+  their own HTTP wrappers; see [the SDK README](../../client/README.md).
 
-### 2.5 Ecosystem family (context)
-
-| Layer | Name | Role |
-|-------|------|------|
-| Umbrella org | **Eonity** | platform / company identity |
-| Operational product | **TYDAM** — *Tagged Digital Asset Management* | the DAM (foundation vocabulary) |
-| Semantic layer | **TYDAL** — *Semantic Digital Asset Library/Layer* | knowledge / projection layer |
-| AI agent | **AITY** — *Asset Intelligence for TYDAM* | cognitive interface |
-
-Pattern: **Data → Knowledge → Intelligence**.
-
-### 2.6 Repository / domain conventions (decisions in progress)
-
-- **GitHub org:** `eonity-org` (umbrella; avoids the `tydal`/`tydalia` repetition;
-  consistent with the eoniTY root). Product repos live under it.
-- **Domain:** `tydalia.com` — product landing / marketing entry (decoupled from
-  org name; this is fine and intentional).
-- **Repo naming guidance:** engineers see Eonity structure
-  (`eonity-core`, `eonity-vault`, `eonity-graph`), users see the TYDAL product
-  suite (`tydal-app`, `tydal-ai`, `tydal-vaults`). The org need not match the
-  product name. The Experience layer (§3.5) is a set of per-mode apps plus one
-  shared SDK package, `@tydal/client`, that every app and the MCP server consume.
 
 ---
 
@@ -225,8 +219,8 @@ Settled design (full spec in [`VAULT_SYSTEM.md`](VAULT_SYSTEM.md)):
   to an ordered **manifest**.
 - **Boundary state** (`state`): `disabled` (off) · `private` (vault key or
   signed grant required) · `public` (the address alone). One axis, because the
-  old `is_active`/`is_published` pair was never orthogonal. "Vaults"
-  (external) = `public` projections (§2.2).
+  old `is_active`/`is_published` pair was never orthogonal. The name Vault
+  applies to all three states (§2.1).
 - **Write boundary** (2026-07-24, [`VAULT_WRITE_METHODS.md`](VAULT_WRITE_METHODS.md)):
   the vault also accepts a purpose-defined set of *write* ops (`gallery` →
   activate/open/close; `ai` → `ingest`, 2026-07-25) gated by a **write-capable
@@ -593,7 +587,7 @@ v2 ✅ (extend, not rebuild — full spec in
 - Human namespace `/v/{orgSlug}/{vaultSlug}/{resourceSlug}` with the tier-gated
   operation grammar (`/meta` · `/files` · `/chunks` · `/links` · …) and the
   ordered **manifest** for multi-file resources.
-- Read-only vault MCP server (verb = tier taxonomy, vault-key / published auth).
+- Vault MCP server, read-only by default (verb = tier taxonomy, Vault-key / public access; supported writes require a write key).
 
 ### Phase 3 — Schema-Driven Indexing (v2 core)
 - `VaultSchemaOverlay` engine.
@@ -623,21 +617,21 @@ v2 ✅ (extend, not rebuild — full spec in
 1. **Resource-centric** — everything is a Resource.
 2. **Vault is a projection, not storage** — never duplicate data per Vault.
 3. **Schema defines meaning, not just validation** — schemas are semantic contracts.
-4. **AI never accesses raw data** — only Vault-scoped MCP tools.
+4. **AI access follows its interface** — organization agents use granted
+   management permissions; Vault consumers use the content and operations
+   exposed by that Vault, including binary content when permitted.
 5. **Embeddings are signals, not structure** — the graph defines meaning,
    embeddings rank it.
-6. **Dual naming discipline** — internal names define behavior, external names
-   define meaning; never let one leak into the other (§2).
+6. **Consistent terminology** — Resource, Collection, Workspace and Vault
+   retain the same meaning in engineering and product documentation (§2).
 
 ---
 
 ## 13. 🧠 Final Definition
 
-> **TYDAL v2** is a schema-driven semantic system where immutable Resources are
-> projected through **Vaults** that define contextual meaning, indexing
-> behavior, and AI interaction surfaces via MCP-enabled reasoning agents —
-> delivered as a graphical UI for Obsidian-style and AI vaults under the
-> **Eonity** platform.
+> **TYDAL is the typed Digital Asset Layer:** an open-source Semantic Asset
+> Platform that structures, enriches and shares digital resources through
+> contextual Vaults for people, applications and AI agents.
 
 ---
 

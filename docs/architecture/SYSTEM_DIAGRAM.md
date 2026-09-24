@@ -127,35 +127,25 @@ sequenceDiagram
 
 ---
 
-## 4. Dual naming map (internal engine ⇄ external product)
+## 4. Resource model and consuming experiences
 
 ```mermaid
 flowchart LR
-    subgraph INT["🟣 Internal — engineering truth (stable)"]
-        EON["Eonity (engine)"]
-        WS["Workspace"]
-        VA["Vault = projection<br/>(promoted CDN entity)"]
-        RE["Resource"]
-        SC["Schema"]
-    end
+    SC["Schemas: structure, validation, indexing"] --> COLL["Collections"]
+    COLL --> RE["Resources: files, metadata, relationships"]
+    RE -->|curated into| WS["Workspaces"]
+    WS -->|selected through| VA["Vaults: context, access rules, addressing"]
+    VA --> GALLERY["Gallery applications"]
+    VA --> KNOWLEDGE["Knowledge views"]
+    VA --> AI["AI clients and agents"]
 
-    subgraph EXT["🟢 External — product (may evolve)"]
-        TY["TYDAL (platform)"]
-        VAULTS["Vaults = published projections"]
-        AITYX["AITY = AI assistant"]
-        COLL["Collections = galleries / obsidian / AI spaces"]
-    end
-
-    EON -->|presented as| TY
-    WS -->|presented as| VAULTS
-    VA -->|same word, user abstraction| VAULTS
-    RE -->|presented as| COLL
-
-    classDef int fill:#3b2e58,color:#fff;
-    classDef ext fill:#2e7d4f,color:#fff;
-    class EON,WS,VA,RE,SC int;
-    class TY,VAULTS,AITYX,COLL ext;
+    classDef core fill:#3b2e58,color:#fff;
+    classDef experience fill:#2e7d4f,color:#fff;
+    class SC,COLL,RE,WS,VA core;
+    class GALLERY,KNOWLEDGE,AI experience;
 ```
 
-> **Rule:** internal names define *behavior*, external names define *meaning*.
-> "Vault" appears in both — enforce the boundary in code and docs.
+This diagram shows relationships, not a file-copy pipeline. The same resource
+can participate in several workspace selections and Vault contexts. Collections
+organize resources; galleries and knowledge views are consuming applications.
+See [product terminology](ARCHITECTURE_AND_ROADMAP.md).

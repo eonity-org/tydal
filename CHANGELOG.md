@@ -9,7 +9,7 @@ All notable changes to TYDAL are documented here. The format follows
 ## [1.0.0] — 2026-09-23
 
 First public release of TYDAL — a multi-tenant, schema-driven semantic knowledge
-system that projects immutable **Resources** through contextual **Vaults** with
+system that exposes shared **Resources** through contextual **Vaults** with
 tiered AI-interaction surfaces (REST, MCP, embeddings, graph). Internally this is
 the "v2" architecture (the CDN delivery layer promoted to the Vault projection
 layer); as a shipped product it is version 1.0.0.
@@ -188,13 +188,15 @@ layer); as a shipped product it is version 1.0.0.
 - **Vault ask head** — grounded, citation-bearing Q&A over a vault's own
   projection, with SSE streaming; retrieval walks the same tier-gated grammar as
   any client. Relevance floor is owner-tunable per vault and per organization.
-- **Two MCP servers**: the internal write-capable working surface (`@tydal/mcp`)
-  and the vault-scoped read-only consumer surface (`@tydal/vault-mcp`).
+- **Two MCP servers**: the organization-scoped management surface (`@tydal/org-mcp`)
+  and the Vault-scoped consumer surface (`@tydal/vault-mcp`), read-only by
+  default with supported writes enabled through a write key.
 
 ### Experience layer
 
-- **`@tydal/client`** — the framework-agnostic TypeScript SDK that is the single
-  transport for every surface (SPA, MCP, apps); no hand-rolled HTTP elsewhere.
+- **`@tydal/client`** — the framework-agnostic TypeScript SDK for the SPA,
+  Vault apps and external integrations. Both MCP adapters use their own HTTP
+  wrappers.
 - **Three vault renderer apps**, each an independent build over the public vault
   grammar: **gallery** (exhibition wall), **obsidian** (graph + notes), and the
   **AI chat** app (streaming ask).

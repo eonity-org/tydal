@@ -1,23 +1,40 @@
 # TYDAL
 
-**TYDAL — the typed Digital Asset Layer**  
-*The semantic layer between your files and your AI.*  
-*Schema-driven semantic vaults for AI agents.*
+**TYDAL — the typed Digital Asset Layer**
 
-**From files to typed semantic resources.**
+TYDAL is an open-source Semantic Asset Platform for structuring, enriching and
+sharing digital resources through contextual Vaults for people, applications
+and AI agents.
 
-TYDAL is a multi-tenant, schema-driven semantic knowledge system that structures, enriches, and projects digital resources through contextual Vaults. It combines a Laravel API, a React frontend, file storage, semantic metadata, workspace-based catalogues, and AI-native enrichment.
+## From files to structured resources
 
-The **TY** signature, inherited from EONI**TY**, connects TYDAL to the **EONITY** product family.
+Documents, images, datasets and code become resources that can contain one file
+or several related files. **Typed** means schemas define resource fields,
+validation and search behavior: the same structure guides forms, filters and
+indexing.
 
+Collections organize resources under schemas. Workspaces curate selections.
+**Vaults** expose contextual views of those resources with their own access
+rules and capabilities, without duplicating the underlying assets. The same
+content can support a gallery, an application or an AI workflow.
+
+AI enrichment can propose metadata for review or configured automatic approval.
+Organization MCP lets authorized agents manage resources and workspaces; Vault
+MCP connects an external AI client to one curated context, read-only by default
+with supported writes enabled through a write key. See [AI surfaces](docs/architecture/AI_SURFACES.md).
+
+The **TY** signature, inherited from EONI**TY**, connects TYDAL to the **EONITY**
+product family. **DAL** stands for **Digital Asset Layer**.
 
 ## Repository Layout
 
 ```text
 backend/    Laravel 12 API, database migrations, jobs, services, tests
 frontend/   Vite + React + TypeScript web application
+client/     TypeScript SDK for applications and integrations
+vaults/     Gallery, knowledge and AI-chat clients of the Vault interfaces
 org-mcp/    Org-wide MCP server (write-capable management surface)
-vault-mcp/  Vault-scoped read-only MCP server (customer AI consumer surface)
+vault-mcp/  Vault-scoped MCP server (read-only by default; supported writes with a write key)
 tools/      Utility scripts, including the bulk uploader
 docs/       Public documentation index and archived design notes
 ```
@@ -49,7 +66,14 @@ gotchas) and [production deployment](DEPLOYMENT.md#production-deployment)
 - [Vault MCP server README](vault-mcp/README.md)
 - [Bulk uploader README](tools/bulk_uploader/README.md)
 
-Historical design notes, migration notes, and planning documents have been moved into `docs/archive/`, `backend/docs/archive/`, and `frontend/docs/archive/` so the public documentation stays short.
+Architecture specifications live in `docs/architecture/`; migration and milestone
+records live in `docs/planning/`. Earlier private archive material is summarized
+in the [historic documentation digest](docs/planning/historic.md).
+
+## Contributing
+
+Run your own instance, inspect the code and help shape the project. See the
+[contribution guide](docs/CONTRIBUTING.md) for development standards and pull requests.
 
 ## Testing
 
