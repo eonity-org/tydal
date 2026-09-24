@@ -1,5 +1,8 @@
 # TYDAL Frontend
 
+*The semantic layer between your files and your AI.*
+
+
 Vite + React web application for the TYDAL API.
 
 ## What It Provides
