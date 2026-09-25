@@ -8,7 +8,7 @@ import {
 import { Warning, ContentCopy, Key, Block, Schedule, Share, Tune } from '@mui/icons-material'
 import AdminTable, { AdminColumn } from './AdminTable'
 import vaultService, { VaultConfig, VaultFormData, VaultKeyEntry, SignedUrlGrant, VAULT_PURPOSES, VaultPurpose, VAULT_STATES, VaultState, PUBLIC_BASE, keyAbilityOptions, VaultCapabilityDef, VaultPresetEntry } from '../../api/vaultService'
-import VaultCapabilityGrid from './VaultCapabilityGrid'
+import VaultCapabilityGrid, { IngestTargetOption } from './VaultCapabilityGrid'
 import SectionTitle from './SectionTitle'
 import adminService, { AdminOrganization } from '../../api/adminService'
 import { CHIP_COLORS } from '../../contexts/ThemeContext'
@@ -54,6 +54,7 @@ function VaultsTab() {
   })
   const [form, setForm] = useState<VaultFormData>(EMPTY_FORM)
   const [orgs, setOrgs] = useState<AdminOrganization[]>([])
+  const [ingestOptions, setIngestOptions] = useState<{ workspaces: IngestTargetOption[]; collections: IngestTargetOption[] } | undefined>()
   // The capability vocabulary + every purpose's preset, served by the backend so
   // the defaults are never restated here (see vaultService.VAULT_WRITE_METHODS).
   const [capabilities, setCapabilities] = useState<VaultCapabilityDef[]>([])
@@ -122,6 +123,30 @@ function VaultsTab() {
       .then(res => setOrgs(res.data.organizations.data))
       .catch(() => setOrgs([]))
   }, [])
+
+  // The ingest target is picked by name from the vault's own organization —
+  // workspace/collection ids appear nowhere else in the admin. Internal
+  // system workspaces (a gallery's selection) are not valid targets.
+  const orgId = modal.open && modal.view === 'capabilities' ? form.organization_id : ''
+  useEffect(() => {
+    if (!orgId) { setIngestOptions(undefined); return }
+    let stale = false
+    Promise.all([
+      adminService.organizations.workspaces(orgId),
+      adminService.collections.list({ organization_id: orgId, per_page: 100 }),
+    ])
+      .then(([ws, cols]) => {
+        if (stale) return
+        setIngestOptions({
+          workspaces: ws.data.workspaces
+            .filter(w => !w.is_system)
+            .map(w => ({ id: Number(w.id), name: w.name, hint: w.is_default ? 'default · every resource in the org' : undefined })),
+          collections: cols.data.collections.data.map(c => ({ id: Number(c.id), name: c.name })),
+        })
+      })
+      .catch(() => { if (!stale) setIngestOptions(undefined) }) // falls back to raw ids
+    return () => { stale = true }
+  }, [orgId])
 
   // The capability matrix is static per deployment — fetch it once.
   useEffect(() => {
@@ -631,6 +656,7 @@ function VaultsTab() {
                     value={form.exposure_policy ?? null}
                     onChange={(exposure_policy) => setForm(f => ({ ...f, exposure_policy }))}
                     disabled={saving}
+                    ingestOptions={ingestOptions}
                   />
                 ) : (
                   <Typography variant="caption" color="text.disabled">
