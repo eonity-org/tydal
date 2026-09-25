@@ -106,6 +106,13 @@ writer decides only **which files an `ingest` carries and how they're stored**.
   `exposure_policy.ingest = { workspace_id, collection_id }` — vault-configured,
   never consumer-supplied (the consumer declares *what*; the vault decides
   *where*). No target → the op is refused with a 400.
+  The platform vault form picks it by name, and also sets which workspaces the
+  vault reads from (`workspace_ids`) — the same links the workspace selector
+  edits. Both sides refuse the links the vault controls
+  (`VaultService::associationLock`, 409): removing the ingest target while the
+  vault accepts `ingest`, touching a system workspace, and any change while a
+  gallery's published selection decides what it shows. The selector shows those
+  links locked, with the reason.
 - **The metadata document.** One flat JSON object, `metadata`. Keys naming a
   resource column (`name`, `description`) are **lifted** onto the resource;
   every other key is stored in `resources.metadata` **as given**. Values are
