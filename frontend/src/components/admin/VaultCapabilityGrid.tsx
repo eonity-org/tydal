@@ -49,6 +49,14 @@ function toLevel(v: unknown): AccessLevel {
   return (v === 'key' || v === 'denied' || v === 'inherit') ? v : 'inherit'
 }
 
+/** A workspace or collection the ingest target can point at, by name. */
+export interface IngestTargetOption {
+  id: number
+  name: string
+  /** Shown after the name, e.g. "default · all resources". */
+  hint?: string
+}
+
 interface Props {
   capabilities: VaultCapabilityDef[]
   /** The active purpose's preset values, keyed by capability. */
@@ -57,6 +65,11 @@ interface Props {
   value: VaultExposurePolicy | null
   onChange: (policy: VaultExposurePolicy | null) => void
   disabled?: boolean
+  /**
+   * The vault's organization's workspaces and collections. When given, the
+   * ingest target is picked by name; without them it falls back to raw ids.
+   */
+  ingestOptions?: { workspaces: IngestTargetOption[]; collections: IngestTargetOption[] }
 }
 
 function parseList(text: string): string[] {
@@ -108,7 +121,7 @@ function describe(v: unknown): string {
   return String(v)
 }
 
-function VaultCapabilityGrid({ capabilities, preset, value, onChange, disabled }: Props) {
+function VaultCapabilityGrid({ capabilities, preset, value, onChange, disabled, ingestOptions }: Props) {
   const overrides = value ?? {}
 
   const isOverridden = (key: VaultCapabilityKey) =>
@@ -180,6 +193,40 @@ function VaultCapabilityGrid({ capabilities, preset, value, onChange, disabled }
       const next = { ...target, ...patch }
       const complete = next.workspace_id != null && next.collection_id != null
       set(cap.key, complete || next.workspace_id != null || next.collection_id != null ? next : undefined)
+    }
+
+    if (ingestOptions) {
+      // A saved id that no longer resolves (deleted, another org) stays visible.
+      const pick = (label: string, options: IngestTargetOption[], id: number | undefined,
+        onPick: (id: number | undefined) => void) => (
+        <TextField
+          select size="small" fullWidth label={label} disabled={disabled}
+          value={id ?? ''}
+          onChange={(e) => onPick(e.target.value === '' ? undefined : Number(e.target.value))}
+        >
+          <MenuItem value=""><em>None</em></MenuItem>
+          {id != null && !options.some(o => o.id === id) && (
+            <MenuItem value={id}>#{id} (not found in this organization)</MenuItem>
+          )}
+          {options.map(o => (
+            <MenuItem key={o.id} value={o.id}>
+              {o.name}
+              {o.hint && (
+                <Typography component="span" variant="caption" color="text.disabled" sx={{ ml: 1 }}>
+                  {o.hint}
+                </Typography>
+              )}
+            </MenuItem>
+          ))}
+        </TextField>
+      )
+
+      return (
+        <Stack direction="row" spacing={1}>
+          {pick('Workspace', ingestOptions.workspaces, target.workspace_id, (workspace_id) => setTarget({ workspace_id }))}
+          {pick('Collection', ingestOptions.collections, target.collection_id, (collection_id) => setTarget({ collection_id }))}
+        </Stack>
+      )
     }
 
     return (
