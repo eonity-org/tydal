@@ -212,9 +212,9 @@ export interface VaultKeyEntry {
 // because a table restated here is a table free to drift.
 export const VAULT_WRITE_METHODS: Record<VaultPurpose, string[]> = {
   delivery: [],
-  gallery: ['activate', 'open', 'close'],
+  gallery: ['activate', 'open', 'close', 'ingest', 'update', 'withdraw'],
   obsidian: [],
-  ai: ['ingest'],
+  ai: ['ingest', 'update', 'withdraw'],
   mixed: [],
 }
 

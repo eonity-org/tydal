@@ -170,7 +170,7 @@ function VaultCapabilityGrid({ capabilities, preset, value, onChange, disabled }
       )
     }
 
-    // `ingest` — the landing spot for the ai purpose's write op. The consumer
+    // `ingest` — where every purpose's `ingest` op lands new resources. The consumer
     // declares what; the vault decides where, so both ids are set together.
     const target = (overridden && typeof current === 'object' && current !== null
       ? current as { workspace_id?: number; collection_id?: number }

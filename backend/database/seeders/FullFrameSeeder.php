@@ -54,7 +54,7 @@ class FullFrameSeeder extends Seeder
         [, $submissions] = $this->seedWorkspaces($org, $admin);
         $collection = $this->seedCollection($org, $admin, $scheme, $index);
         $this->seedPhotos($org, $admin, $collection, $submissions);
-        $vault = $this->seedVault($org, $submissions);
+        $vault = $this->seedVault($org, $submissions, $collection);
         $keys = $this->seedVaultKeys($vault);
 
         $this->summary($org, $vault, $collection, $keys);
@@ -513,7 +513,7 @@ class FullFrameSeeder extends Seeder
     // Vault + key
     // -------------------------------------------------------------------------
 
-    private function seedVault(Organization $org, Workspace $submissions): Vault
+    private function seedVault(Organization $org, Workspace $submissions, Collection $collection): Vault
     {
         $vault = Vault::firstOrCreate(
             ['organization_id' => $org->id, 'slug' => 'first-frame'],
@@ -531,6 +531,12 @@ class FullFrameSeeder extends Seeder
 
         $submissions->vaults()->syncWithoutDetaching([$vault->id]);
 
+        // Curator uploads (`ingest`) land in Submissions, in the photo
+        // collection — the vault decides where, never the consumer.
+        $vault->update(['exposure_policy' => array_merge($vault->exposure_policy ?? [], [
+            'ingest' => ['workspace_id' => $submissions->id, 'collection_id' => $collection->id],
+        ])]);
+
         $this->command->info("✓ Vault: First Frame (gallery, private, hash: {$vault->hash}) ← Submissions");
 
         return $vault;
@@ -538,7 +544,8 @@ class FullFrameSeeder extends Seeder
 
     /**
      * Mint the exhibition's two vault keys — a read key for the jury proxy and a
-     * write key (activate/open/close) for the opening (VAULT_WRITE_METHODS.md).
+     * write key for the opening (activate/open/close) and the curator's uploads
+     * (ingest/update/withdraw) (VAULT_WRITE_METHODS.md).
      *
      * @return array{read: string, write: string}|null
      */
@@ -551,7 +558,7 @@ class FullFrameSeeder extends Seeder
         }
 
         [, $read] = VaultKey::mint($vault, 'fullframe-read', ['read']);
-        [, $write] = VaultKey::mint($vault, 'fullframe-write', ['w:activate', 'w:open', 'w:close']);
+        [, $write] = VaultKey::mint($vault, 'fullframe-write', ['w:activate', 'w:open', 'w:close', 'w:ingest', 'w:update', 'w:withdraw']);
 
         return ['read' => $read, 'write' => $write];
     }

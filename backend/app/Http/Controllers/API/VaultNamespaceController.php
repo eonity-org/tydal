@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Enums\VaultPurpose;
 use App\Http\Controllers\Controller;
 use App\Models\File;
 use App\Models\Vault;
@@ -11,6 +12,7 @@ use App\Services\AiVaultWriter;
 use App\Services\GalleryVaultWriter;
 use App\Services\Processing\VisionImagePreparer;
 use App\Services\VaultAskService;
+use App\Services\VaultIngest;
 use App\Services\VaultLinkService;
 use App\Services\VaultOperationService;
 use Illuminate\Http\JsonResponse;
@@ -353,18 +355,20 @@ class VaultNamespaceController extends Controller
      * Write at the boundary (VAULT_WRITE_METHODS.md §5) — the inbound
      * counterpart to the read grammar. Gated by a write-capable vault key
      * (not the read policy: writes must reach a private vault). The purpose
-     * defines the verbs; only `gallery` exposes any today, so the writer is
-     * dispatched against it. Every accepted call is audited on the vault.
+     * lists the verbs: every purpose that takes content shares `ingest` /
+     * `update` / `withdraw` (VaultIngest), and `gallery` adds its projection
+     * ops `activate` / `open` / `close`. Every accepted call is audited on the
+     * vault — the audit is also the provenance `update`/`withdraw` check.
      */
-    public function hashVaultWrite(string $vaultHash, string $method, Request $request, GalleryVaultWriter $writer, AiVaultWriter $aiWriter): JsonResponse
+    public function hashVaultWrite(string $vaultHash, string $method, Request $request, GalleryVaultWriter $writer, AiVaultWriter $aiWriter, VaultIngest $ingest): JsonResponse
     {
-        return $this->dispatchWrite(Vault::findByHashCached($vaultHash), $method, $request, $writer, $aiWriter);
+        return $this->dispatchWrite(Vault::findByHashCached($vaultHash), $method, $request, $writer, $aiWriter, $ingest);
     }
 
     /** Human-form write — same gate and grammar as the hash form (spec §4). */
-    public function vaultWrite(string $orgSlug, string $vaultSlug, string $method, Request $request, GalleryVaultWriter $writer, AiVaultWriter $aiWriter): JsonResponse
+    public function vaultWrite(string $orgSlug, string $vaultSlug, string $method, Request $request, GalleryVaultWriter $writer, AiVaultWriter $aiWriter, VaultIngest $ingest): JsonResponse
     {
-        return $this->dispatchWrite(Vault::findBySlugsCached($orgSlug, $vaultSlug), $method, $request, $writer, $aiWriter);
+        return $this->dispatchWrite(Vault::findBySlugsCached($orgSlug, $vaultSlug), $method, $request, $writer, $aiWriter, $ingest);
     }
 
     /**
@@ -372,34 +376,41 @@ class VaultNamespaceController extends Controller
      * (GET) counterpart to the write boundary. Reports the write methods the
      * presented key may invoke here, without invoking any — so a consumer's
      * config UI can confirm a write key is bound before an opening depends on
-     * it. Same gate, same 404 opacity as the write itself.
+     * it. When the key may `update` or `withdraw`, it also lists the resources
+     * those ops can act on (`ingested`), so the consumer offers them on the
+     * right items. Same gate, same 404 opacity as the write itself.
      */
-    public function hashVaultWriteInfo(string $vaultHash, Request $request): JsonResponse
+    public function hashVaultWriteInfo(string $vaultHash, Request $request, VaultIngest $ingest): JsonResponse
     {
-        return $this->writeInfo(Vault::findByHashCached($vaultHash), $request);
+        return $this->writeInfo(Vault::findByHashCached($vaultHash), $request, $ingest);
     }
 
     /** Human-form write probe — same gate as the hash form. */
-    public function vaultWriteInfo(string $orgSlug, string $vaultSlug, Request $request): JsonResponse
+    public function vaultWriteInfo(string $orgSlug, string $vaultSlug, Request $request, VaultIngest $ingest): JsonResponse
     {
-        return $this->writeInfo(Vault::findBySlugsCached($orgSlug, $vaultSlug), $request);
+        return $this->writeInfo(Vault::findBySlugsCached($orgSlug, $vaultSlug), $request, $ingest);
     }
 
-    private function writeInfo(?Vault $vault, Request $request): JsonResponse
+    private function writeInfo(?Vault $vault, Request $request, VaultIngest $ingest): JsonResponse
     {
         $probe = $this->links->writeCapabilities($vault, $request->ip(), $this->vaultKey($request));
 
-        if ($probe['status'] !== 200) {
+        if ($probe['status'] !== 200 || ! $vault) {
             return $this->vaultJson(
                 ['ok' => false, 'error' => $probe['error'] ?? 'Not found or expired'],
-                $probe['status'],
+                $probe['status'] === 200 ? 404 : $probe['status'],
             );
         }
 
-        return $this->vaultJson(['ok' => true, 'methods' => $probe['methods']]);
+        $body = ['ok' => true, 'methods' => $probe['methods']];
+        if (array_intersect(['update', 'withdraw'], $probe['methods']) !== []) {
+            $body['ingested'] = $ingest->ingested($vault);
+        }
+
+        return $this->vaultJson($body);
     }
 
-    private function dispatchWrite(?Vault $vault, string $method, Request $request, GalleryVaultWriter $writer, AiVaultWriter $aiWriter): JsonResponse
+    private function dispatchWrite(?Vault $vault, string $method, Request $request, GalleryVaultWriter $writer, AiVaultWriter $aiWriter, VaultIngest $ingest): JsonResponse
     {
         $auth = $this->links->authorizeWrite($vault, $method, $request->ip(), $this->vaultKey($request));
 
@@ -418,7 +429,9 @@ class VaultNamespaceController extends Controller
                 'activate' => $writer->activate($vault, $this->activatePayload($request)),
                 'open' => $writer->open($vault),
                 'close' => $writer->close($vault),
-                'ingest' => $this->dispatchIngest($aiWriter, $vault, $request),
+                'ingest' => $this->dispatchIngest($vault, $request, $writer, $aiWriter, $ingest),
+                'update' => $ingest->update($vault, $this->resourcePayload($request), $request->input('metadata')),
+                'withdraw' => $ingest->withdraw($vault, $this->resourcePayload($request)),
                 // allowsWriteMethod vouched for the method but no handler maps
                 // it — only reachable if a purpose lists a verb without an
                 // implementation (config drift), never from client input.
@@ -459,53 +472,50 @@ class VaultNamespaceController extends Controller
         return array_values($validated['resources']);
     }
 
-    /**
-     * Resolve + run an `ingest` (keeps the `match` arm type-clean: the validated
-     * `image` is statically nullable, but `ingestPayload` proves it present).
-     *
-     * @return array{hash: string, files: int}
-     */
-    private function dispatchIngest(AiVaultWriter $aiWriter, Vault $vault, Request $request): array
+    /** The `update`/`withdraw` target: the link hash `ingest` returned. */
+    private function resourcePayload(Request $request): string
     {
-        $document = $this->ingestPayload($request);
-        $image = $request->file('image');
-
-        if (! $image instanceof UploadedFile) {
-            throw ValidationException::withMessages(['image' => 'A translated image file is required.']);
-        }
-
-        return $aiWriter->ingest($vault, $document, $image);
+        return $request->validate([
+            'resource' => ['required', 'string', 'max:64'],
+        ])['resource'];
     }
 
     /**
-     * The `ingest` document (multipart): a translated `image` file plus a
-     * `descriptor` JSON document, and an optional output `name` / `source_hash`.
-     * The named op is the permission unit; this payload is the declarative
-     * document the AiVaultWriter maps (VAULT_WRITE_METHODS.md §7).
+     * An `ingest` (multipart): an `image` file plus the `metadata` document
+     * (a JSON object — `name`/`description` become the resource's columns,
+     * the rest its metadata). The purpose decides what else it carries and
+     * how the files are stored: `gallery` stores the photograph; `ai` also
+     * needs a `descriptor` JSON document (VAULT_WRITE_METHODS.md §3/§7).
      *
-     * @return array{descriptor: array<array-key, mixed>, name?: string, source_hash?: string}
+     * @return array<string, mixed>
      */
-    private function ingestPayload(Request $request): array
+    private function dispatchIngest(Vault $vault, Request $request, GalleryVaultWriter $writer, AiVaultWriter $aiWriter, VaultIngest $ingest): array
     {
-        $validated = $request->validate([
+        $request->validate([
             'image' => ['required', 'file', 'image', 'max:512000'],
-            'descriptor' => ['required', 'string'],
-            'name' => ['sometimes', 'string', 'max:255'],
-            'source_hash' => ['sometimes', 'string', 'max:64'],
+            'metadata' => ['sometimes', 'nullable'],
         ]);
-
-        $descriptor = json_decode($validated['descriptor'], true);
-        if (! is_array($descriptor)) {
-            throw ValidationException::withMessages([
-                'descriptor' => 'The descriptor must be a JSON object.',
-            ]);
+        $image = $request->file('image');
+        if (! $image instanceof UploadedFile) {
+            throw ValidationException::withMessages(['image' => 'An image file is required.']);
         }
 
-        return array_filter([
-            'descriptor' => $descriptor,
-            'name' => $validated['name'] ?? null,
-            'source_hash' => $validated['source_hash'] ?? null,
-        ], fn ($v) => $v !== null);
+        $document = $ingest->document($request->input('metadata'));
+
+        if ($vault->purpose === VaultPurpose::AI) {
+            $descriptor = json_decode((string) $request->validate([
+                'descriptor' => ['required', 'string'],
+            ])['descriptor'], true);
+            if (! is_array($descriptor)) {
+                throw ValidationException::withMessages([
+                    'descriptor' => 'The descriptor must be a JSON object.',
+                ]);
+            }
+
+            return $aiWriter->ingest($vault, $document, $descriptor, $image);
+        }
+
+        return $writer->ingest($vault, $document, $image);
     }
 
     public function hashEntry(string $vaultHash, string $linkHash, Request $request): StreamedResponse|JsonResponse
