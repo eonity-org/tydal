@@ -13,8 +13,9 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  Tooltip,
 } from '@mui/material'
-import { AutoAwesome, WorkspacesOutlined, Edit, Delete, Close, Add } from '@mui/icons-material'
+import { AutoAwesome, WorkspacesOutlined, Edit, Delete, Close, Add, Lock } from '@mui/icons-material'
 import workspaceService, { type Workspace } from '../../api/workspaceService'
 import vaultService, { type VaultConfig } from '../../api/vaultService'
 
@@ -49,6 +50,9 @@ export default function WorkspacesManagerDialog({
   const [newVaultIds, setNewVaultIds] = useState<Set<string>>(new Set())
   // allWorkspaceVaultIds: pre-loaded map of wsId → Set<vaultId> for view-mode chips
   const [allWorkspaceVaultIds, setAllWorkspaceVaultIds] = useState<Record<string, Set<string>>>({})
+  // wsId → vaultId → why the vault controls that link (it can't be removed here)
+  const [linkLocks, setLinkLocks] = useState<Record<string, Record<string, string>>>({})
+  const [vaultError, setVaultError] = useState<string | null>(null)
 
   // Load available Vaults + all workspace Vault associations when dialog opens
   useEffect(() => {
@@ -60,11 +64,18 @@ export default function WorkspacesManagerDialog({
     Promise.all(
       workspaces.map(ws =>
         vaultService.workspace.listVaults(ws.id)
-          .then(res => ({ wsId: String(ws.id), vaultIds: new Set(res.data.vaults.map(c => c.id)) }))
-          .catch(() => ({ wsId: String(ws.id), vaultIds: new Set<string>() }))
+          .then(res => ({
+            wsId: String(ws.id),
+            vaultIds: new Set(res.data.vaults.map(c => c.id)),
+            locks: Object.fromEntries(
+              res.data.vaults.filter(c => c.association_lock).map(c => [c.id, c.association_lock as string]),
+            ),
+          }))
+          .catch(() => ({ wsId: String(ws.id), vaultIds: new Set<string>(), locks: {} }))
       )
     ).then(results => {
       setAllWorkspaceVaultIds(Object.fromEntries(results.map(r => [r.wsId, r.vaultIds])))
+      setLinkLocks(Object.fromEntries(results.map(r => [r.wsId, r.locks])))
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -81,7 +92,17 @@ export default function WorkspacesManagerDialog({
     setWorkspaceVaultIds(new Set())
     setNewVaultIds(new Set())
     setAllWorkspaceVaultIds({})
+    setLinkLocks({})
+    setVaultError(null)
   }
+
+  /**
+   * When the vault itself controls a link (TYDAL's VaultService::associationLock),
+   * the chip explains why instead of toggling: removing a vault's ingest target,
+   * or changing anything while a gallery's published selection decides what it shows.
+   */
+  const lockFor = (wsId: string | number, vault: VaultConfig, attached: boolean): string | null =>
+    attached ? linkLocks[String(wsId)]?.[vault.id] ?? null : vault.attach_lock ?? null
 
   const handleVaultToggle = async (ws: Workspace, vaultId: string) => {
     const wsKey = String(ws.id)
@@ -103,8 +124,11 @@ export default function WorkspacesManagerDialog({
           [wsKey]: new Set([...(prev[wsKey] ?? []), vaultId]),
         }))
       }
-    } catch {
-      // silently ignore — UI will reflect unchanged state
+      setVaultError(null)
+    } catch (err) {
+      // e.g. a 409 from a lock this view didn't know about yet — say why.
+      const message = (err as { message?: string })?.message
+      setVaultError(message || 'The vault did not accept this change.')
     }
   }
 
@@ -238,6 +262,8 @@ export default function WorkspacesManagerDialog({
                       <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
                         {availableVaults.map((vault) => {
                           const isOn = newVaultIds.has(vault.id)
+                          const lock = lockFor('', vault, false)
+                          if (lock) return <LockedVaultChip key={vault.id} name={vault.name} reason={lock} on={false} />
                           return (
                             <Chip
                               key={vault.id}
@@ -339,6 +365,8 @@ export default function WorkspacesManagerDialog({
                         <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
                             {availableVaults.map((vault) => {
                               const isOn = workspaceVaultIds.has(vault.id)
+                              const lock = lockFor(ws.id, vault, isOn)
+                              if (lock) return <LockedVaultChip key={vault.id} name={vault.name} reason={lock} on={isOn} />
                               return (
                                 <Chip
                                   key={vault.id}
@@ -358,6 +386,11 @@ export default function WorkspacesManagerDialog({
                               )
                             })}
                           </Stack>
+                        {vaultError && (
+                          <Alert severity="warning" sx={{ mt: 1 }} onClose={() => setVaultError(null)}>
+                            {vaultError}
+                          </Alert>
+                        )}
                       </Box>
                     </>
                   )}
@@ -446,14 +479,19 @@ export default function WorkspacesManagerDialog({
                     )}
                     {availableVaults
                       .filter(c => allWorkspaceVaultIds[String(ws.id)]?.has(c.id))
-                      .map(vault => (
-                        <Chip
-                          key={vault.id}
-                          label={vault.name}
-                          size="small"
-                          sx={{ height: 18, fontSize: '0.75rem', bgcolor: 'secondary.main', color: 'white' }}
-                        />
-                      ))}
+                      .map(vault => {
+                        const lock = lockFor(ws.id, vault, true)
+                        const chip = (
+                          <Chip
+                            key={vault.id}
+                            label={vault.name}
+                            size="small"
+                            icon={lock ? <Lock sx={{ fontSize: '0.7rem !important', color: 'white !important' }} /> : undefined}
+                            sx={{ height: 18, fontSize: '0.75rem', bgcolor: 'secondary.main', color: 'white' }}
+                          />
+                        )
+                        return lock ? <Tooltip key={vault.id} title={lock}>{chip}</Tooltip> : chip
+                      })}
                   </Stack>
                   <Stack direction="row" spacing={0.5}>
                     <IconButton
@@ -488,5 +526,28 @@ export default function WorkspacesManagerDialog({
         </Stack>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** A vault link the vault itself controls: shown as it is, with the reason, never toggled. */
+function LockedVaultChip({ name, reason, on }: { name: string; reason: string; on: boolean }) {
+  return (
+    <Tooltip title={reason}>
+      <Chip
+        label={name}
+        size="small"
+        icon={<Lock sx={{ fontSize: '0.85rem !important', color: on ? 'white !important' : undefined }} />}
+        variant={on ? 'filled' : 'outlined'}
+        aria-disabled
+        sx={{
+          cursor: 'not-allowed',
+          fontWeight: on ? 600 : 400,
+          bgcolor: on ? 'secondary.main' : undefined,
+          color: on ? 'white' : 'text.disabled',
+          borderColor: on ? 'secondary.main' : 'divider',
+          opacity: on ? 0.85 : 0.7,
+        }}
+      />
+    </Tooltip>
   )
 }

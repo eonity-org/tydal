@@ -74,6 +74,14 @@ export interface VaultConfig {
   hash_ttl_hours: number | null
   allowed_ips: string[] | null
   exposure_policy: VaultExposurePolicy | null
+  /** The workspaces the vault reads from (platform list; system ones included). */
+  workspaces?: Array<{ id: number; name: string; is_system?: boolean }>
+  /** Set while a gallery's published selection decides what the vault shows. */
+  selection_snapshot?: Record<string, unknown> | null
+  /** Workspace selector: why this link can't be removed right now (the vault controls it). */
+  association_lock?: string | null
+  /** Workspace selector: why a new link to this vault can't be added right now. */
+  attach_lock?: string | null
   base_url: string | null
   is_active: boolean
   created_at: string
@@ -96,6 +104,8 @@ export interface VaultFormData {
   /** Capability overrides; omit or null to run entirely on the purpose preset. */
   exposure_policy?: VaultExposurePolicy | null
   base_url?: string
+  /** Exactly the (non-system) workspaces the vault reads from; omit to leave them as they are. */
+  workspace_ids?: number[]
 }
 
 export interface VaultLinkEntry {

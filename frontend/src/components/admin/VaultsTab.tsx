@@ -1,16 +1,16 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   Button, TextField, Stack, Switch, FormControlLabel,
   Typography, Chip, Alert, Tooltip, MenuItem, IconButton,
   FormControl, InputLabel, Select,
 } from '@mui/material'
-import { Warning, ContentCopy, Key, Block, Schedule, Share, Tune } from '@mui/icons-material'
+import { Warning, ContentCopy, Key, Block, Schedule, Share, Tune, Lock } from '@mui/icons-material'
 import AdminTable, { AdminColumn } from './AdminTable'
 import vaultService, { VaultConfig, VaultFormData, VaultKeyEntry, SignedUrlGrant, VAULT_PURPOSES, VaultPurpose, VAULT_STATES, VaultState, PUBLIC_BASE, keyAbilityOptions, VaultCapabilityDef, VaultPresetEntry } from '../../api/vaultService'
 import VaultCapabilityGrid, { IngestTargetOption } from './VaultCapabilityGrid'
 import SectionTitle from './SectionTitle'
-import adminService, { AdminOrganization } from '../../api/adminService'
+import adminService, { AdminOrganization, AdminWorkspace, AdminCollection } from '../../api/adminService'
 import { CHIP_COLORS } from '../../contexts/ThemeContext'
 
 const EMPTY_FORM: VaultFormData = {
@@ -26,6 +26,7 @@ const EMPTY_FORM: VaultFormData = {
   allowed_ips: [],
   exposure_policy: null,
   base_url: '',
+  workspace_ids: [],
 }
 
 function slugify(s: string): string {
@@ -54,7 +55,8 @@ function VaultsTab() {
   })
   const [form, setForm] = useState<VaultFormData>(EMPTY_FORM)
   const [orgs, setOrgs] = useState<AdminOrganization[]>([])
-  const [ingestOptions, setIngestOptions] = useState<{ workspaces: IngestTargetOption[]; collections: IngestTargetOption[] } | undefined>()
+  // The vault's organization's workspaces and collections, for the pickers.
+  const [orgLists, setOrgLists] = useState<{ workspaces: AdminWorkspace[]; collections: AdminCollection[] } | undefined>()
   // The capability vocabulary + every purpose's preset, served by the backend so
   // the defaults are never restated here (see vaultService.VAULT_WRITE_METHODS).
   const [capabilities, setCapabilities] = useState<VaultCapabilityDef[]>([])
@@ -124,29 +126,40 @@ function VaultsTab() {
       .catch(() => setOrgs([]))
   }, [])
 
-  // The ingest target is picked by name from the vault's own organization —
-  // workspace/collection ids appear nowhere else in the admin. Internal
-  // system workspaces (a gallery's selection) are not valid targets.
-  const orgId = modal.open && modal.view === 'capabilities' ? form.organization_id : ''
+  // Workspaces and collections are picked by name from the vault's own
+  // organization — their ids appear nowhere else in the admin.
+  const listsNeeded = modal.open && ['create', 'capabilities', 'sharing'].includes(modal.view)
+  const orgId = listsNeeded ? form.organization_id ?? '' : ''
   useEffect(() => {
-    if (!orgId) { setIngestOptions(undefined); return }
+    if (!orgId) { setOrgLists(undefined); return }
     let stale = false
     Promise.all([
       adminService.organizations.workspaces(orgId),
       adminService.collections.list({ organization_id: orgId, per_page: 100 }),
     ])
       .then(([ws, cols]) => {
-        if (stale) return
-        setIngestOptions({
-          workspaces: ws.data.workspaces
-            .filter(w => !w.is_system)
-            .map(w => ({ id: Number(w.id), name: w.name, hint: w.is_default ? 'default · every resource in the org' : undefined })),
-          collections: cols.data.collections.data.map(c => ({ id: Number(c.id), name: c.name })),
-        })
+        if (!stale) setOrgLists({ workspaces: ws.data.workspaces, collections: cols.data.collections.data })
       })
-      .catch(() => { if (!stale) setIngestOptions(undefined) }) // falls back to raw ids
+      .catch(() => { if (!stale) setOrgLists(undefined) }) // pickers fall back / hide
     return () => { stale = true }
   }, [orgId])
+
+  // Ingest target: any workspace but TYDAL's internal ones (a gallery's selection).
+  const ingestOptions = useMemo(() => orgLists && {
+    workspaces: orgLists.workspaces
+      .filter(w => !w.is_system)
+      .map((w): IngestTargetOption => ({ id: Number(w.id), name: w.name, hint: w.is_default ? 'default · every resource in the org' : undefined })),
+    collections: orgLists.collections.map((c): IngestTargetOption => ({ id: Number(c.id), name: c.name })),
+  }, [orgLists])
+
+  // What the vault reads from. The default workspace is left out: it stands
+  // for the whole org, which the "Include default workspace" switch controls.
+  const readableWorkspaces = useMemo(
+    () => (orgLists?.workspaces ?? []).filter(w => !w.is_system && !w.is_default),
+    [orgLists],
+  )
+  const ingestTargetId = Number((form.exposure_policy as { ingest?: { workspace_id?: number } } | null)?.ingest?.workspace_id ?? 0) || null
+  const selectionActive = modal.view !== 'create' && modal.vault?.selection_snapshot != null
 
   // The capability matrix is static per deployment — fetch it once.
   useEffect(() => {
@@ -254,6 +267,10 @@ function VaultsTab() {
       allowed_ips:          vault.allowed_ips ?? [],
       exposure_policy:      vault.exposure_policy ?? null,
       base_url:             vault.base_url ?? '',
+      // Omitted when unknown, so a save never unlinks what it didn't load.
+      workspace_ids:        vault.workspaces
+        ?.filter(w => !w.is_system)
+        .map(w => Number(w.id)),
     })
     setAllowedIpsText((vault.allowed_ips ?? []).join(', '))
     setPurposeWarning(false)
@@ -391,6 +408,63 @@ function VaultsTab() {
     } finally {
       setSaving(false)
     }
+  }
+
+  /**
+   * The workspaces this vault reads from — the same links the workspace
+   * selector edits, from the vault's side. Links the vault controls are
+   * locked here too (VaultService::associationLock): its ingest target, and
+   * everything while a published selection decides what it shows.
+   */
+  const workspacePicker = () => {
+    if (!orgLists) return null
+    const chosen = form.workspace_ids ?? []
+    const lockNote = selectionActive
+      ? 'Locked — this vault\'s published selection decides what it shows. Close the exhibition first.'
+      : ingestTargetId && chosen.includes(ingestTargetId)
+        ? 'The ingest target stays linked — uploads land there. Change the target first to unlink it.'
+        : 'Resources in these workspaces are what the vault shows. For the whole organization, use "Include default workspace".'
+    return (
+      <TextField
+        select size="small" fullWidth label="Workspaces (reads from)"
+        disabled={saving || selectionActive}
+        value={chosen}
+        onChange={(e) => {
+          const raw = e.target.value as unknown as Array<number | string>
+          const next = raw.map(Number)
+          // Keep the ingest target linked; the backend refuses to drop it anyway.
+          if (ingestTargetId && chosen.includes(ingestTargetId) && !next.includes(ingestTargetId)) next.push(ingestTargetId)
+          setForm(f => ({ ...f, workspace_ids: next }))
+        }}
+        helperText={lockNote}
+        SelectProps={{
+          multiple: true,
+          renderValue: (ids) => (
+            <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+              {(ids as number[]).map(id => (
+                <Chip
+                  key={id} size="small"
+                  label={readableWorkspaces.find(w => Number(w.id) === id)?.name ?? `#${id}`}
+                  icon={id === ingestTargetId ? <Lock sx={{ fontSize: '0.9rem' }} /> : undefined}
+                />
+              ))}
+            </Stack>
+          ),
+        }}
+      >
+        {readableWorkspaces.length === 0 && (
+          <MenuItem disabled value="">No workspaces yet — create one in the organization first</MenuItem>
+        )}
+        {readableWorkspaces.map(w => (
+          <MenuItem key={w.id} value={Number(w.id)} disabled={Number(w.id) === ingestTargetId && chosen.includes(ingestTargetId)}>
+            {w.name}
+            {Number(w.id) === ingestTargetId && (
+              <Typography component="span" variant="caption" color="text.disabled" sx={{ ml: 1 }}>ingest target</Typography>
+            )}
+          </MenuItem>
+        ))}
+      </TextField>
+    )
   }
 
   const handleDelete = async () => {
@@ -564,12 +638,15 @@ function VaultsTab() {
                     <InputLabel>Organization</InputLabel>
                     <Select
                       label="Organization" value={form.organization_id}
-                      onChange={(e) => setForm(f => ({ ...f, organization_id: e.target.value }))}
+                      // Workspaces belong to one organization — a new org starts clean.
+                      onChange={(e) => setForm(f => ({ ...f, organization_id: e.target.value, workspace_ids: [] }))}
                     >
                       {orgs.map(o => <MenuItem key={o.id} value={o.id}>{o.name}</MenuItem>)}
                     </Select>
                   </FormControl>
                 )}
+
+                {isCreate && workspacePicker()}
 
                 <TextField
                   label="Purpose (preset)" size="small" fullWidth select
@@ -781,6 +858,8 @@ function VaultsTab() {
                     <MenuItem key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</MenuItem>
                   ))}
                 </TextField>
+
+                {workspacePicker()}
 
                 <Stack spacing={1}>
                   <FormControlLabel
