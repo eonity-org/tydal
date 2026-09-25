@@ -17,6 +17,7 @@ use App\Services\Interfaces\CollectionServiceInterface;
 use App\Services\Interfaces\VaultServiceInterface;
 use Database\Seeders\PhotoSchemeSeeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -36,6 +37,9 @@ class ExhibitionProvisioner
     public const WRITE_ABILITIES = ['w:activate', 'w:open', 'w:close', 'w:ingest', 'w:update', 'w:withdraw'];
 
     public const DEFAULT_INDEX = 'tydal_photo_exhibition';
+
+    /** Roles a curator can be given here — ownership is never handed out by a command. */
+    public const CURATOR_ROLES = ['viewer', 'editor', 'admin'];
 
     public function __construct(
         private CollectionServiceInterface $collections,
@@ -144,6 +148,53 @@ class ExhibitionProvisioner
             [, $write] = VaultKey::mint($vault, 'exhibition-write', self::WRITE_ABILITIES);
 
             return ['vault' => $vault, 'workspace' => $workspace, 'read_key' => $read, 'write_key' => $write];
+        });
+    }
+
+    /**
+     * Give someone access to the organization's exhibitions: create the TYDAL
+     * user (with a generated password, returned once) or reuse an existing
+     * one, and make them a member with at least `$role`. An existing higher
+     * role is never lowered, and ownership is never granted here.
+     *
+     * @return array{user: User, password: string|null, role: string}
+     */
+    public function curator(Organization $organization, string $email, ?string $name, string $role): array
+    {
+        $order = self::CURATOR_ROLES; // lowest to highest
+        if (! in_array($role, $order, true)) {
+            throw new RuntimeException('The curator role must be viewer, editor or admin.');
+        }
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new RuntimeException("{$email} is not an email address.");
+        }
+
+        return DB::transaction(function () use ($organization, $email, $name, $role, $order): array {
+            $password = null;
+            $user = User::where('email', $email)->first();
+            if (! $user) {
+                $password = Str::password(16, symbols: false);
+                $user = User::create([
+                    'name' => $name ?: Str::before($email, '@'),
+                    'email' => $email,
+                    'password' => Hash::make($password),
+                    'is_active' => true,
+                    'is_superadmin' => false,
+                    'last_organization_id' => $organization->id,
+                ]);
+            }
+
+            $current = $organization->users()->where('users.id', $user->id)->first()?->getRelationValue('pivot')?->role;
+            if ($current === null) {
+                $organization->users()->attach($user->id, ['role' => $role]);
+            } elseif ($current !== OrganizationRole::OWNER->value
+                && array_search($current, $order, true) < array_search($role, $order, true)) {
+                $organization->users()->updateExistingPivot($user->id, ['role' => $role]);
+            } else {
+                $role = $current; // already at least this — left as it is
+            }
+
+            return ['user' => $user, 'password' => $password, 'role' => $role];
         });
     }
 

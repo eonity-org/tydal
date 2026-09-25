@@ -296,7 +296,8 @@ rebuild). `--collection=Name` renames the collection it creates.
 Once per exhibition.
 
 ```bash
-php artisan exhibitions:create --org=lucila --name="Semana 42" [--slug=semana-42]
+php artisan exhibitions:create --org=lucila --name="Semana 42" [--slug=semana-42] \
+  [--curator=ana@example.org [--curator-name="Ana Ruiz"] [--role=editor]]
 ```
 
 Creates the exhibition's workspace and a **private gallery vault** that shows
@@ -305,6 +306,13 @@ there), and mints a read key and a write key (`w:activate/open/close` to
 publish, `w:ingest/update/withdraw` for uploads). Prints the shared vault URL
 and both keys — paste them into Full Frame's *Connect an exhibition*. The keys
 are shown only once. Refuses a slug already used by a vault in the organization.
+
+`--curator` gives someone the studio: it creates the TYDAL user (printing a
+generated password once) or reuses an existing one, and makes them a member of
+the organization with `--role` — `editor` (default) manages exhibitions,
+`viewer` gets a read-only studio, `admin` also administers the organization in
+TYDAL. An existing higher role is never lowered; ownership is never granted.
+They sign into Full Frame's studio with that TYDAL account.
 
 ## Housekeeping (scheduled — see `bootstrap/app.php`)
 

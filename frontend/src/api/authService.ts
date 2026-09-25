@@ -12,6 +12,8 @@ import { API_BASE_URL } from '../constants/api'
 export interface LoginResponse {
   status?: string
   error?: string | Record<string, string[]> | null
+  /** TYDAL's reason on a failed login, e.g. "Invalid credentials" or a wait after too many attempts. */
+  message?: string
   code?: number
   data?: {
     token?: string  // Changed from access_token to token for tydal backend

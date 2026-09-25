@@ -152,4 +152,60 @@ class ExhibitionsCommandsTest extends TestCase
             ->assertStatus(200)
             ->assertJsonPath('ok', true);
     }
+
+    // =========================================================================
+    // --curator
+    // =========================================================================
+
+    public function test_create_with_a_new_curator_makes_their_account(): void
+    {
+        $this->artisan('exhibitions:setup', ['--org' => 'lucila'])->assertSuccessful();
+
+        $this->artisan('exhibitions:create', ['--org' => 'lucila', '--name' => 'Semana 42', '--curator' => 'curator@example.org'])
+            ->expectsOutputToContain('curator@example.org')
+            ->expectsOutputToContain('new account')
+            ->assertSuccessful();
+
+        $curator = User::where('email', 'curator@example.org')->firstOrFail();
+        $this->assertSame('editor', $this->org->users()->where('users.id', $curator->id)->first()->pivot->role);
+    }
+
+    public function test_an_existing_member_is_never_downgraded(): void
+    {
+        $this->artisan('exhibitions:setup', ['--org' => 'lucila'])->assertSuccessful();
+        $admin = User::factory()->create(['email' => 'boss@example.org']);
+        $this->org->users()->attach($admin->id, ['role' => 'admin']);
+
+        $this->artisan('exhibitions:create', ['--org' => 'lucila', '--name' => 'Semana 42', '--curator' => 'boss@example.org', '--role' => 'viewer'])
+            ->expectsOutputToContain('their existing TYDAL password')
+            ->assertSuccessful();
+
+        $this->assertSame('admin', $this->org->users()->where('users.id', $admin->id)->first()->pivot->role);
+    }
+
+    public function test_a_bad_curator_option_stops_before_anything_is_created(): void
+    {
+        $this->artisan('exhibitions:setup', ['--org' => 'lucila'])->assertSuccessful();
+
+        $this->artisan('exhibitions:create', ['--org' => 'lucila', '--name' => 'Semana 42', '--curator' => 'x@example.org', '--role' => 'owner'])
+            ->assertFailed();
+        $this->artisan('exhibitions:create', ['--org' => 'lucila', '--name' => 'Semana 42', '--curator' => 'not-an-email'])
+            ->assertFailed();
+
+        $this->assertSame(0, Vault::count());
+    }
+
+    public function test_write_key_check_names_the_vaults_organization(): void
+    {
+        $provisioner = app(ExhibitionProvisioner::class);
+        $provisioner->setup($this->org, null, 'Photos');
+        $exhibition = $provisioner->create($this->org, 'Semana 42');
+
+        $this->getJson("/h/{$exhibition['vault']->hash}/w", ['X-Vault-Key' => $exhibition['write_key']])
+            ->assertJsonPath('organization.slug', 'lucila')
+            ->assertJsonPath('organization.id', $this->org->id);
+        // Readers still learn nothing about who owns it.
+        $this->getJson("/h/{$exhibition['vault']->hash}/w", ['X-Vault-Key' => $exhibition['read_key']])
+            ->assertStatus(403);
+    }
 }

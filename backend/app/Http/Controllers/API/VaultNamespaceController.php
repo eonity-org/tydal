@@ -404,6 +404,11 @@ class VaultNamespaceController extends Controller
         }
 
         $body = ['ok' => true, 'methods' => $probe['methods']];
+        // Only a write-key holder learns whose vault this is — the hash
+        // address itself keeps revealing nothing. A product uses it to file an
+        // exhibition under its organization (Full Frame's per-org studio).
+        $vault->loadMissing('organization:id,slug,name');
+        $body['organization'] = $vault->organization->only(['id', 'slug', 'name']);
         if (in_array('ingest', $probe['methods'], true)) {
             $body['max_upload_bytes'] = $ingest->maxUploadBytes();
         }
