@@ -313,4 +313,28 @@ class VaultIngestOpsTest extends TestCase
             ->assertStatus(200)
             ->assertJsonMissingPath('ingested');
     }
+
+    // =========================================================================
+    // size limit
+    // =========================================================================
+
+    public function test_ingest_refuses_a_file_over_the_limit_with_its_size(): void
+    {
+        config(['media-library.max_file_size' => 1024 * 1024]); // 1 MB
+
+        $this->ingest($this->writeKey(), null, UploadedFile::fake()->image('big.jpg')->size(2048))
+            ->assertStatus(400)
+            ->assertJsonPath('error', 'The file is 2.0 MB; this vault accepts up to 1.0 MB.');
+        $this->assertSame(0, Resource::count());
+    }
+
+    public function test_probe_reports_the_upload_limit_to_keys_that_can_ingest(): void
+    {
+        config(['media-library.max_file_size' => 1024 * 1024]);
+
+        $this->getJson("/h/{$this->vault->hash}/w", ['X-Vault-Key' => $this->writeKey()])
+            ->assertJsonPath('max_upload_bytes', 1024 * 1024);
+        $this->getJson("/h/{$this->vault->hash}/w", ['X-Vault-Key' => $this->writeKey(['w:activate'])])
+            ->assertJsonMissingPath('max_upload_bytes');
+    }
 }

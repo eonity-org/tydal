@@ -13,6 +13,7 @@ use App\Models\VaultLink;
 use App\Models\VaultWrite;
 use App\Models\Workspace;
 use App\Services\Interfaces\ResourceServiceInterface;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -72,6 +73,48 @@ class VaultIngest
         }
 
         return [$workspace, $collection];
+    }
+
+    /**
+     * The largest file an `ingest` accepts, in bytes: TYDAL's own media limit
+     * (MAX_MEDIA_FILE_SIZE) bounded by what PHP will receive at all. Reported by
+     * the write probe so a consumer can refuse a file before uploading it.
+     */
+    public function maxUploadBytes(): int
+    {
+        $limits = [
+            (int) config('media-library.max_file_size'),
+            self::iniBytes((string) ini_get('upload_max_filesize')),
+            self::iniBytes((string) ini_get('post_max_size')),
+        ];
+
+        return min(array_filter($limits, fn (int $bytes) => $bytes > 0) ?: [PHP_INT_MAX]);
+    }
+
+    /** "300M" → bytes (php.ini shorthand); 0 means unlimited. */
+    private static function iniBytes(string $value): int
+    {
+        $value = trim($value);
+        $number = (int) $value;
+
+        return match (strtolower(substr($value, -1))) {
+            'g' => $number * 1024 ** 3,
+            'm' => $number * 1024 ** 2,
+            'k' => $number * 1024,
+            default => $number,
+        };
+    }
+
+    /** Refuse a file over the limit with a message a curator can act on. */
+    public function assertSize(UploadedFile $file): void
+    {
+        $max = $this->maxUploadBytes();
+        if ((int) $file->getSize() > $max) {
+            $mb = fn (int $bytes) => number_format($bytes / 1024 / 1024, 1);
+            throw ValidationException::withMessages([
+                'image' => "The file is {$mb((int) $file->getSize())} MB; this vault accepts up to {$mb($max)} MB.",
+            ]);
+        }
     }
 
     /**
