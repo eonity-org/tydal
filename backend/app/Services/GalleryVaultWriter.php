@@ -2,12 +2,18 @@
 
 namespace App\Services;
 
+use App\Enums\FileRole;
+use App\Enums\ResourceState;
+use App\Enums\ResourceType;
 use App\Enums\VaultState;
 use App\Jobs\RebuildVaultIndex;
 use App\Models\Vault;
 use App\Models\VaultLink;
 use App\Models\Workspace;
+use App\Services\Interfaces\ResourceServiceInterface;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -23,6 +29,92 @@ use Illuminate\Validation\ValidationException;
  */
 class GalleryVaultWriter
 {
+    public function __construct(
+        private ResourceServiceInterface $resources,
+        private VaultLinkService $links,
+        private VaultIngest $ingest,
+    ) {}
+
+    /**
+     * A gallery's `ingest` (VAULT_WRITE_METHODS.md §3): one photograph, which
+     * becomes a live image resource in the vault's ingest target and its own
+     * preview. The metadata document is already split by VaultIngest; the
+     * gallery requires `name` (the author owns the title). The stored filename
+     * is derived from it, so the uploader's filename (often a person's name)
+     * never reaches TYDAL. Nothing here rewrites what the consumer sent — no AI
+     * enrichment runs on it.
+     *
+     * Refused when the target workspace isn't projected by this vault — the
+     * photo would be written but never shown (e.g. after an `activate`, whose
+     * selection replaces the projection until `close`).
+     *
+     * @param  array{columns: array<string, string|null>, metadata: array<string, scalar|null>}  $document
+     * @return array{hash: string, name: string}
+     */
+    public function ingest(Vault $vault, array $document, UploadedFile $image): array
+    {
+        $name = $document['columns']['name'] ?? null;
+        if ($name === null) {
+            throw ValidationException::withMessages(['metadata' => 'metadata.name (the title) is required.']);
+        }
+
+        [$workspace, $collection] = $this->ingest->target($vault);
+
+        $scheme = $collection->scheme;
+        $mime = (string) $image->getMimeType();
+        if ($scheme && ! $scheme->acceptsMime($mime)) {
+            throw ValidationException::withMessages([
+                'image' => "File type {$mime} is not accepted by this vault's collection.",
+            ]);
+        }
+
+        $projected = $vault->has_public_workspace
+            || $vault->workspaces()->where('workspaces.id', $workspace->id)->exists();
+        if (! $projected) {
+            throw ValidationException::withMessages([
+                'vault' => 'The ingest workspace is not projected by this vault right now, so the photograph would not appear.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($vault, $document, $name, $image, $workspace, $collection): array {
+            $metadata = array_filter($document['metadata'], fn ($v) => $v !== null);
+
+            $resource = $this->resources->createResource([
+                'organization_id' => $vault->organization_id,
+                'collection_id' => $collection->id,
+                'user_owner_id' => $workspace->user_owner_id ?? $collection->user_owner_id,
+                'type' => ResourceType::IMAGE->value,
+                'name' => $name,
+                'description' => $document['columns']['description'] ?? null,
+                'metadata' => $metadata === [] ? null : $metadata,
+                'state' => ResourceState::LIVE->value,
+            ]);
+
+            $extension = strtolower($image->getClientOriginalExtension() ?: ($image->guessExtension() ?? 'jpg'));
+            $stem = Str::slug($name) ?: 'photograph';
+
+            // Images are their own snapshot (the preview every card shows).
+            $this->ingest->attachFile(
+                $resource,
+                (string) $image->getRealPath(),
+                "{$stem}.{$extension}",
+                FileRole::CANONICAL,
+                null,
+                ['snapshot'],
+            );
+
+            $workspace->resources()->syncWithoutDetaching([$resource->id]);
+
+            // Re-index now that the workspace edge exists — the create-time
+            // index ran before it, so the vault's projected index missed it.
+            $resource->touch();
+
+            $link = $this->links->getOrCreateLink($vault, null, $resource->id, null);
+
+            return ['hash' => $link->hash, 'name' => $name];
+        });
+    }
+
     /**
      * Project exactly the given works — declarative replace. Non-listed works
      * simply stop resolving (projection-pure revocation). The references are

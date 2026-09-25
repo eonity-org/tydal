@@ -27,7 +27,7 @@ import { readImage } from '../tools/read-image.js';
 
 const V = '/v/acme/press-kit';
 
-type ReplyConfig = { headers: Record<string, string>; params: Record<string, string>; data?: string };
+type ReplyConfig = { headers: Record<string, string>; params: Record<string, string>; data?: string; form?: FormData };
 type ReplyBody = unknown | Buffer;
 type ReplyTuple = [number, ReplyBody, Record<string, string>?];
 type ReplyFn = (cfg: ReplyConfig) => ReplyTuple;
@@ -75,6 +75,7 @@ class MockFetch {
       headers: reqHeaders,
       params: Object.fromEntries(url.searchParams),
       data: typeof init?.body === 'string' ? init.body : undefined,
+      form: init?.body instanceof FormData ? init.body : undefined,
     };
 
     const [status, body, resHeaders] = entry.fn ? entry.fn(cfg) : [entry.status ?? 200, entry.body, entry.headers];
@@ -355,11 +356,13 @@ describe('ingest', () => {
   const descriptor = { schemaVersion: '1.0', source: { hash: 'H1' }, figures: [] };
 
   it('POSTs the descriptor + image to /w/ingest with the WRITE key', async () => {
+    let sent: unknown;
     mock.onPost(`${V}/w/ingest`).reply((cfg) => {
       // The write op uses the write key, not the default read key.
       expect(cfg.headers?.['X-Vault-Key']).toBe('tvk_write-key-00000000000000000000000000000');
       // multipart body carrying the descriptor + image parts.
       expect(String(cfg.headers?.['Content-Type'])).toContain('multipart/form-data');
+      sent = cfg.form;
       return [200, { ok: true, result: { hash: 'LH999', files: 2 } }];
     });
 
@@ -373,6 +376,10 @@ describe('ingest', () => {
 
     expect(result.type).toBe('ingest');
     expect(result.result.hash).toBe('LH999');
+    // name/source_hash travel in the metadata document, not as loose fields.
+    const form = sent as FormData;
+    expect(JSON.parse(String(form.get('metadata')))).toEqual({ name: 'Fig 1', source_hash: 'H1' });
+    expect(form.get('name')).toBeNull();
   });
 
   it('surfaces a refused write (ok:false)', async () => {

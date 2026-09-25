@@ -37,11 +37,12 @@ enum VaultPurpose: string
     public function writeMethods(): array
     {
         return match ($this) {
-            self::GALLERY => ['activate', 'open', 'close'],
-            // `ingest` accepts a derived artifact (a translated image) + a JSON
-            // descriptor document and materializes an output resource in the
-            // vault's configured ingest target (VAULT_WRITE_METHODS.md §7).
-            self::AI => ['ingest'],
+            // The inbound ops are purpose-agnostic (VaultIngest): `ingest` adds
+            // a resource to the vault's ingest target, `update` corrects one it
+            // ingested, `withdraw` removes one. Each purpose's writer decides
+            // only which files an `ingest` carries (VAULT_WRITE_METHODS.md §3).
+            self::GALLERY => ['activate', 'open', 'close', 'ingest', 'update', 'withdraw'],
+            self::AI => ['ingest', 'update', 'withdraw'],
             default => [],
         };
     }

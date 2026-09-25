@@ -67,8 +67,8 @@ for the rest.
 
 ```
 VaultPurpose::writeMethods(): string[]
-  gallery  → ['activate', 'open', 'close']
-  ai       → ['ingest']
+  gallery  → ['activate', 'open', 'close', 'ingest', 'update', 'withdraw']
+  ai       → ['ingest', 'update', 'withdraw']
   delivery → []          // future: ['mintLink', 'revokeLink']
   obsidian → []
   mixed    → []          // union of member purposes, later
@@ -95,20 +95,56 @@ single generic `write(op, payload)` rather than a namespace per purpose (§8).
 `activate` can be re-run (re-cut the selection) without touching state, and so a
 dry-run/preview stays a pure read.
 
-### AI method
+### Inbound ops — `ingest` / `update` / `withdraw` (every purpose that takes content)
 
-- **`ingest`** — *materialize a derived artifact.* **Multipart** document: an
-  `image` file (a derived/translated image) + a `descriptor` JSON field
-  (tables/graphs/formulae), plus optional `name` / `source_hash`. The
-  `AiVaultWriter` creates one **output resource** (canonical `descriptor.json`
-  + a `component` translated image, `relation: translation`) in the vault's
-  **configured ingest target** — `exposure_policy.ingest = { workspace_id,
-  collection_id }`. The consumer declares *what*; the vault decides *where*
-  (the landing spot is never consumer-supplied). A companion `delivery` vault
-  over that workspace then exports the JSON to a downstream renderer.
+Added 2026-09-25 for Full Frame's curator uploads, and deliberately
+purpose-agnostic: the names say what happens to the vault's content, not which
+kind of vault it is. `VaultIngest` implements everything shared; a purpose's
+writer decides only **which files an `ingest` carries and how they're stored**.
 
-  This is the first op to carry **binary**; the SDK's generic `write()` sends
-  multipart automatically when the document holds a `Blob`/`File` (§8).
+- **The ingest target.** New resources land in
+  `exposure_policy.ingest = { workspace_id, collection_id }` — vault-configured,
+  never consumer-supplied (the consumer declares *what*; the vault decides
+  *where*). No target → the op is refused with a 400.
+- **The metadata document.** One flat JSON object, `metadata`. Keys naming a
+  resource column (`name`, `description`) are **lifted** onto the resource;
+  every other key is stored in `resources.metadata` **as given**. Values are
+  text, numbers or booleans (≤ 50 keys, ≤ 5000 chars; `name` ≤ 255); keys are
+  `lower_snake_case`. No AI and no scheme check rewrites it — the collection's
+  scheme only decides which keys are indexed, faceted and shown on vault cards
+  (undeclared keys are still returned by `…/meta`). Each fact lives once: the
+  title is the resource's `name`, never also a metadata copy.
+- **`ingest`** — multipart: the purpose's files + `metadata`. Returns
+  `{ hash, … }` — the new resource's vault link hash.
+  - `gallery`: one `image` (canonical, its own preview); `metadata.name` is
+    **required** (the author owns the title). The stored filename is slugged
+    from the title, so the uploader's filename (often a person's name) never
+    reaches TYDAL. Refused when the collection's scheme doesn't accept the MIME
+    type, or when the vault doesn't project the target workspace right now
+    (e.g. during an active selection) — the photo would be stored but unseen.
+  - `ai`: an `image` (a derived/translated image, stored as a `component`,
+    `relation: translation`) + a `descriptor` JSON field (tables/graphs/
+    formulae, stored as the canonical `descriptor.json`). `name` is optional;
+    provenance such as `source_hash` is just metadata. A companion `delivery`
+    vault over the target workspace then exports the JSON to a renderer.
+  - No AI enrichment runs on ingested content.
+- **`update`** — `{ resource: <hash>, metadata: {…} }`, merged per key: a
+  value replaces, `null` removes; `name` can change but not be removed.
+- **`withdraw`** — `{ resource: <hash> }`. Soft delete (TYDAL's trash,
+  recoverable by an org admin until `resource:prune`). Refused while a gallery
+  selection is active.
+- **Provenance.** `update`/`withdraw` act **only on resources this vault's
+  `ingest` created** — the `vault_writes` audit is the record, so a write key
+  can never touch a work that reached the vault another way. The write probe
+  (`GET …/w`) lists them as `ingested` when the key holds `w:update` or
+  `w:withdraw`, so a consumer offers those actions on the right items with no
+  bookkeeping of its own.
+
+A new purpose that takes content only defines its file composition; the target,
+the metadata document, `update`, `withdraw` and provenance come with it.
+
+This was the first op family to carry **binary**; the SDK's generic `write()`
+sends multipart automatically when the document holds a `Blob`/`File` (§8).
 
 ## 4. Credential model
 

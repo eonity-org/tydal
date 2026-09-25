@@ -141,9 +141,10 @@ class VaultValidatePolicy extends Command
     }
 
     /**
-     * The ingest landing spot must exist and belong to the vault's org — the
-     * consumer never chooses where its output lands, so a dangling target is a
-     * write that fails at run time instead of at configuration time.
+     * The ingest target (every purpose's `ingest`) must exist and
+     * belong to the vault's org — the consumer never chooses where its output
+     * lands, so a dangling target is a write that fails at run time instead of
+     * at configuration time.
      *
      * @return list<string>
      */
@@ -152,9 +153,10 @@ class VaultValidatePolicy extends Command
         $target = $vault->exposure_policy[VaultCapability::INGEST->value] ?? null;
 
         if ($target === null) {
-            // An ai vault that accepts `ingest` but has nowhere to put the result
-            // will throw a validation error on the first write.
-            return $vault->allowsWriteMethod('ingest')
+            // An ai vault exists to take `ingest`; with nowhere to put the result
+            // it fails on the first write. Other purposes accept `ingest` only
+            // as an option, so a missing target there is not a finding.
+            return $vault->purpose === VaultPurpose::AI && $vault->allowsWriteMethod('ingest')
                 ? ['ingest: this vault accepts the `ingest` op but has no ingest target configured']
                 : [];
         }
@@ -181,6 +183,19 @@ class VaultValidatePolicy extends Command
         $collection = Collection::where('organization_id', $vault->organization_id)->find($collectionId);
         if (! $collection) {
             $errors[] = "ingest: collection {$collectionId} not found in this vault's organization";
+        }
+
+        // A gallery's ingest lands photographs in this workspace; unless the
+        // vault projects it they are written but never shown. (An active
+        // selection legitimately detaches it until `close`.)
+        if ($workspace
+            && $vault->purpose === VaultPurpose::GALLERY
+            && $vault->allowsWriteMethod('ingest')
+            && ! $vault->has_public_workspace
+            && $vault->selection_snapshot === null
+            && ! $vault->workspaces()->where('workspaces.id', $workspace->id)->exists()
+        ) {
+            $errors[] = "ingest: workspace {$workspaceId} is not attached to this vault, so ingested photographs would not appear";
         }
 
         return $errors;

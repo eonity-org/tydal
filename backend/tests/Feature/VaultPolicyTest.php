@@ -47,9 +47,9 @@ class VaultPolicyTest extends TestCase
         return [
             // purpose, chunks, binary, ask, chunk_roles, write_methods
             'delivery' => [VaultPurpose::DELIVERY, false, true, false, $base, []],
-            'gallery' => [VaultPurpose::GALLERY, false, true, false, $base, ['activate', 'open', 'close']],
+            'gallery' => [VaultPurpose::GALLERY, false, true, false, $base, ['activate', 'open', 'close', 'ingest', 'update', 'withdraw']],
             'obsidian' => [VaultPurpose::OBSIDIAN, true, true, false, $base, []],
-            'ai' => [VaultPurpose::AI, true, false, true, $withSupporting, ['ingest']],
+            'ai' => [VaultPurpose::AI, true, false, true, $withSupporting, ['ingest', 'update', 'withdraw']],
             'mixed' => [VaultPurpose::MIXED, true, true, true, $base, []],
         ];
     }
@@ -355,7 +355,7 @@ class VaultPolicyTest extends TestCase
         $this->assertFalse($response->json('data.presets.ai.values.allow_binary'));
         $this->assertTrue($response->json('data.presets.gallery.values.allow_binary'));
         $this->assertSame(
-            ['activate', 'open', 'close'],
+            ['activate', 'open', 'close', 'ingest', 'update', 'withdraw'],
             $response->json('data.presets.gallery.values.write_methods'),
         );
     }
