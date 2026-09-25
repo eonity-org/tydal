@@ -525,7 +525,6 @@ class FullFrameSeeder extends Seeder
                 'state' => VaultState::PRIVATE->value,
                 'has_public_workspace' => false,
                 'is_downloadable' => false,
-                'is_active' => true,
             ]
         );
 
