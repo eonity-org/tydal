@@ -378,7 +378,8 @@ class VaultNamespaceController extends Controller
      * config UI can confirm a write key is bound before an opening depends on
      * it. When the key may `update` or `withdraw`, it also lists the resources
      * those ops can act on (`ingested`), so the consumer offers them on the
-     * right items. Same gate, same 404 opacity as the write itself.
+     * right items; with `ingest`, the largest file it accepts
+     * (`max_upload_bytes`). Same gate, same 404 opacity as the write itself.
      */
     public function hashVaultWriteInfo(string $vaultHash, Request $request, VaultIngest $ingest): JsonResponse
     {
@@ -403,6 +404,9 @@ class VaultNamespaceController extends Controller
         }
 
         $body = ['ok' => true, 'methods' => $probe['methods']];
+        if (in_array('ingest', $probe['methods'], true)) {
+            $body['max_upload_bytes'] = $ingest->maxUploadBytes();
+        }
         if (array_intersect(['update', 'withdraw'], $probe['methods']) !== []) {
             $body['ingested'] = $ingest->ingested($vault);
         }
@@ -492,13 +496,14 @@ class VaultNamespaceController extends Controller
     private function dispatchIngest(Vault $vault, Request $request, GalleryVaultWriter $writer, AiVaultWriter $aiWriter, VaultIngest $ingest): array
     {
         $request->validate([
-            'image' => ['required', 'file', 'image', 'max:512000'],
+            'image' => ['required', 'file', 'image'],
             'metadata' => ['sometimes', 'nullable'],
         ]);
         $image = $request->file('image');
         if (! $image instanceof UploadedFile) {
             throw ValidationException::withMessages(['image' => 'An image file is required.']);
         }
+        $ingest->assertSize($image);
 
         $document = $ingest->document($request->input('metadata'));
 

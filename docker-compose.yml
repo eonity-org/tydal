@@ -150,6 +150,8 @@ services:
       PHP_DISMOD: ioncube   # not bundled in this image; silences a load warning
     volumes:
       - ./backend:/var/www/html
+      # nginx body limit matched to PHP_POST_MAX_SIZE (the image default is 50m)
+      - ./tools/deploy/nginx/10-general.conf:/opt/docker/etc/nginx/vhost.common.d/10-general.conf:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"   # reach host-side Ollama (ollama-host) on Linux
     depends_on:

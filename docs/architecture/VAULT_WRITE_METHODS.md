@@ -135,6 +135,12 @@ writer decides only **which files an `ingest` carries and how they're stored**.
     provenance such as `source_hash` is just metadata. A companion `delivery`
     vault over the target workspace then exports the JSON to a renderer.
   - No AI enrichment runs on ingested content.
+- **Size limit.** An `ingest` file larger than `MAX_MEDIA_FILE_SIZE` (bounded by
+  PHP's `upload_max_filesize`/`post_max_size`) is refused with a 400 naming both
+  sizes; the probe reports the limit as `max_upload_bytes` to keys holding
+  `w:ingest`. In Docker, nginx's body limit is matched to PHP's in
+  `tools/deploy/nginx/10-general.conf` (the image default of 50 MB cut uploads
+  off before PHP).
 - **`update`** — `{ resource: <hash>, metadata: {…} }`, merged per key: a
   value replaces, `null` removes; `name` can change but not be removed.
 - **`withdraw`** — `{ resource: <hash> }`. Soft delete (TYDAL's trash,

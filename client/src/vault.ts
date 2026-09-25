@@ -243,6 +243,11 @@ export interface VaultWriteCapabilities {
    * ones those ops accept.
    */
   ingested?: string[]
+  /**
+   * Present when the key may `ingest`: the largest file TYDAL accepts, in
+   * bytes, so a consumer can refuse a file before uploading it.
+   */
+  max_upload_bytes?: number
 }
 
 export interface VaultWriteResult {
