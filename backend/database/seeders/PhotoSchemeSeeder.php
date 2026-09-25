@@ -23,7 +23,15 @@ class PhotoSchemeSeeder extends Seeder
 
     public function run(): void
     {
-        CollectionScheme::updateOrCreate(
+        self::apply();
+
+        $this->command->info('✓ Collection scheme: '.self::NAME.' (images only)');
+    }
+
+    /** Create or update the scheme — also used by `exhibitions:setup`. */
+    public static function apply(): CollectionScheme
+    {
+        return CollectionScheme::updateOrCreate(
             ['name' => self::NAME],
             [
                 'display_name' => 'Photo Exhibition',
@@ -127,7 +135,5 @@ class PhotoSchemeSeeder extends Seeder
                 ],
             ]
         );
-
-        $this->command->info('✓ Collection scheme: '.self::NAME.' (images only)');
     }
 }
