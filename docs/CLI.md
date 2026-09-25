@@ -270,6 +270,42 @@ Set `TYDAL_VAULT_WRITE_KEY` on the vault-MCP connection and the purpose's write
 ops (`ingest` on an `ai` vault) appear as tools — read-only otherwise.
 There is no CLI for vault keys — they are minted in the admin UI or via that endpoint.
 
+## Photo exhibitions (Full Frame)
+
+Prepare TYDAL to serve photo exhibitions to a gallery client such as
+[Full Frame](https://github.com/eonity-org/fullframe), with nothing to configure
+by hand. Opt-in: the installer stays generic.
+
+### `exhibitions:setup`
+
+Once per organization; safe to re-run.
+
+```bash
+php artisan exhibitions:setup --org=lucila                          # own index: tydal_photo_exhibition
+php artisan exhibitions:setup --org=lucila --index=tydal_multimedia # share an existing index
+```
+
+Creates (or updates) the `photo_exhibition` scheme — title, author (credit),
+year, technique and dimensions (details), description — its index, and the
+organization's **Photos** collection. An organization that already has a
+collection on the scheme keeps it; the index only ever gains fields (no
+rebuild). `--collection=Name` renames the collection it creates.
+
+### `exhibitions:create`
+
+Once per exhibition.
+
+```bash
+php artisan exhibitions:create --org=lucila --name="Semana 42" [--slug=semana-42]
+```
+
+Creates the exhibition's workspace and a **private gallery vault** that shows
+it, with that workspace + Photos as its ingest target (curator uploads land
+there), and mints a read key and a write key (`w:activate/open/close` to
+publish, `w:ingest/update/withdraw` for uploads). Prints the shared vault URL
+and both keys — paste them into Full Frame's *Connect an exhibition*. The keys
+are shown only once. Refuses a slug already used by a vault in the organization.
+
 ## Housekeeping (scheduled — see `bootstrap/app.php`)
 
 | Command | Schedule | Purpose |
