@@ -17,7 +17,10 @@ class ExhibitionsCreate extends Command
     protected $signature = 'exhibitions:create
         {--org= : Organization slug or UUID}
         {--name= : Exhibition name (the vault and workspace are named after it)}
-        {--slug= : Vault address slug (default: from the name)}';
+        {--slug= : Vault address slug (default: from the name)}
+        {--curator= : Email of the curator who runs it in Full Frame (TYDAL user created or reused)}
+        {--curator-name= : Name for a newly created curator (default: from the email)}
+        {--role=editor : Curator role in the organization: viewer (read-only), editor or admin}';
 
     protected $description = 'Create a photo exhibition (Full Frame): workspace, private gallery vault and its read + write keys';
 
@@ -32,6 +35,21 @@ class ExhibitionsCreate extends Command
         $name = trim((string) $this->option('name'));
         if ($name === '') {
             $this->error('Pass --name="Exhibition name".');
+
+            return self::FAILURE;
+        }
+
+        // Checked before anything is created: the exhibition's keys are shown
+        // only once, so a bad curator option must not cut the output short.
+        $curatorEmail = $this->option('curator') !== null ? (string) $this->option('curator') : null;
+        $role = (string) $this->option('role');
+        if ($curatorEmail !== null && ! filter_var($curatorEmail, FILTER_VALIDATE_EMAIL)) {
+            $this->error("{$curatorEmail} is not an email address.");
+
+            return self::FAILURE;
+        }
+        if ($curatorEmail !== null && ! in_array($role, ExhibitionProvisioner::CURATOR_ROLES, true)) {
+            $this->error('--role must be one of: '.implode(', ', ExhibitionProvisioner::CURATOR_ROLES).'.');
 
             return self::FAILURE;
         }
@@ -61,6 +79,30 @@ class ExhibitionsCreate extends Command
         $this->line("  Write key        : {$result['write_key']}");
         $this->newLine();
         $this->line("Machine address: {$base}/h/{$vault->hash}");
+
+        if ($curatorEmail === null) {
+            return self::SUCCESS;
+        }
+        try {
+            $curator = $provisioner->curator(
+                $organization,
+                $curatorEmail,
+                $this->option('curator-name') !== null ? (string) $this->option('curator-name') : null,
+                $role,
+            );
+        } catch (RuntimeException $e) {
+            $this->newLine();
+            $this->error("Curator not added: {$e->getMessage()} The exhibition above is ready; add them in TYDAL.");
+
+            return self::FAILURE;
+        }
+
+        $this->newLine();
+        $this->line("Curator — signs into Full Frame's studio with their TYDAL account ({$curator['role']}):");
+        $this->line("  Email    : {$curator['user']->email}");
+        $this->line($curator['password'] !== null
+            ? "  Password : {$curator['password']}   (new account — shown only now; they can change it in TYDAL)"
+            : '  Password : their existing TYDAL password');
 
         return self::SUCCESS;
     }

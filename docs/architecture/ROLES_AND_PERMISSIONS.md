@@ -158,6 +158,32 @@ collection pins a field contract, a search index and the facets of everything in
 it, so self-service creation is bounded. Platform administrators are exempt — the
 cap governs a tenant's people, not the operators.
 
+## TYDAL as identity provider for products
+
+A product can let people sign in with their TYDAL account without ever holding
+a TYDAL credential for them. `POST /api/v1/auth/identify` takes an email and
+password and returns the user and their organizations with roles
+(`{ data: { user, organizations: [{ id, slug, name, role }] } }`). It creates **no
+token and no session** — unlike `/login`, which rotates the user's session
+tokens and would sign them out of the SPA — so the product only learns *who*
+someone is. It is rate-limited per email (5 attempts a minute: a product calls
+from one server address for all its users) under a per-IP ceiling.
+
+Full Frame's studio uses it: owner / admin / editor manage their organization's
+exhibitions, a viewer gets a read-only studio, a platform admin signs in as the
+installation admin. Exhibitions are filed under the vault's organization, which
+the write-key probe (`GET …/w`) reports to write-key holders only. Revoking
+access in TYDAL takes effect at the product's next sign-in (Full Frame keeps
+curator sessions to 12 hours). `exhibitions:create --curator=email` creates or
+reuses the user and adds them to the organization.
+
+**Sign-in rate limits.** `/login` allows 5 failed attempts per email *and*
+address a minute (a stranger can't lock an owner out from elsewhere), under a
+per-address ceiling of 20 a minute against trying many emails; a success clears
+the count. `/auth/identify` counts per email (5 a minute, 60 per address).
+`/register` is capped at 10 a minute per address. A limited request gets 429
+with `Retry-After`, and the SPA shows TYDAL's message.
+
 ## Guards worth knowing
 
 - A platform administrator cannot **revoke their own** platform role, nor remove
