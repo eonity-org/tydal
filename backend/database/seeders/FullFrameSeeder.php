@@ -26,7 +26,7 @@ use Illuminate\Support\Str;
  *
  * Seeds everything the Full Frame exhibition platform needs to develop
  * against: a dedicated organization, an images-only "photo exhibition"
- * collection scheme (author/year/technique facets + gallery slot roles),
+ * collection scheme (PhotoSchemeSeeder: author/year/technique facets + gallery slot roles),
  * a Submissions workspace with generated demo photographs, and a private
  * gallery vault ("First Frame") with one minted VaultKey.
  *
@@ -54,7 +54,7 @@ class FullFrameSeeder extends Seeder
         [, $submissions] = $this->seedWorkspaces($org, $admin);
         $collection = $this->seedCollection($org, $admin, $scheme, $index);
         $this->seedPhotos($org, $admin, $collection, $submissions);
-        $vault = $this->seedVault($org, $submissions);
+        $vault = $this->seedVault($org, $submissions, $collection);
         $keys = $this->seedVaultKeys($vault);
 
         $this->summary($org, $vault, $collection, $keys);
@@ -83,97 +83,11 @@ class FullFrameSeeder extends Seeder
 
     private function seedScheme(): CollectionScheme
     {
-        $scheme = CollectionScheme::updateOrCreate(
-            ['name' => 'photo_exhibition'],
-            [
-                'display_name' => 'Photo Exhibition',
-                'description' => 'Images-only scheme for photo exhibitions (Full Frame): author, year and technique as facets',
-                'accepted_mimetypes' => ['image/*'],
-                'is_system' => false,
-                'fields' => [
-                    [
-                        'name' => 'name',
-                        'display_name' => 'Title',
-                        'type' => 'string',
-                        'required' => true,
-                        'storage' => 'column',
-                        'is_facet' => false,
-                        'display_in_form' => true,
-                        'order' => 1,
-                        'validators' => ['min_length' => 2, 'max_length' => 255],
-                        'es_type' => 'text',
-                        'es_fields' => ['keyword' => ['type' => 'keyword', 'ignore_above' => 256]],
-                    ],
-                    [
-                        'name' => 'description',
-                        'display_name' => 'Description',
-                        'type' => 'text',
-                        'required' => false,
-                        'storage' => 'column',
-                        'is_facet' => false,
-                        'display_in_form' => true,
-                        'order' => 2,
-                        'validators' => null,
-                        'es_type' => 'text',
-                    ],
-                    [
-                        'name' => 'author',
-                        'display_name' => 'Author',
-                        'type' => 'string',
-                        'required' => true,
-                        'storage' => 'metadata',
-                        'is_facet' => true,
-                        'facet_label' => 'Author',
-                        'facet_order' => 1,
-                        'display_in_form' => true,
-                        'order' => 3,
-                        'validators' => ['min_length' => 2, 'max_length' => 255],
-                        'es_type' => 'text',
-                        'es_fields' => ['keyword' => ['type' => 'keyword', 'ignore_above' => 256]],
-                        'vault_roles' => ['gallery' => 'credit'],
-                    ],
-                    [
-                        'name' => 'year',
-                        'display_name' => 'Year',
-                        'type' => 'integer',
-                        'required' => false,
-                        'storage' => 'metadata',
-                        'is_facet' => true,
-                        'facet_label' => 'Year',
-                        'facet_order' => 3,
-                        'display_in_form' => true,
-                        'order' => 4,
-                        // 1826: the earliest surviving photograph (Niépce)
-                        'validators' => ['min_value' => 1826, 'max_value' => 2100],
-                        'es_type' => 'integer',
-                        'vault_roles' => ['gallery' => 'detail'],
-                    ],
-                    [
-                        'name' => 'technique',
-                        'display_name' => 'Technique',
-                        'type' => 'select',
-                        'required' => false,
-                        'storage' => 'metadata',
-                        'is_facet' => true,
-                        'facet_label' => 'Technique',
-                        'facet_order' => 2,
-                        'display_in_form' => true,
-                        'order' => 5,
-                        'validators' => ['in' => [
-                            'digital', 'film-35mm', 'medium-format', 'large-format',
-                            'instant', 'gelatin-silver', 'cyanotype', 'smartphone',
-                            'drone', 'other',
-                        ]],
-                        'es_type' => 'keyword',
-                        'vault_roles' => ['gallery' => 'badge'],
-                    ],
-                ],
-            ]
-        );
+        // The scheme lives in its own seeder so any organization can use it
+        // without this demo (e.g. a Photos collection for a real exhibition).
+        $this->call(PhotoSchemeSeeder::class);
 
-        $this->command->info('✓ Collection scheme: photo_exhibition (images only)');
-
-        return $scheme;
+        return CollectionScheme::where('name', PhotoSchemeSeeder::NAME)->firstOrFail();
     }
 
     // -------------------------------------------------------------------------
@@ -335,6 +249,7 @@ class FullFrameSeeder extends Seeder
                         'author' => $photo['author'],
                         'year' => $photo['year'],
                         'technique' => $photo['technique'],
+                        'dimensions' => $photo['dimensions'],
                     ],
                 ]
             );
@@ -397,12 +312,12 @@ class FullFrameSeeder extends Seeder
     private function photoSet(): array
     {
         $authors = [
-            'Lena Okafor' => ['digital', 'drone'],
-            'Marc Aubert' => ['film-35mm', 'gelatin-silver'],
-            'Sofía Ibarra' => ['medium-format', 'digital'],
-            'Yuki Tanabe' => ['instant', 'smartphone'],
-            'Ewa Lindqvist' => ['large-format', 'cyanotype'],
-            'Daniel Mora' => ['digital', 'film-35mm'],
+            'Lena Okafor' => ['Digital', 'Aerial (drone)'],
+            'Marc Aubert' => ['35 mm film', 'Silver gelatin print'],
+            'Sofía Ibarra' => ['Medium format film', 'Digital'],
+            'Yuki Tanabe' => ['Instant film', 'Smartphone'],
+            'Ewa Lindqvist' => ['Large format film', 'Cyanotype'],
+            'Daniel Mora' => ['Digital', '35 mm film'],
         ];
 
         $works = [
@@ -443,6 +358,7 @@ class FullFrameSeeder extends Seeder
                 'author' => $author,
                 'year' => $year,
                 'technique' => $authors[$author][$i % 2],
+                'dimensions' => ['landscape' => '50 × 70 cm', 'portrait' => '70 × 50 cm', 'square' => '50 × 50 cm'][$orientation],
                 'tags' => $workTags,
                 'palette' => $palette,
                 'orientation' => $orientation,
@@ -513,7 +429,7 @@ class FullFrameSeeder extends Seeder
     // Vault + key
     // -------------------------------------------------------------------------
 
-    private function seedVault(Organization $org, Workspace $submissions): Vault
+    private function seedVault(Organization $org, Workspace $submissions, Collection $collection): Vault
     {
         $vault = Vault::firstOrCreate(
             ['organization_id' => $org->id, 'slug' => 'first-frame'],
@@ -525,11 +441,16 @@ class FullFrameSeeder extends Seeder
                 'state' => VaultState::PRIVATE->value,
                 'has_public_workspace' => false,
                 'is_downloadable' => false,
-                'is_active' => true,
             ]
         );
 
         $submissions->vaults()->syncWithoutDetaching([$vault->id]);
+
+        // Curator uploads (`ingest`) land in Submissions, in the photo
+        // collection — the vault decides where, never the consumer.
+        $vault->update(['exposure_policy' => array_merge($vault->exposure_policy ?? [], [
+            'ingest' => ['workspace_id' => $submissions->id, 'collection_id' => $collection->id],
+        ])]);
 
         $this->command->info("✓ Vault: First Frame (gallery, private, hash: {$vault->hash}) ← Submissions");
 
@@ -538,7 +459,8 @@ class FullFrameSeeder extends Seeder
 
     /**
      * Mint the exhibition's two vault keys — a read key for the jury proxy and a
-     * write key (activate/open/close) for the opening (VAULT_WRITE_METHODS.md).
+     * write key for the opening (activate/open/close) and the curator's uploads
+     * (ingest/update/withdraw) (VAULT_WRITE_METHODS.md).
      *
      * @return array{read: string, write: string}|null
      */
@@ -551,7 +473,7 @@ class FullFrameSeeder extends Seeder
         }
 
         [, $read] = VaultKey::mint($vault, 'fullframe-read', ['read']);
-        [, $write] = VaultKey::mint($vault, 'fullframe-write', ['w:activate', 'w:open', 'w:close']);
+        [, $write] = VaultKey::mint($vault, 'fullframe-write', ['w:activate', 'w:open', 'w:close', 'w:ingest', 'w:update', 'w:withdraw']);
 
         return ['read' => $read, 'write' => $write];
     }

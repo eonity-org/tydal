@@ -223,7 +223,8 @@ Settled design (full spec in [`VAULT_SYSTEM.md`](VAULT_SYSTEM.md)):
   applies to all three states (§2.1).
 - **Write boundary** (2026-07-24, [`VAULT_WRITE_METHODS.md`](VAULT_WRITE_METHODS.md)):
   the vault also accepts a purpose-defined set of *write* ops (`gallery` →
-  activate/open/close; `ai` → `ingest`, 2026-07-25) gated by a **write-capable
+  activate/open/close; `ai` → `ingest`, 2026-07-25; purpose-agnostic
+  ingest/update/withdraw on gallery and ai, 2026-09-25) gated by a **write-capable
   vault key** (`vault_keys.abilities`) — symmetric with the read tiers. The op is
   the permission/audit unit; its payload is a declarative document the purpose's
   writer maps, so `@tydal/client` exposes one generic `write(op, payload)` (no

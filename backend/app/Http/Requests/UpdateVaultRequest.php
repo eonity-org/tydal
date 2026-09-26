@@ -42,6 +42,10 @@ class UpdateVaultRequest extends FormRequest
             // The capability matrix declares its own shape (VaultCapability),
             // so every knob is typed and unknown keys are rejected rather than
             // silently ignored.
+            // The workspaces the vault reads from (the vault form's side of the
+            // workspace selector's links); VaultService::syncWorkspaces applies them.
+            'workspace_ids' => 'sometimes|array',
+            'workspace_ids.*' => 'integer',
             'exposure_policy' => VaultCapability::documentRule(),
             ...VaultCapability::rulesForAll(),
         ];

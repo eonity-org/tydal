@@ -6,10 +6,39 @@ this package adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 The SDK versions independently of the TYDAL product release documented in
 [`../CHANGELOG.md`](../CHANGELOG.md).
 
-> **Note on published versions.** `1.0.1` is the last version published to npm;
+> **Note on published versions.** `1.4.0` (2026-08-02) was published from
+> source that was later lost; `1.5.0` supersedes it from the 1.3.0 line (see
+> its entry).
+>
+> Earlier: `1.0.1` is the last version published to npm;
 > `1.1.0` and `1.2.0` were developed and consumed locally (Full Frame vendored a
 > `1.1.0` tarball) but never released. `1.3.0` is the first release to carry
 > them, so upgrading from `1.0.1` picks up the whole vault write surface.
+
+## [Unreleased]
+
+### Added
+- `VaultWriteCapabilities.max_upload_bytes` — reported with `w:ingest`: the
+  largest file TYDAL accepts, so a consumer can refuse a file before uploading.
+
+## [1.5.0] — 2026-09-25
+
+### Added
+- `VaultWriteCapabilities` type for `writeCapabilities()`, with the optional
+  `ingested` list: when the key holds `w:update` or `w:withdraw`, the hashes of
+  the resources this vault's `ingest` created — the only ones those ops accept.
+- The purpose-agnostic inbound ops `ingest` / `update` / `withdraw`
+  (`VAULT_WRITE_METHODS.md` §3) documented in the README. They go through the
+  existing generic `write(op, payload)`: `metadata` is one flat object (`name`
+  and `description` go onto the resource, every other key into its metadata),
+  sent multipart alongside any `File`.
+- `VaultResourceCard.preview_renditions` (already in the source, never released).
+
+### Removed
+- The 1.4.0 slot engine (`buildSlotMap`, `VaultSlotMap`, `VaultDetail`,
+  `isHttpUrl`, `hostOf`) and `VaultPresentationBlock.labels`. Their source was
+  lost and 1.5.0 is built from the 1.3.0 line; every consumer still carries its
+  own copy of the slot engine, and there are no external users yet.
 
 ## [1.3.0] — 2026-07-26
 

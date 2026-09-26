@@ -80,8 +80,13 @@ export const ingest = {
     const form = new FormData();
     form.append('descriptor', JSON.stringify(descriptor));
     form.append('image', new Blob([Buffer.from(image_base64, 'base64')], { type: image_mime ?? 'image/png' }), 'image');
-    if (name) form.append('name', name);
-    if (source_hash) form.append('source_hash', source_hash);
+    // Everything but the files travels in the shared metadata document; TYDAL
+    // lifts `name` onto the resource and keeps the rest (e.g. `source_hash`)
+    // as its metadata.
+    const metadata: Record<string, string> = {};
+    if (name) metadata.name = name;
+    if (source_hash) metadata.source_hash = source_hash;
+    if (Object.keys(metadata).length) form.append('metadata', JSON.stringify(metadata));
 
     try {
       // The write op uses the WRITE key, distinct from the read key the client

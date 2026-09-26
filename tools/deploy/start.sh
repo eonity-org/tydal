@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # TYDAL — serve a dev instance. Brings the stack up, then runs the application
-# tier: on `host` topology `artisan serve` + queue + Vite on the host; on
-# `docker` topology only Vite (app/queue are containers). Ctrl-C stops the host
+# tier: on `host` topology `artisan serve` + queue + scheduler + Vite on the
+# host; on `docker` topology only Vite (app/queue/scheduler are containers).
+# Either way it reminds you that the scheduler daemon must stay running for the
+# scheduled maintenance jobs (bootstrap/app.php). Ctrl-C stops the host
 # processes (Docker keeps running). Re-running the script reloads already-running
 # Docker app/queue containers so they pick up code and .env changes. Does not
 # manage Ollama or seed the DB. See README.md.
@@ -12,7 +14,8 @@ usage() {
 Usage: start.sh [-h|--help]
 
 Serve a dev instance (topology-aware, no config args). Brings the stack up; on
-host runs artisan serve + queue + Vite, on docker runs only Vite. Ctrl-C stops
+host runs artisan serve + queue + scheduler (schedule:work) + Vite, on docker
+runs only Vite (the tydal_scheduler container runs the scheduler). Ctrl-C stops
 host processes but leaves Docker running. Re-running this script reloads an
 already-running Docker app + queue so code and .env changes take effect. Run
 first_install.sh first to seed. See tools/deploy/README.md.
@@ -58,7 +61,7 @@ docker compose -f "$COMPOSE" up -d --remove-orphans
 # serve / queue:work on the host would clash on port 8000 and fail to resolve
 # DB_HOST=mysql. Detect the tier from backend/.env DB_HOST (see tier.lib.sh) and
 # skip the host backend processes — only the Vite dev server stays on the host.
-. "$SCRIPT_DIR/tier.lib.sh"
+. "$SCRIPT_DIR/../lib/tier.lib.sh"
 INFRA="$(detect_infra "$ROOT/backend/.env" "$COMPOSE")"
 
 # --- stop backgrounded host processes on exit (no orphaned workers/serve) ---
@@ -88,7 +91,7 @@ if [ "$INFRA" = "docker" ]; then
     echo "Reloading app + queue containers so code and .env changes take effect…"
     docker compose -f "$COMPOSE" restart app queue
   fi
-  echo "Application tier: docker — backend (app + queue) runs in containers at http://localhost:8000."
+  echo "Application tier: docker — backend (app + queue + scheduler) runs in containers at http://localhost:8000."
   echo "Starting only the Vite dev server on the host (Ctrl-C stops it; containers keep running)."
 else
   cd "$ROOT/backend"
@@ -96,7 +99,31 @@ else
   pids+=($!)
   php artisan queue:work --timeout=300 &
   pids+=($!)
+  php artisan schedule:work &
+  pids+=($!)
 fi
+
+# --- scheduler notice ---
+# The maintenance jobs in bootstrap/app.php only fire while a scheduler daemon
+# runs `schedule:run` every minute. Say where it runs, and warn loudly if it doesn't.
+echo
+echo "⏱  Scheduler: resource:prune (daily 03:00), files:purge-uncommitted (daily 03:30)"
+echo "   and resources:purge-drafts (hourly) run ONLY while the scheduler daemon"
+echo "   (php artisan schedule:work) is running."
+if [ "$INFRA" = "docker" ]; then
+  if [ "$(docker inspect -f '{{.State.Running}}' tydal_scheduler 2>/dev/null)" = "true" ]; then
+    echo "   ✓ Running in the tydal_scheduler container (restarts with Docker)."
+  else
+    echo "   ⚠ The tydal_scheduler container is NOT running, so maintenance is not happening." >&2
+    echo "     Re-run tools/deploy/configure.sh <ai> docker to enable it in docker-compose.yml," >&2
+    echo "     or start it by hand: docker compose -f \"$COMPOSE\" up -d scheduler" >&2
+  fi
+else
+  echo "   ✓ Started here in the background; it stops with Ctrl-C along with serve + queue."
+  echo "     Keep this script running (or run 'php artisan schedule:work' yourself)."
+fi
+echo "   Production: a cron entry '* * * * * php artisan schedule:run' instead (DEPLOYMENT.md)."
+echo
 
 # Vite runs in the foreground; Ctrl-C here triggers the cleanup trap above.
 # Docker-only host (no npm): run Vite in a disposable node container instead.

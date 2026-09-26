@@ -64,7 +64,8 @@ gotchas) and [production deployment](DEPLOYMENT.md#production-deployment)
 - [OpenAPI specification](backend/docs/openapi.yaml)
 - [Org MCP server README](org-mcp/README.md)
 - [Vault MCP server README](vault-mcp/README.md)
-- [Bulk uploader README](tools/bulk_uploader/README.md)
+- [Tools index](tools/README.md) — dev scripts by category: stack lifecycle, clients at the border (vault apps, Full Frame), dev data
+- [Quick reference](QUICK_REFERENCE.md) — one line per script/command, docker and native forms, with preconditions
 
 Architecture specifications live in `docs/architecture/`; migration and milestone
 records live in `docs/planning/`. Earlier private archive material is summarized
