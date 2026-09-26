@@ -10,7 +10,7 @@ This folder holds only the **lifecycle of the stack**. Vault apps and the Full
 Frame provisioning live in [`../clients/`](../README.md#clients--the-border), and
 test data and load smoke live in [`../dev/`](../README.md#dev--data-and-smoke). See the
 [tools index](../README.md) and the one-line
-[quick reference](../../docs/QUICK_REFERENCE.md).
+[quick reference](../../QUICK_REFERENCE.md).
 
 ## How a TYDAL deployment is organized
 

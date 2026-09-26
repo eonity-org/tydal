@@ -7,7 +7,7 @@ the `app` container (docker tier) or on the host (host tier). So you never have 
 `docker exec -w /var/www/html tydal_app …` yourself.
 
 For a one-line-per-command cheat sheet (scripts and artisan, docker and native
-forms, preconditions), see **[docs/QUICK_REFERENCE.md](../docs/QUICK_REFERENCE.md)**.
+forms, preconditions), see **[QUICK_REFERENCE.md](../QUICK_REFERENCE.md)**.
 
 ## Layout
 
@@ -51,10 +51,12 @@ itself runs.
 | Script | Purpose | Needs |
 |---|---|---|
 | `vault-apps.sh [up\|stop\|down\|status] [gallery] [obsidian] [aity]` (root: `./clients.sh`) | Run the `vaults/*` renderer apps in node containers: gallery :3010, obsidian :3011, aity :3012. `up` creates or restarts them and waits until each answers; a restart re-runs the `@tydal/client` build. | Docker, stack up |
-| `fullframe.sh setup --org=SLUG [--index=tydal_multimedia]` | Once per organization: `photo_exhibition` scheme, its index (or a shared one), and the **Photos** collection. Safe to re-run. | Stack up, existing org |
-| `fullframe.sh create --org=SLUG --name="…" [--curator=EMAIL …]` | Once per exhibition: workspace, private gallery vault, read + write keys, and optionally the curator's TYDAL account. Prints the URL, keys and new password **once**. | `setup` done for the org |
+| `fullframe.sh setup --org=SLUG [--index=tydal_multimedia] [--language=es]` | Once per organization: `photo_exhibition` scheme, its index (or a shared one), and the **Photos** collection in the language you pick (asked if omitted). Safe to re-run; `--language` on a re-run corrects it. Ends by suggesting the matching `fullframe.sh create`. | Stack up, existing org |
+| `fullframe.sh create --org=SLUG --name="…" [--curator=EMAIL …]` | Once per exhibition: workspace, private gallery vault, read + write keys, and optionally the curator's TYDAL account. A new curator's password is asked (hidden, twice; empty = generated) or given with `--curator-password`. Prints the URL and keys (and a generated password) **once**. | `setup` done for the org |
 
-`fullframe.sh` passes every option straight to `artisan exhibitions:setup|create`
+From a terminal, `fullframe.sh` runs interactively and asks for what you left
+out. From a pipe or script it never prompts and uses the defaults (language
+`en`, generated password). It passes every option straight to `artisan exhibitions:setup|create`
 (full contract: [docs/CLI.md → Photo exhibitions](../docs/CLI.md#photo-exhibitions-full-frame)).
 Full Frame itself lives in its own repo (`../fullframe`, `docker compose up -d`).
 After `create`, the curator signs into its studio (`http://localhost:3020/admin`)

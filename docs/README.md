@@ -28,7 +28,7 @@ This folder keeps the public documentation index intentionally small. Start with
 - [Vault MCP server README](../vault-mcp/README.md) — vault-scoped consumer surface for external AI; read-only by default, `ingest` write tool with a write key (bring-your-own-AI)
 - [Shared client SDK README](../client/README.md) — `@tydal/client`, the TypeScript SDK for applications and integrations; the MCP adapters use their own HTTP wrappers
 - [Tools index](../tools/README.md) — dev scripts: `deploy/` (stack lifecycle), `clients/` (vault apps, Full Frame provisioning), `dev/` (seed a vault, load smoke)
-- [Quick reference](QUICK_REFERENCE.md) — every everyday script and artisan command on one line: docker form, native form, what it provides, preconditions
+- [Quick reference](../QUICK_REFERENCE.md) — every everyday script and artisan command on one line: docker form, native form, what it provides, preconditions
 
 ## Setup & Deployment
 

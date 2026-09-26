@@ -41,6 +41,18 @@ class ExhibitionProvisioner
     /** Roles a curator can be given here — ownership is never handed out by a command. */
     public const CURATOR_ROLES = ['viewer', 'editor', 'admin'];
 
+    /** The Photos collection's language when none is chosen (the column's default). */
+    public const DEFAULT_LANGUAGE = 'en';
+
+    /** Same floor as account registration (AuthController). */
+    public const MIN_PASSWORD_LENGTH = 8;
+
+    /** An ISO 639 code, optionally with a region/script subtag: en, es, pt-BR, zh-Hant. */
+    public static function isLanguage(string $code): bool
+    {
+        return strlen($code) <= 10 && preg_match('/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/', $code) === 1;
+    }
+
     public function __construct(
         private CollectionServiceInterface $collections,
         private VaultServiceInterface $vaults,
@@ -50,12 +62,17 @@ class ExhibitionProvisioner
     /**
      * The photo scheme, an index and the organization's Photos collection.
      * Idempotent: an organization that already has a collection on the photo
-     * scheme keeps it (and its index).
+     * scheme keeps it (and its index); a `$language` given on a re-run is
+     * applied to it, so a wrong first choice can be corrected.
      *
      * @return array{collection: Collection, index: SearchIndex, created: bool}
      */
-    public function setup(Organization $organization, ?string $indexName, string $collectionName): array
+    public function setup(Organization $organization, ?string $indexName, string $collectionName, ?string $language = null): array
     {
+        if ($language !== null && ! self::isLanguage($language)) {
+            throw new RuntimeException("{$language} is not a language code (e.g. en, es, pt-BR).");
+        }
+
         $scheme = PhotoSchemeSeeder::apply();
 
         $existing = $this->photoCollection($organization);
@@ -63,6 +80,9 @@ class ExhibitionProvisioner
             $index = $existing->searchIndex ?? throw new RuntimeException("Collection {$existing->name} has no search index.");
             // The scheme may have gained fields since — additive, never a rebuild.
             $this->elasticsearch->provisionIndex($index);
+            if ($language !== null && $existing->language !== $language) {
+                $existing->update(['language' => $language]);
+            }
 
             return ['collection' => $existing, 'index' => $index, 'created' => false];
         }
@@ -86,6 +106,7 @@ class ExhibitionProvisioner
             'user_owner_id' => $this->owner($organization)->id,
             'name' => $collectionName,
             'description' => 'Exhibition photographs with their curatorial details (author, technique, dimensions)',
+            'language' => $language ?? self::DEFAULT_LANGUAGE,
             'scheme_id' => $scheme->id,
             'index_id' => $index->id,
             'is_active' => true,
@@ -153,13 +174,15 @@ class ExhibitionProvisioner
 
     /**
      * Give someone access to the organization's exhibitions: create the TYDAL
-     * user (with a generated password, returned once) or reuse an existing
-     * one, and make them a member with at least `$role`. An existing higher
-     * role is never lowered, and ownership is never granted here.
+     * user or reuse an existing one, and make them a member with at least
+     * `$role`. A new account gets `$password` when given, else a generated
+     * one (returned once as `password`). An existing account's password is
+     * never touched. An existing higher role is never lowered, and ownership
+     * is never granted here.
      *
-     * @return array{user: User, password: string|null, role: string}
+     * @return array{user: User, created: bool, password: string|null, role: string}
      */
-    public function curator(Organization $organization, string $email, ?string $name, string $role): array
+    public function curator(Organization $organization, string $email, ?string $name, string $role, ?string $password = null): array
     {
         $order = self::CURATOR_ROLES; // lowest to highest
         if (! in_array($role, $order, true)) {
@@ -168,16 +191,20 @@ class ExhibitionProvisioner
         if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             throw new RuntimeException("{$email} is not an email address.");
         }
+        if ($password !== null && strlen($password) < self::MIN_PASSWORD_LENGTH) {
+            throw new RuntimeException('The curator password must be at least '.self::MIN_PASSWORD_LENGTH.' characters.');
+        }
 
-        return DB::transaction(function () use ($organization, $email, $name, $role, $order): array {
-            $password = null;
+        return DB::transaction(function () use ($organization, $email, $name, $role, $order, $password): array {
+            $generated = null;
             $user = User::where('email', $email)->first();
-            if (! $user) {
-                $password = Str::password(16, symbols: false);
+            $created = $user === null;
+            if ($created) {
+                $generated = $password === null ? Str::password(16, symbols: false) : null;
                 $user = User::create([
                     'name' => $name ?: Str::before($email, '@'),
                     'email' => $email,
-                    'password' => Hash::make($password),
+                    'password' => Hash::make($password ?? $generated),
                     'is_active' => true,
                     'is_superadmin' => false,
                     'last_organization_id' => $organization->id,
@@ -194,7 +221,7 @@ class ExhibitionProvisioner
                 $role = $current; // already at least this — left as it is
             }
 
-            return ['user' => $user, 'password' => $password, 'role' => $role];
+            return ['user' => $user, 'created' => $created, 'password' => $generated, 'role' => $role];
         });
     }
 
