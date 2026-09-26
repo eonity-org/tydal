@@ -11,7 +11,15 @@ All notable changes to TYDAL are documented here. The format follows
 - **`tools/clients/fullframe.sh setup|create`**: a tier-aware front for
   `exhibitions:setup` / `exhibitions:create`, so provisioning Full Frame
   exhibitions no longer needs `docker exec -w /var/www/html …`.
-- **[Quick reference](docs/QUICK_REFERENCE.md)**: every everyday script and
+- **`exhibitions:setup --language=CODE`**: the Photos collection gets the
+  language you pick (asked interactively, default `en`), and a re-run with
+  the option corrects it. When run through `fullframe.sh`, the closing hint
+  suggests `fullframe.sh create` instead of `php artisan exhibitions:create`.
+- **`exhibitions:create --curator-password=…`**: a new curator's password
+  can be chosen instead of changed later. Interactive runs ask for it
+  (hidden, confirmed; empty = generated). It's validated before anything is
+  created, and an existing account's password is never overwritten.
+- **[Quick reference](QUICK_REFERENCE.md)**: every everyday script and
   artisan command on one line, in docker and native form, with preconditions.
 - **[Tools index](tools/README.md)**: what goes in each `tools/` category.
 - **The scheduler now runs in dev.** Before, nothing ran `schedule:work`, so

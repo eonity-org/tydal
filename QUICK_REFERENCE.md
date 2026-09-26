@@ -2,8 +2,12 @@
 
 One line per thing you actually run: the **docker-tier** form, the **native
 (host-tier)** form, what it gives you, and what must already be true. Contracts
-and flags live in [tools/README.md](../tools/README.md) (scripts) and
-[CLI.md](CLI.md) (artisan). Paths are relative to `tydal/`.
+and flags live in [tools/README.md](tools/README.md) (scripts) and
+[docs/CLI.md](docs/CLI.md) (artisan). Paths are relative to `tydal/`.
+
+This is the **lookup** for a running dev install. For installing, configuring
+`.env`, AI providers, production (nginx, Supervisor, cron) and troubleshooting,
+read [DEPLOYMENT.md](DEPLOYMENT.md), the **walkthrough**.
 
 **Which form?** Your tier is set by `DB_HOST` in `backend/.env`: `mysql` means
 docker, `localhost` means native. Scripts under `tools/` detect it themselves, so
@@ -36,8 +40,8 @@ Tip for the docker tier: `alias art='docker exec -w /var/www/html tydal_app php 
 | Command | Provides | Needs |
 |---|---|---|
 | `./clients.sh [up\|stop\|down\|status] [gallery\|obsidian\|aity]` | Vault renderer apps at :3010 / :3011 / :3012 (`?vault=org/slug`) | stack |
-| `tools/clients/fullframe.sh setup --org=SLUG --index=tydal_multimedia` | Once per org: `photo_exhibition` scheme + Photos collection on a shared index | stack, org exists |
-| `tools/clients/fullframe.sh create --org=SLUG --name="…" --curator=EMAIL` | Once per exhibition: workspace, private gallery vault, read + write keys, curator account; **prints them once** | `setup` done |
+| `tools/clients/fullframe.sh setup --org=SLUG --index=tydal_multimedia [--language=es]` | Once per org: `photo_exhibition` scheme + Photos collection on a shared index, in the language you pick (asked if omitted) | stack, org exists |
+| `tools/clients/fullframe.sh create --org=SLUG --name="…" --curator=EMAIL` | Once per exhibition: workspace, private gallery vault, read + write keys, curator account (asks the new curator's password; empty = generated); **prints them once** | `setup` done |
 | `cd ../fullframe && docker compose up -d --build` | Full Frame at :3020 (studio `/admin`); native dev: `./dev.sh dev` | `fullframe/.env` with `ADMIN_PASSWORD`, `FULLFRAME_ENCRYPTION_KEY` |
 
 ## Dev data & smoke (same on both tiers)

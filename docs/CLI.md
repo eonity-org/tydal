@@ -7,7 +7,7 @@ app container: `docker exec -w /var/www/html tydal_app php artisan <command>`
 (the `-w` matters; without it you get `Could not open input file: artisan`).
 Commands that check integrity exit **non-zero on findings**, so they slot into
 CI as-is. For a one-line-per-command cheat sheet with both forms and
-preconditions, see [QUICK_REFERENCE.md](QUICK_REFERENCE.md); for the shell
+preconditions, see [QUICK_REFERENCE.md](../QUICK_REFERENCE.md); for the shell
 scripts that wrap these, see [tools/README.md](../tools/README.md).
 
 ## Search index lifecycle
@@ -292,6 +292,7 @@ Once per organization; safe to re-run.
 ```bash
 php artisan exhibitions:setup --org=lucila                          # own index: tydal_photo_exhibition
 php artisan exhibitions:setup --org=lucila --index=tydal_multimedia # share an existing index
+php artisan exhibitions:setup --org=lucila --language=es            # collection language (asked if omitted)
 ```
 
 Creates (or updates) the `photo_exhibition` scheme — title, author (credit),
@@ -300,13 +301,20 @@ organization's **Photos** collection. An organization that already has a
 collection on the scheme keeps it; the index only ever gains fields (no
 rebuild). `--collection=Name` renames the collection it creates.
 
+`--language` is the language the photographs' texts are written in, as an ISO
+code (`en`, `es`, `ca`, `pt-BR`…). When it's omitted, an interactive run asks
+while creating the collection; a non-interactive one uses `en`. On a re-run,
+`--language` corrects an existing collection. Without it, a re-run never
+asks and never changes the language. The hint printed at the end names
+`tools/clients/fullframe.sh create` when you came through the wrapper.
+
 ### `exhibitions:create`
 
 Once per exhibition.
 
 ```bash
 php artisan exhibitions:create --org=lucila --name="Semana 42" [--slug=semana-42] \
-  [--curator=ana@example.org [--curator-name="Ana Ruiz"] [--role=editor]]
+  [--curator=ana@example.org [--curator-name="Ana Ruiz"] [--role=editor] [--curator-password=…]]
 ```
 
 Creates the exhibition's workspace and a **private gallery vault** that shows
@@ -316,12 +324,20 @@ publish, `w:ingest/update/withdraw` for uploads). Prints the shared vault URL
 and both keys — paste them into Full Frame's *Connect an exhibition*. The keys
 are shown only once. Refuses a slug already used by a vault in the organization.
 
-`--curator` gives someone the studio: it creates the TYDAL user (printing a
-generated password once) or reuses an existing one, and makes them a member of
+`--curator` gives someone the studio: it creates the TYDAL user or reuses an
+existing one, and makes them a member of
 the organization with `--role` — `editor` (default) manages exhibitions,
 `viewer` gets a read-only studio, `admin` also administers the organization in
 TYDAL. An existing higher role is never lowered; ownership is never granted.
 They sign into Full Frame's studio with that TYDAL account.
+
+A **new** account's password is yours to choose. An interactive run asks for it
+(hidden, typed twice; leave it empty to generate one, printed once).
+`--curator-password=…` sets it without a prompt, but it lands in your shell
+history, so prefer the prompt. A non-interactive run without it generates one.
+Passwords need at least 8 characters, and a bad or mismatched one stops the
+command **before** anything is created. An **existing** account's password is
+never changed; `--curator-password` is ignored for it, with a warning.
 
 ## Housekeeping (scheduled — see `bootstrap/app.php`)
 

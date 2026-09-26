@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\User;
 use App\Services\ExhibitionProvisioner;
 use Illuminate\Console\Command;
 use RuntimeException;
@@ -20,6 +21,7 @@ class ExhibitionsCreate extends Command
         {--slug= : Vault address slug (default: from the name)}
         {--curator= : Email of the curator who runs it in Full Frame (TYDAL user created or reused)}
         {--curator-name= : Name for a newly created curator (default: from the email)}
+        {--curator-password= : Password for a newly created curator (min 8). Omitted: asked (hidden) when interactive, else generated. Prefer the prompt — a value here lands in shell history}
         {--role=editor : Curator role in the organization: viewer (read-only), editor or admin}';
 
     protected $description = 'Create a photo exhibition (Full Frame): workspace, private gallery vault and its read + write keys';
@@ -52,6 +54,13 @@ class ExhibitionsCreate extends Command
             $this->error('--role must be one of: '.implode(', ', ExhibitionProvisioner::CURATOR_ROLES).'.');
 
             return self::FAILURE;
+        }
+        $password = null;
+        if ($curatorEmail !== null) {
+            $password = $this->curatorPassword($curatorEmail);
+            if ($password === false) {
+                return self::FAILURE;
+            }
         }
 
         try {
@@ -89,6 +98,7 @@ class ExhibitionsCreate extends Command
                 $curatorEmail,
                 $this->option('curator-name') !== null ? (string) $this->option('curator-name') : null,
                 $role,
+                $password,
             );
         } catch (RuntimeException $e) {
             $this->newLine();
@@ -100,10 +110,50 @@ class ExhibitionsCreate extends Command
         $this->newLine();
         $this->line("Curator — signs into Full Frame's studio with their TYDAL account ({$curator['role']}):");
         $this->line("  Email    : {$curator['user']->email}");
-        $this->line($curator['password'] !== null
-            ? "  Password : {$curator['password']}   (new account — shown only now; they can change it in TYDAL)"
-            : '  Password : their existing TYDAL password');
+        $this->line(match (true) {
+            $curator['password'] !== null => "  Password : {$curator['password']}   (new account, generated — shown only now; they can change it in TYDAL)",
+            $curator['created'] => '  Password : the one you chose   (new account)',
+            default => '  Password : their existing TYDAL password',
+        });
 
         return self::SUCCESS;
+    }
+
+    /**
+     * The password a NEW curator account gets: --curator-password, else asked
+     * (hidden, confirmed) when interactive, else null (generated). An existing
+     * account keeps its own. False when the choice is invalid — reported here,
+     * before anything is created.
+     */
+    private function curatorPassword(string $email): string|false|null
+    {
+        $given = $this->option('curator-password');
+        if (User::where('email', $email)->exists()) {
+            if ($given !== null) {
+                $this->warn("{$email} already has a TYDAL account — --curator-password ignored; their password is left unchanged.");
+            }
+
+            return null;
+        }
+
+        if ($given === null && $this->input->isInteractive()) {
+            $given = (string) $this->secret("Password for the new curator {$email} (leave empty to generate one)");
+            if ($given === '') {
+                return null;
+            }
+            if ($given !== (string) $this->secret('Repeat the password')) {
+                $this->error('The passwords do not match — nothing was created.');
+
+                return false;
+            }
+        }
+
+        if ($given !== null && strlen((string) $given) < ExhibitionProvisioner::MIN_PASSWORD_LENGTH) {
+            $this->error('The curator password must be at least '.ExhibitionProvisioner::MIN_PASSWORD_LENGTH.' characters — nothing was created.');
+
+            return false;
+        }
+
+        return $given !== null ? (string) $given : null;
     }
 }

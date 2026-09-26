@@ -156,7 +156,7 @@ wrappers over [`tools/deploy/`](tools/deploy/README.md); `./clients.sh` and
 `./seed-vault.sh` wrap [`tools/clients/`](tools/README.md#clients--the-border)
 and [`tools/dev/`](tools/README.md#dev--data-and-smoke). The
 [tools index](tools/README.md) has the full contract for every script and flag,
-and the [quick reference](docs/QUICK_REFERENCE.md) has one line per command.)
+and the [quick reference](QUICK_REFERENCE.md) has one line per command.)
 
 ### 2. Fill in `.env`
 
@@ -275,23 +275,11 @@ docker exec tydal_ollama ollama pull llama3.2-vision
 
 ### Everyday commands (after first install)
 
-```bash
-tools/deploy/reload.sh                    # picked up an .env/code change: restart the queue worker
-tools/deploy/reindex.sh                   # rebuild ES + embeddings only, DB untouched (after an embedding-model change)
-tools/deploy/test.sh                      # Pest (on tydal_test — dev DB untouched) + JS suites
-tools/clients/fullframe.sh setup --org=SLUG --index=tydal_multimedia   # once per org: ready for Full Frame exhibitions
-tools/clients/fullframe.sh create --org=SLUG --name="…" --curator=EMAIL  # one exhibition: vault + keys + curator (printed once)
-
-# From backend/ — the rest are artisan commands (full reference: docs/CLI.md).
-# On the docker tier prefix them with: docker exec -w /var/www/html tydal_app
-# One-line cheat sheet with both forms: docs/QUICK_REFERENCE.md
-php artisan queue:work --timeout=360      # required for anything async: indexing, enrichment, embeddings
-php artisan search:reconcile              # diagnose MySQL <-> ES drift (report only)
-php artisan search:reconcile --fix        # repair it
-php artisan search:embed                  # backfill chunk embeddings (needs the queue worker)
-php artisan search:setup-indices          # additive mapping update, e.g. after a new scheme field
-php artisan search:setup-indices --recreate && php artisan search:reindex   # after a field's es_type CHANGED
-```
+Day-to-day commands aren't repeated here. **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)**
+has every script and artisan command on one line, in docker and native form,
+with its preconditions: reload, reindex, test, Full Frame provisioning, search
+drift repair, maintenance, and debugging. The full artisan contracts are in
+[docs/CLI.md](docs/CLI.md).
 
 ### Manual (understanding each step)
 
