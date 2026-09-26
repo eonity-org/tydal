@@ -7,6 +7,7 @@ use App\Enums\VaultPurpose;
 use App\Enums\VaultState;
 use App\Models\Collection;
 use App\Models\Organization;
+use App\Models\Resource;
 use App\Models\User;
 use App\Models\Vault;
 use App\Models\VaultKey;
@@ -20,7 +21,8 @@ use Tests\TestCase;
 
 /**
  * The `ai` vault's `ingest` write method (VAULT_WRITE_METHODS.md §7): a derived
- * artifact (translated image + JSON descriptor document) is materialized as an
+ * artifact (translated image + JSON descriptor document, plus the shared
+ * metadata document) is materialized as an
  * output resource in the vault's configured ingest target, behind a `w:ingest`
  * write key — the same gate the gallery methods use, extended for binary.
  */
@@ -81,8 +83,7 @@ class AiVaultIngestTest extends TestCase
         return $this->post("/h/{$vault->hash}/w/ingest", [
             'descriptor' => json_encode($descriptor ?? ['figures' => [['type' => 'formula', 'latex' => 'E=mc^2']]]),
             'image' => UploadedFile::fake()->image('translated.png', 40, 40),
-            'name' => 'Figure 1',
-            'source_hash' => 'SRC12345',
+            'metadata' => json_encode(['name' => 'Figure 1', 'source_hash' => 'SRC12345']),
         ], $headers);
     }
 
@@ -146,13 +147,17 @@ class AiVaultIngestTest extends TestCase
         $resourceId = $link->resource_id;
         $this->assertNotNull($resourceId);
 
-        // Resource created live in the configured collection…
+        // Resource created live in the configured collection, named from the
+        // metadata document, the rest kept as its metadata…
         $this->assertDatabaseHas('resources', [
             'id' => $resourceId,
+            'name' => 'Figure 1',
             'organization_id' => $this->org->id,
             'collection_id' => $this->collection->id,
             'state' => ResourceState::LIVE->value,
         ]);
+
+        $this->assertSame(['source_hash' => 'SRC12345'], Resource::find($resourceId)->metadata);
 
         // …attached to the ingest workspace…
         $this->assertDatabaseHas('dam_resource_workspace', [

@@ -44,7 +44,7 @@ enum VaultCapability: string
             self::ADDRESS_ROLES => 'File roles that get addresses',
             self::CHUNK_ROLES => 'File roles that feed chunks',
             self::WRITE_METHODS => 'Write methods accepted',
-            self::INGEST => 'Ingest landing target',
+            self::INGEST => 'Ingest target',
             self::RAG_MIN_SCORE => 'Ask relevance floor',
         };
     }
@@ -89,7 +89,7 @@ enum VaultCapability: string
                 $path => 'sometimes|nullable|array',
                 $path.'.*' => 'string',
             ],
-            // The landing spot for the `ai` purpose's ingest op — the consumer
+            // Where every purpose's `ingest` op lands new resources — the consumer
             // declares what, the vault decides where, so both ids are required
             // together when the key is present at all.
             self::INGEST => [

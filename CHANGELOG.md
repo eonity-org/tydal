@@ -6,6 +6,59 @@ All notable changes to TYDAL are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`tools/clients/fullframe.sh setup|create`**: a tier-aware front for
+  `exhibitions:setup` / `exhibitions:create`, so provisioning Full Frame
+  exhibitions no longer needs `docker exec -w /var/www/html …`.
+- **`exhibitions:setup --language=CODE`**: the Photos collection gets the
+  language you pick (asked interactively, default `en`), and a re-run with
+  the option corrects it. When run through `fullframe.sh`, the closing hint
+  suggests `fullframe.sh create` instead of `php artisan exhibitions:create`.
+- **`exhibitions:create --curator-password=…`**: a new curator's password
+  can be chosen instead of changed later. Interactive runs ask for it
+  (hidden, confirmed; empty = generated). It's validated before anything is
+  created, and an existing account's password is never overwritten.
+- **[Quick reference](QUICK_REFERENCE.md)**: every everyday script and
+  artisan command on one line, in docker and native form, with preconditions.
+- **[Tools index](tools/README.md)**: what goes in each `tools/` category.
+- **The scheduler now runs in dev.** Before, nothing ran `schedule:work`, so
+  `resource:prune`, `files:purge-uncommitted` and `resources:purge-drafts` never
+  fired. The docker tier gets a `scheduler` compose service (`tydal_scheduler`,
+  toggled with app/queue by `configure.sh`). On the host tier `start.sh` runs
+  `schedule:work` beside the queue. `start.sh` prints where the daemon runs and
+  warns if the container is down. DEPLOYMENT.md gains the production cron entry.
+
+### Changed
+
+- **`tools/` reorganized by role.** `deploy/` keeps the stack lifecycle.
+  `clients/` holds what sits at TYDAL's border (`vault-apps.sh`, formerly
+  `deploy/clients.sh`, plus `fullframe.sh`). `dev/` holds seeding and smoke
+  (`seed-vault.sh`, `loadtest.sh`), and `lib/` the sourced `tier.lib.sh`. The
+  root wrappers `./clients.sh` and `./seed-vault.sh` still work.
+- **`tools/deploy/test.sh` no longer resets the dev database.** It used to run
+  `migrate:fresh --seed` on `tydal` although Pest runs on `tydal_test`. It now
+  creates `tydal_test` if missing, runs the `client`/`org-mcp`/`vault-mcp`
+  suites (it pointed at the removed `mcp/` workspace), runs every suite even
+  after a failure, and accepts `--backend-only` and `-- PEST_ARGS`.
+
+### Fixed
+
+- **`seed-vault.sh`** works against the current API again. Resources are created
+  with `state: live`, and the vault with `organization_id`, `state: public` and
+  `workspace_ids`. The removed `visibility` / `is_published` fields made every
+  resource create fail and the vault come out private.
+- **`vault-apps.sh`** shields `org-mcp/` and `vault-mcp/` `node_modules`
+  (it listed the removed `mcp/`).
+
+### Removed
+
+- `tools/deploy/populate.sh`, `tools/deploy/query.sh` and `tools/bulk_uploader/`.
+  They had broken against the current API: `visibility` instead of the required
+  `state`, and calls to the removed `extract`/`autotag` endpoints. The uploader's
+  accept/tags logic already lives in `AutoApprovalService`. Use
+  `tools/dev/seed-vault.sh` for dev data (see [tools/README.md](tools/README.md#removed)).
+
 ## [1.0.0] — 2026-09-23
 
 First public release of TYDAL — a multi-tenant, schema-driven semantic knowledge

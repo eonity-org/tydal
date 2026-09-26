@@ -6,12 +6,14 @@
 # are named (tydal_gallery, …) and persistent: `up` re-starts them re-running
 # npm install + the client build, so SDK/app changes are picked up. Hosts with
 # npm can skip this and run `npm run dev -w @tydal/<app>` directly (see each
-# app's README). Assumes the stack is already up (start.sh). See README.md.
+# app's README). Assumes the stack is already up (start.sh). Root wrapper:
+# ./clients.sh. See tools/README.md.
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: clients.sh [up|stop|down|status] [gallery] [obsidian] [aity]
+Usage: vault-apps.sh [up|stop|down|status] [gallery] [obsidian] [aity]
+       (or the root wrapper: ./clients.sh …)
 
 Run the vault client apps in node containers (Docker-only hosts; with host npm
 you can run the workspaces directly). Default action: up. Default apps: all.
@@ -101,7 +103,8 @@ for app in "${APPS[@]}"; do
       -v /app/node_modules \
       -v /app/frontend/node_modules \
       -v /app/client/node_modules \
-      -v /app/mcp/node_modules \
+      -v /app/org-mcp/node_modules \
+      -v /app/vault-mcp/node_modules \
       -v /app/vaults/gallery/node_modules \
       -v /app/vaults/obsidian/node_modules \
       -v /app/vaults/aity/node_modules \
@@ -130,4 +133,4 @@ for app in "${APPS[@]}"; do
   done
   echo "  $app → http://localhost:$port/?vault=<org>/<slug>"
 done
-echo "Clients up. Stop with: clients.sh stop"
+echo "Clients up. Stop with: ./clients.sh stop"

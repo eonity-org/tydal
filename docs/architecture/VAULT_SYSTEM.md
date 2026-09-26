@@ -331,8 +331,8 @@ chunks); `ai` is Tier 0 + Tier 1 (chunks, binary *off* by default, so a vault
 key cannot be farmed for bytes). Any UI that presents these as cumulative
 levels — "links, plus metadata, plus binary" — misrepresents the model, because
 the top rung would force binary on for the one purpose that deliberately denies
-it. Writes are not a ladder either: `gallery` → activate/open/close and `ai` →
-ingest are disjoint vocabularies, not accumulating ones.
+it. Writes are not a ladder either: `gallery` → activate/open/close and every content-taking purpose →
+ingest/update/withdraw are vocabularies, not accumulating tiers.
 
 #### The capability vocabulary
 

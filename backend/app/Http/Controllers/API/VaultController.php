@@ -26,6 +26,7 @@ use App\Services\VaultSignatureService;
 use App\Values\VaultPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -48,7 +49,16 @@ class VaultController extends Controller
         $vaults = Vault::query()->whereIn('state', [VaultState::PRIVATE->value, VaultState::PUBLIC->value])
             ->where('organization_id', currentOrganizationId())
             ->orderBy('name')
-            ->get(['id', 'organization_id', 'name', 'slug', 'description', 'purpose', 'state']);
+            ->get(['id', 'organization_id', 'name', 'slug', 'description', 'purpose', 'state', 'selection_snapshot'])
+            // The selector's hint for adding a link; removing one is reported
+            // per workspace by WorkspaceController::listVaults.
+            ->map(fn (Vault $v) => [
+                ...$v->only(['id', 'organization_id', 'name', 'slug', 'description', 'state']),
+                'purpose' => $v->purpose,
+                'attach_lock' => $v->selection_snapshot !== null
+                    ? 'This vault\'s published selection decides what it shows — close the exhibition first.'
+                    : null,
+            ]);
 
         return response()->json([
             'success' => true,
@@ -116,7 +126,20 @@ class VaultController extends Controller
      */
     public function store(StoreVaultRequest $request): JsonResponse
     {
-        $vault = $this->vaultService->createVault($request->validated());
+        $data = $request->validated();
+        $workspaceIds = $data['workspace_ids'] ?? null;
+        unset($data['workspace_ids']);
+
+        // One transaction: a refused workspace link leaves no half-made vault.
+        $vault = DB::transaction(function () use ($data, $workspaceIds) {
+            $vault = $this->vaultService->createVault($data);
+            if ($workspaceIds !== null) {
+                $this->vaultService->syncWorkspaces($vault, $workspaceIds);
+            }
+
+            return $vault;
+        });
+        $vault->load('workspaces:workspaces.id,workspaces.name,workspaces.is_system');
 
         // A new vault has no projected index yet (indexed_at NULL → search runs
         // on the DB fallback: keyword-only, no facets, no semantic mode even
@@ -167,11 +190,24 @@ class VaultController extends Controller
         }
 
         $data = $request->validated();
+        $workspaceIds = $data['workspace_ids'] ?? null;
+        unset($data['workspace_ids']);
         $saltChanged = isset($data['salt']) && $data['salt'] !== $existing->salt;
         $purposeChanged = isset($data['purpose']) && $data['purpose'] !== $existing->purpose->value;
         $projectionChanged = $this->projectionRolesChanged($existing, $data);
 
-        $vault = $this->vaultService->updateVault($id, $data);
+        // One transaction: a refused workspace link (VaultService::associationLock)
+        // rolls back the settings saved with it. The links are checked against
+        // the updated vault, so a new ingest target frees the old one.
+        $vault = DB::transaction(function () use ($id, $data, $workspaceIds) {
+            $vault = $this->vaultService->updateVault($id, $data);
+            if ($vault && $workspaceIds !== null) {
+                $this->vaultService->syncWorkspaces($vault, $workspaceIds);
+            }
+
+            return $vault;
+        });
+        $vault?->load('workspaces:workspaces.id,workspaces.name,workspaces.is_system');
 
         if ($saltChanged || $purposeChanged) {
             $this->vaultLinkService->purgeLinksForVault($id);

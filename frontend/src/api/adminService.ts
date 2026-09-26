@@ -53,6 +53,10 @@ export interface AdminWorkspace {
   id: string
   name: string
   slug?: string
+  /** The org's "All Resources" workspace, created with the org. */
+  is_default?: boolean
+  /** Internal, code-managed (e.g. a gallery's `vault-{id}-selection`). */
+  is_system?: boolean
 }
 
 export type Visibility = 'global' | 'restricted'

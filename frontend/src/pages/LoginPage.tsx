@@ -71,6 +71,10 @@ function LoginPage() {
             const errorMessages = Object.values(response.error).flat()
             errorMessage = errorMessages.join(', ')
           }
+        } else if (response.message) {
+          // TYDAL's own reason — "Invalid credentials", or how long to wait
+          // after too many attempts.
+          errorMessage = response.message
         }
 
         setError(errorMessage)

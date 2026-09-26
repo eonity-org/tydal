@@ -181,7 +181,7 @@ class PlatformController extends Controller
     public function listOrgWorkspaces(string $id): JsonResponse
     {
         $organization = Organization::findOrFail($id);
-        $workspaces = $organization->workspaces()->get(['id', 'name', 'slug']);
+        $workspaces = $organization->workspaces()->get(['id', 'name', 'slug', 'is_default', 'is_system']);
 
         return response()->json([
             'success' => true,

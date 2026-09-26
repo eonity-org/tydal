@@ -2,8 +2,13 @@
 
 Every custom artisan command, what it's for, and the operational recipes that
 string them together. All commands run from `backend/`:
-`php artisan <command>`. Commands that check integrity exit **non-zero on
-findings**, so they slot into CI as-is.
+`php artisan <command>`. On the docker application tier run them inside the
+app container: `docker exec -w /var/www/html tydal_app php artisan <command>`
+(the `-w` matters; without it you get `Could not open input file: artisan`).
+Commands that check integrity exit **non-zero on findings**, so they slot into
+CI as-is. For a one-line-per-command cheat sheet with both forms and
+preconditions, see [QUICK_REFERENCE.md](../QUICK_REFERENCE.md); for the shell
+scripts that wrap these, see [tools/README.md](../tools/README.md).
 
 ## Search index lifecycle
 
@@ -270,6 +275,70 @@ Set `TYDAL_VAULT_WRITE_KEY` on the vault-MCP connection and the purpose's write
 ops (`ingest` on an `ai` vault) appear as tools — read-only otherwise.
 There is no CLI for vault keys — they are minted in the admin UI or via that endpoint.
 
+## Photo exhibitions (Full Frame)
+
+Prepare TYDAL to serve photo exhibitions to a gallery client such as
+[Full Frame](https://github.com/eonity-org/fullframe), with nothing to configure
+by hand. Opt-in: the installer stays generic.
+
+`tools/clients/fullframe.sh setup|create …` runs these two commands with the
+same options on either tier (it finds where artisan runs), so it's the
+easiest way in. See [tools/README.md](../tools/README.md#clients--the-border).
+
+### `exhibitions:setup`
+
+Once per organization; safe to re-run.
+
+```bash
+php artisan exhibitions:setup --org=lucila                          # own index: tydal_photo_exhibition
+php artisan exhibitions:setup --org=lucila --index=tydal_multimedia # share an existing index
+php artisan exhibitions:setup --org=lucila --language=es            # collection language (asked if omitted)
+```
+
+Creates (or updates) the `photo_exhibition` scheme — title, author (credit),
+year, technique and dimensions (details), description — its index, and the
+organization's **Photos** collection. An organization that already has a
+collection on the scheme keeps it; the index only ever gains fields (no
+rebuild). `--collection=Name` renames the collection it creates.
+
+`--language` is the language the photographs' texts are written in, as an ISO
+code (`en`, `es`, `ca`, `pt-BR`…). When it's omitted, an interactive run asks
+while creating the collection; a non-interactive one uses `en`. On a re-run,
+`--language` corrects an existing collection. Without it, a re-run never
+asks and never changes the language. The hint printed at the end names
+`tools/clients/fullframe.sh create` when you came through the wrapper.
+
+### `exhibitions:create`
+
+Once per exhibition.
+
+```bash
+php artisan exhibitions:create --org=lucila --name="Semana 42" [--slug=semana-42] \
+  [--curator=ana@example.org [--curator-name="Ana Ruiz"] [--role=editor] [--curator-password=…]]
+```
+
+Creates the exhibition's workspace and a **private gallery vault** that shows
+it, with that workspace + Photos as its ingest target (curator uploads land
+there), and mints a read key and a write key (`w:activate/open/close` to
+publish, `w:ingest/update/withdraw` for uploads). Prints the shared vault URL
+and both keys — paste them into Full Frame's *Connect an exhibition*. The keys
+are shown only once. Refuses a slug already used by a vault in the organization.
+
+`--curator` gives someone the studio: it creates the TYDAL user or reuses an
+existing one, and makes them a member of
+the organization with `--role` — `editor` (default) manages exhibitions,
+`viewer` gets a read-only studio, `admin` also administers the organization in
+TYDAL. An existing higher role is never lowered; ownership is never granted.
+They sign into Full Frame's studio with that TYDAL account.
+
+A **new** account's password is yours to choose. An interactive run asks for it
+(hidden, typed twice; leave it empty to generate one, printed once).
+`--curator-password=…` sets it without a prompt, but it lands in your shell
+history, so prefer the prompt. A non-interactive run without it generates one.
+Passwords need at least 8 characters, and a bad or mismatched one stops the
+command **before** anything is created. An **existing** account's password is
+never changed; `--curator-password` is ignored for it, with a warning.
+
 ## Housekeeping (scheduled — see `bootstrap/app.php`)
 
 | Command | Schedule | Purpose |
@@ -280,7 +349,12 @@ There is no CLI for vault keys — they are minted in the admin UI or via that e
 | `aity:purge-stale` | manual | mark stale AITY file states failed and purge matching Redis jobs (`--hours=24 --queue=default --dry-run`) |
 
 The scheduler needs `php artisan schedule:work` (dev) or a system cron
-running `php artisan schedule:run` every minute (prod).
+running `php artisan schedule:run` every minute (prod, see
+[DEPLOYMENT.md](../DEPLOYMENT.md#scheduler-cron)). In dev, `start.sh` takes
+care of it and prints a notice saying where the daemon runs. On the docker tier
+that's the `tydal_scheduler` compose service, toggled with app/queue by
+`configure.sh`. On the host tier it's a background `schedule:work` that stops
+with Ctrl-C. Check what's scheduled with `php artisan schedule:list`.
 
 ## Debug helpers
 
