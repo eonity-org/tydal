@@ -144,7 +144,7 @@ cfg_args=("$AI_ARG" "$TOPO_ARG" -f)
 # On the `docker` application tier the host may have NO PHP/Composer/Node at
 # all: PHP steps run inside the app container and npm falls back to a node
 # container (run_npm, tier.lib.sh). On `host`, everything runs as before.
-. "$SCRIPT_DIR/tier.lib.sh"
+. "$SCRIPT_DIR/../lib/tier.lib.sh"
 case "$TOPO_ARG" in docker) TOPO="docker" ;; *) TOPO="host" ;; esac
 
 # app_exec CMD… : run a command (composer/php artisan) inside the app container.

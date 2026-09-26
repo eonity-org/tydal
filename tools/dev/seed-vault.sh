@@ -3,9 +3,10 @@
 # Goes through the REAL API pipeline (not direct DB inserts): each file becomes
 # a resource + canonical file upload, so Tika extraction, chunking, embedding
 # and auto-tagging run exactly as they would for a user upload. Then a
-# workspace groups the resources, a published mixed-purpose vault projects the
+# workspace groups the resources, a public mixed-purpose vault projects the
 # workspace, and the vault's ES index is rebuilt once processing settles.
-# Requires the stack up (start.sh) AND the queue worker running. See README.md.
+# Requires the stack up (start.sh) AND the queue worker running. See
+# tools/README.md.
 set -euo pipefail
 
 usage() {
@@ -17,7 +18,7 @@ Seed a test vault from a folder of PDFs and images (top level of <folder>;
 
   1. one resource + canonical file upload per archive (full enrichment pipeline)
   2. a workspace "<slug>-ws" holding all of them
-  3. a published, downloadable, mixed-purpose vault "<slug>" projecting the
+  3. a public, downloadable, mixed-purpose vault "<slug>" projecting the
      workspace, then waits for extraction/embedding and rebuilds the vault index
 
 vault-slug defaults to the folder name. Re-running with the same slug fails on
@@ -101,7 +102,7 @@ for f in "${FILES[@]}"; do
   esac
 
   RES=$(curl -s -X POST "$BASE_URL/resources" "${AUTH[@]}" -H 'Content-Type: application/json' \
-    -d "{\"collection_id\": \"$COLLECTION_ID\", \"name\": \"$name\", \"type\": \"$type\", \"visibility\": \"organization\"}")
+    -d "{\"collection_id\": \"$COLLECTION_ID\", \"name\": \"$name\", \"type\": \"$type\", \"state\": \"live\"}")
   RES_ID=$(echo "$RES" | jq -r '.data.resource.id // empty')
   if [ -z "$RES_ID" ]; then
     echo "  ✗ $base — resource creation failed: $(echo "$RES" | jq -c '.message // .errors // .')" >&2
@@ -123,13 +124,11 @@ done
 
 # ── Vault ────────────────────────────────────────────────────────────────────
 VAULT=$(curl -s -X POST "$BASE_URL/platform/vaults" "${AUTH[@]}" -H 'Content-Type: application/json' \
-  -d "{\"name\": \"$SLUG\", \"slug\": \"$SLUG\", \"purpose\": \"mixed\", \"is_published\": true, \"is_downloadable\": true, \"description\": \"Seeded test vault\"}")
+  -d "{\"organization_id\": \"$ORG_ID\", \"name\": \"$SLUG\", \"slug\": \"$SLUG\", \"purpose\": \"mixed\", \"state\": \"public\", \"is_downloadable\": true, \"workspace_ids\": [$WS_ID], \"description\": \"Seeded test vault\"}")
 VAULT_ID=$(echo "$VAULT" | jq -r '.data.vault.id // empty')
 VAULT_HASH=$(echo "$VAULT" | jq -r '.data.vault.hash // empty')
 [ -n "$VAULT_ID" ] || { echo "Vault creation failed:" >&2; echo "$VAULT" | jq '.' >&2; exit 1; }
-curl -s -X POST "$BASE_URL/workspaces/$WS_ID/vaults" "${AUTH[@]}" -H 'Content-Type: application/json' \
-  -d "{\"vault_id\": \"$VAULT_ID\"}" >/dev/null
-echo "✓ Vault: $SLUG (hash: $VAULT_HASH, purpose: mixed, published) ← workspace $SLUG-ws"
+echo "✓ Vault: $SLUG (hash: $VAULT_HASH, purpose: mixed, public) ← workspace $SLUG-ws"
 
 # ── Wait for the enrichment pipeline (queue worker) ──────────────────────────
 echo "Waiting for extraction/embedding (queue worker must be running)..."
@@ -149,7 +148,7 @@ done
 echo ""
 
 # ── Rebuild the vault's projected index (tier-aware artisan) ─────────────────
-. "$SCRIPT_DIR/tier.lib.sh"
+. "$SCRIPT_DIR/../lib/tier.lib.sh"
 INFRA="$(detect_infra "$BACKEND_DIR/.env" "$COMPOSE")"
 artisan() {
   if [ "$INFRA" = "docker" ]; then

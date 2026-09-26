@@ -151,10 +151,12 @@ in CI/non-interactive shells); `--no-force-env` to keep an existing `.env` and
 only toggle Docker Compose services. `frontend/.env` is created only when
 missing.
 
-(`./install.sh` / `./start.sh` / `./configure.sh` / `./clients.sh` /
-`./seed-vault.sh` at the repo root are thin wrappers over
-[`tools/deploy/`](tools/deploy/README.md) — the full contract for every
-script and flag lives there.)
+(`./install.sh` / `./start.sh` / `./configure.sh` at the repo root are thin
+wrappers over [`tools/deploy/`](tools/deploy/README.md); `./clients.sh` and
+`./seed-vault.sh` wrap [`tools/clients/`](tools/README.md#clients--the-border)
+and [`tools/dev/`](tools/README.md#dev--data-and-smoke). The
+[tools index](tools/README.md) has the full contract for every script and flag,
+and the [quick reference](docs/QUICK_REFERENCE.md) has one line per command.)
 
 ### 2. Fill in `.env`
 
@@ -276,8 +278,13 @@ docker exec tydal_ollama ollama pull llama3.2-vision
 ```bash
 tools/deploy/reload.sh                    # picked up an .env/code change: restart the queue worker
 tools/deploy/reindex.sh                   # rebuild ES + embeddings only, DB untouched (after an embedding-model change)
+tools/deploy/test.sh                      # Pest (on tydal_test — dev DB untouched) + JS suites
+tools/clients/fullframe.sh setup --org=SLUG --index=tydal_multimedia   # once per org: ready for Full Frame exhibitions
+tools/clients/fullframe.sh create --org=SLUG --name="…" --curator=EMAIL  # one exhibition: vault + keys + curator (printed once)
 
-# From backend/ — the rest are artisan commands (full reference: docs/CLI.md):
+# From backend/ — the rest are artisan commands (full reference: docs/CLI.md).
+# On the docker tier prefix them with: docker exec -w /var/www/html tydal_app
+# One-line cheat sheet with both forms: docs/QUICK_REFERENCE.md
 php artisan queue:work --timeout=360      # required for anything async: indexing, enrichment, embeddings
 php artisan search:reconcile              # diagnose MySQL <-> ES drift (report only)
 php artisan search:reconcile --fix        # repair it
@@ -330,7 +337,7 @@ npm run dev                                       # Vite dev server (default :30
 With the `docker` application tier the scripts need **only Docker** on the
 host: `install.sh` runs composer/artisan inside the `app` container (bringing
 the containers up first), and every npm step (`install.sh`, `start.sh`'s
-Vite, `test.sh`'s MCP suite) falls back to a disposable `node:22` container
+Vite, `test.sh`'s JS suites) falls back to a disposable `node:22` container
 when the host has no npm (override the image with `TYDAL_NODE_IMAGE`). Note
 this branch writes Linux-native `node_modules` into the checkout; if you
 later install Node on the host, `rm -rf node_modules` and reinstall. See
@@ -555,6 +562,21 @@ sudo supervisorctl start tydal-worker:*
 ```
 
 After each deploy, run `php artisan queue:restart` so workers pick up new code.
+
+#### Scheduler (cron)
+
+The maintenance jobs in `bootstrap/app.php` (`resource:prune` daily 03:00,
+`files:purge-uncommitted` daily 03:30, `resources:purge-drafts` hourly) run
+only if something calls the scheduler every minute. In production, one crontab
+entry for the web user does it (`sudo crontab -u www-data -e`):
+
+```cron
+* * * * * cd /var/www/tydal/backend && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Check it with `php artisan schedule:list`. In dev, `start.sh` covers this. The
+docker tier has a `tydal_scheduler` container, and the host tier runs
+`schedule:work` in the background.
 
 ### 6. Backing services
 
