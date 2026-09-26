@@ -2,8 +2,13 @@
 
 Every custom artisan command, what it's for, and the operational recipes that
 string them together. All commands run from `backend/`:
-`php artisan <command>`. Commands that check integrity exit **non-zero on
-findings**, so they slot into CI as-is.
+`php artisan <command>`. On the docker application tier run them inside the
+app container: `docker exec -w /var/www/html tydal_app php artisan <command>`
+(the `-w` matters; without it you get `Could not open input file: artisan`).
+Commands that check integrity exit **non-zero on findings**, so they slot into
+CI as-is. For a one-line-per-command cheat sheet with both forms and
+preconditions, see [QUICK_REFERENCE.md](QUICK_REFERENCE.md); for the shell
+scripts that wrap these, see [tools/README.md](../tools/README.md).
 
 ## Search index lifecycle
 
@@ -276,6 +281,10 @@ Prepare TYDAL to serve photo exhibitions to a gallery client such as
 [Full Frame](https://github.com/eonity-org/fullframe), with nothing to configure
 by hand. Opt-in: the installer stays generic.
 
+`tools/clients/fullframe.sh setup|create …` runs these two commands with the
+same options on either tier (it finds where artisan runs), so it's the
+easiest way in. See [tools/README.md](../tools/README.md#clients--the-border).
+
 ### `exhibitions:setup`
 
 Once per organization; safe to re-run.
@@ -324,7 +333,12 @@ They sign into Full Frame's studio with that TYDAL account.
 | `aity:purge-stale` | manual | mark stale AITY file states failed and purge matching Redis jobs (`--hours=24 --queue=default --dry-run`) |
 
 The scheduler needs `php artisan schedule:work` (dev) or a system cron
-running `php artisan schedule:run` every minute (prod).
+running `php artisan schedule:run` every minute (prod, see
+[DEPLOYMENT.md](../DEPLOYMENT.md#scheduler-cron)). In dev, `start.sh` takes
+care of it and prints a notice saying where the daemon runs. On the docker tier
+that's the `tydal_scheduler` compose service, toggled with app/queue by
+`configure.sh`. On the host tier it's a background `schedule:work` that stops
+with Ctrl-C. Check what's scheduled with `php artisan schedule:list`.
 
 ## Debug helpers
 

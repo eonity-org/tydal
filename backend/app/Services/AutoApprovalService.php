@@ -22,8 +22,8 @@ use Illuminate\Validation\ValidationException;
 /**
  * Automatic approval of AI suggestions for a workspace or resource set.
  *
- * Ports the logic from tools/bulk_uploader/upload.py (--phase accept + --phase tags)
- * into the backend so it can be triggered from the UI without the CLI tool.
+ * Originally ported from the (since removed) tools/bulk_uploader/upload.py
+ * `--phase accept` + `--phase tags`, so it runs from the UI without a CLI tool.
  *
  * Pipeline:
  *  1. Collect AI-suggested name / description / tags from active SystemFiles

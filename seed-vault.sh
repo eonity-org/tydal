@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-# Thin wrapper → tools/deploy/seed-vault.sh. See tools/deploy/README.md.
-exec "$(dirname "${BASH_SOURCE[0]}")/tools/deploy/seed-vault.sh" "$@"
+# Thin wrapper → tools/dev/seed-vault.sh. See tools/README.md.
+exec "$(dirname "${BASH_SOURCE[0]}")/tools/dev/seed-vault.sh" "$@"

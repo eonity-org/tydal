@@ -259,13 +259,14 @@ else
 fi
 
 # --- docker-compose.yml service toggles ---
-# The app/queue services follow the app topology; the ollama service follows the
-# AI arg (ollama-docker) — the two are independent, so e.g. app=docker with
-# ollama on the host enables app/queue but NOT the ollama container.
+# The app/queue/scheduler services follow the app topology; the ollama service
+# follows the AI arg (ollama-docker) — the two are independent, so e.g.
+# app=docker with ollama on the host enables app/queue/scheduler but NOT the
+# ollama container.
 ENABLED=()
 if [ "$INFRA" = "docker" ]; then
   toggle_compose_region "$COMPOSE" "docker-app" on
-  ENABLED+=("app + queue")
+  ENABLED+=("app + queue + scheduler")
 else
   toggle_compose_region "$COMPOSE" "docker-app" off
 fi
@@ -278,7 +279,7 @@ else
   toggle_compose_region "$COMPOSE" "ollama-volume" off
 fi
 if [ "${#ENABLED[@]}" -eq 0 ]; then
-  echo "docker-compose.yml: backing services only (app/queue/ollama disabled)."
+  echo "docker-compose.yml: backing services only (app/queue/scheduler/ollama disabled)."
 else
   joined="$(printf '%s, ' "${ENABLED[@]}")"; joined="${joined%, }"
   echo "docker-compose.yml: enabled $joined (+ backing services)."
@@ -295,7 +296,7 @@ if [ "$INFRA" = "docker" ]; then
     echo "  #   docker exec -it tydal_app composer install && docker exec -it tydal_app php artisan key:generate"
   fi
 else
-  echo "  tools/deploy/start.sh      # bring up backing services + serve (app + queue + Vite on host)"
+  echo "  tools/deploy/start.sh      # bring up backing services + serve (app + queue + scheduler + Vite on host)"
   echo "  tools/deploy/reload.sh     # if the stack was already up, to apply this .env change"
 fi
 

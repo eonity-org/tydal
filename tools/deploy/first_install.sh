@@ -78,7 +78,7 @@ fi
 
 # Detect the application tier from backend/.env DB_HOST (see tier.lib.sh): the
 # value artisan dials decides whether it must run inside the app container.
-. "$SCRIPT_DIR/tier.lib.sh"
+. "$SCRIPT_DIR/../lib/tier.lib.sh"
 INFRA="$(detect_infra "$BACKEND_DIR/.env" "$COMPOSE")"
 echo "Application tier: $INFRA"
 
