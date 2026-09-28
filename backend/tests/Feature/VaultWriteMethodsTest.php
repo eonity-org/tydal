@@ -197,7 +197,12 @@ class VaultWriteMethodsTest extends TestCase
         $this->writeInfo($this->writeKey(['w:activate', 'w:open']))
             ->assertStatus(200)
             ->assertJsonPath('ok', true)
-            ->assertExactJson(['ok' => true, 'methods' => ['activate', 'open']]);
+            ->assertExactJson([
+                'ok' => true,
+                'methods' => ['activate', 'open'],
+                // Only write-key holders learn whose vault it is.
+                'organization' => $this->org->only(['id', 'slug', 'name']),
+            ]);
     }
 
     public function test_write_probe_rejects_read_key(): void

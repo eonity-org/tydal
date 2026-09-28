@@ -114,10 +114,19 @@ const writer = createVaultConsumer({
 await writer.write('activate', { resources: linkHashes })  // project these works
 await writer.write('open')                                 // publish
 await writer.write('close')                                // un-publish + restore
-await writer.write('ingest', { descriptor, image })        // ai vaults; multipart
 
-// Which ops may this key invoke? A probe that performs none:
-const { methods } = await writer.writeCapabilities()
+// Inbound content, on any purpose that takes it (gallery, ai). Multipart when
+// the document holds a File; `metadata` is one flat object — `name` and
+// `description` go onto the resource, every other key into its metadata.
+const { result } = await writer.write('ingest', {
+  image,
+  metadata: { name: 'Morning at the Pier', author: 'Ana Ruiz', technique: 'Silver gelatin print' },
+})                                                          // ai vaults also send `descriptor`
+await writer.write('update', { resource: hash, metadata: { dimensions: '50 × 70 cm' } }) // null removes a key
+await writer.write('withdraw', { resource: hash })         // to TYDAL's trash
+
+// Which ops may this key invoke, and (with w:update/w:withdraw) on what?
+const { methods, ingested } = await writer.writeCapabilities()
 ```
 
 > `writer.gallery.activate/open/close` still work as thin shims but are

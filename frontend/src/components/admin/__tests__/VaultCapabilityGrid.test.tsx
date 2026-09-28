@@ -138,4 +138,48 @@ describe('VaultCapabilityGrid', () => {
 
     expect(onChange).toHaveBeenCalledWith(null)
   })
+  describe('ingest target', () => {
+    const INGEST: VaultCapabilityDef[] = [
+      { key: 'ingest', label: 'Ingest target', group: 'write' },
+    ]
+    const OPTIONS = {
+      workspaces: [
+        { id: 1, name: 'All Resources', hint: 'default · every resource in the org' },
+        { id: 7, name: 'Submissions' },
+      ],
+      collections: [{ id: 3, name: 'Exhibition Photos' }],
+    }
+
+    function setupIngest(value: Record<string, unknown> | null = null) {
+      const onChange = vi.fn()
+      render(
+        <VaultCapabilityGrid
+          capabilities={INGEST}
+          preset={{ ingest: null } as unknown as Record<VaultCapabilityKey, unknown>}
+          value={value}
+          onChange={onChange}
+          ingestOptions={OPTIONS}
+        />,
+      )
+      return { onChange, user: userEvent.setup() }
+    }
+
+    it('picks the workspace and collection by name, not by id', async () => {
+      const { onChange, user } = setupIngest({ ingest: { collection_id: 3 } })
+
+      expect(screen.queryByLabelText('Workspace id')).toBeNull()
+      await user.click(screen.getAllByRole('combobox')[0])
+      const list = within(screen.getByRole('listbox'))
+      expect(list.getByText('default · every resource in the org')).not.toBeNull()
+      await user.click(list.getByText('Submissions'))
+
+      expect(onChange).toHaveBeenLastCalledWith({ ingest: { workspace_id: 7, collection_id: 3 } })
+    })
+
+    it('keeps a saved id that is not in the organization visible', () => {
+      setupIngest({ ingest: { workspace_id: 99, collection_id: 3 } })
+
+      expect(screen.getByText('#99 (not found in this organization)')).not.toBeNull()
+    })
+  })
 })

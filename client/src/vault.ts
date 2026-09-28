@@ -233,6 +233,23 @@ export interface VaultGraph {
  * back as 4xx and therefore throw `TydalApiError` — the same shape the read
  * grammar uses — with the boundary's `{ ok: false, error }` body attached.
  */
+/** The write probe (`GET …/w`): what the presented write key may do here. */
+export interface VaultWriteCapabilities {
+  ok: boolean
+  methods: string[]
+  /**
+   * Present when the key may `update` or `withdraw`: the hashes of the
+   * resources this vault's `ingest` created and that still exist — the only
+   * ones those ops accept.
+   */
+  ingested?: string[]
+  /**
+   * Present when the key may `ingest`: the largest file TYDAL accepts, in
+   * bytes, so a consumer can refuse a file before uploading it.
+   */
+  max_upload_bytes?: number
+}
+
 export interface VaultWriteResult {
   ok: boolean
   result?: unknown
@@ -310,7 +327,7 @@ export interface VaultConsumer {
    *
    * ```ts
    * await vault.write('activate', { resources: hashes })
-   * await vault.write('ingest', { descriptor, image })   // image: Blob/File → multipart
+   * await vault.write('ingest', { image, metadata: { name } })   // image: Blob/File → multipart
    * ```
    *
    * A refused op throws `TydalApiError` (4xx); success resolves `{ ok, result }`.
@@ -323,7 +340,7 @@ export interface VaultConsumer {
    * cannot write (missing/read-only) throws `TydalApiError` (403), a hidden
    * vault 404s — the same opacity a real write has.
    */
-  writeCapabilities(): Promise<{ ok: boolean; methods: string[] }>
+  writeCapabilities(): Promise<VaultWriteCapabilities>
   /**
    * @deprecated Per-purpose sugar is retired in favor of the generic
    * `write(op, payload)` — `write('activate', { resources })` / `write('open')` /
@@ -502,7 +519,7 @@ export function createVaultConsumer(config: VaultConsumerConfig): VaultConsumer 
 
     write: (method, body) => write(method, body),
 
-    writeCapabilities: () => get<{ ok: boolean; methods: string[] }>('/w'),
+    writeCapabilities: () => get<VaultWriteCapabilities>('/w'),
 
     gallery: {
       activate: (linkHashes) => write('activate', { resources: linkHashes }),

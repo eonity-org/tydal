@@ -120,9 +120,11 @@ services:
   # By default (the `host` topology) the backend runs on the host:
   #   php -d upload_max_filesize=300M -d post_max_size=310M artisan serve   (port 8000)
   #   php artisan queue:work --timeout=360                                  (queue worker)
-  # This keeps the fast edit/reload loop and is the recommended dev path.
+  #   php artisan schedule:work                                             (scheduler daemon)
+  # tools/deploy/start.sh launches all three. This keeps the fast edit/reload
+  # loop and is the recommended dev path.
   #
-  # To run the whole backend inside Docker instead, uncomment the two blocks
+  # To run the whole backend inside Docker instead, uncomment the three blocks
   # below. They use the prebuilt webdevops/php-nginx image (php-fpm + nginx +
   # all required PHP extensions baked in) — no Dockerfile or config files needed.
   # Or let `configure.sh <cloud|ollama-host|ollama-docker> docker` do it.
@@ -150,6 +152,8 @@ services:
       PHP_DISMOD: ioncube   # not bundled in this image; silences a load warning
     volumes:
       - ./backend:/var/www/html
+      # nginx body limit matched to PHP_POST_MAX_SIZE (the image default is 50m)
+      - ./tools/deploy/nginx/10-general.conf:/opt/docker/etc/nginx/vhost.common.d/10-general.conf:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"   # reach host-side Ollama (ollama-host) on Linux
     depends_on:
@@ -173,6 +177,28 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+  # Scheduler daemon: runs `schedule:run` every minute, which fires the
+  # maintenance jobs in bootstrap/app.php (resource:prune, files:purge-uncommitted,
+  # resources:purge-drafts). Each run is a fresh PHP process, so code/.env
+  # changes apply without a restart.
+  scheduler:
+    image: webdevops/php-nginx:8.4
+    container_name: tydal_scheduler
+    working_dir: /var/www/html
+    command: php artisan schedule:work
+    environment:
+      PHP_MEMORY_LIMIT: 512M
+      PHP_DISMOD: ioncube
+    volumes:
+      - ./backend:/var/www/html
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      mysql:
+        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped

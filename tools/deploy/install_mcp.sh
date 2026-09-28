@@ -33,7 +33,7 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-. "$SCRIPT_DIR/tier.lib.sh"
+. "$SCRIPT_DIR/../lib/tier.lib.sh"
 
 echo "Installing workspace dependencies…"
 run_npm "$ROOT" . install

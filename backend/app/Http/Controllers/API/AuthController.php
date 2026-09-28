@@ -11,7 +11,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -82,6 +84,87 @@ class AuthController extends Controller
         ], 201);
     }
 
+    /** Failed password attempts allowed per key within the window. */
+    private const MAX_ATTEMPTS = 5;
+
+    private const ATTEMPT_WINDOW_SECONDS = 60;
+
+    /** A 429 (with Retry-After) once a key has used up its attempts, else null. */
+    private function tooManyAttempts(string $key): ?JsonResponse
+    {
+        if (! RateLimiter::tooManyAttempts($key, self::MAX_ATTEMPTS)) {
+            return null;
+        }
+        $seconds = RateLimiter::availableIn($key);
+
+        return response()->json([
+            'success' => false,
+            'message' => "Too many attempts. Try again in {$seconds} seconds.",
+        ], 429)->header('Retry-After', (string) $seconds);
+    }
+
+    /**
+     * Confirm who someone is, for a product that uses TYDAL as its identity
+     * provider (e.g. Full Frame's studio sign-in): checks the email and
+     * password and returns the user and their organizations with roles.
+     *
+     * Unlike `login`, it creates no token and no session, and so leaves the
+     * person's own TYDAL sessions alone (`login` rotates every session token).
+     * The caller gets an answer, never a credential to act in TYDAL.
+     *
+     * Rate-limited per email address, because a product calls from one server
+     * address for all its users — a per-IP limit would let one person's typos
+     * lock everyone out. The route adds a looser per-IP ceiling.
+     */
+    public function identify(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string'],
+        ]);
+
+        $key = 'identify:'.Str::lower($validated['email']);
+        if ($limited = $this->tooManyAttempts($key)) {
+            return $limited;
+        }
+
+        $user = User::where('email', $validated['email'])->first();
+        if (! $user || ! Hash::check($validated['password'], $user->password)) {
+            RateLimiter::hit($key, self::ATTEMPT_WINDOW_SECONDS);
+
+            return response()->json(['success' => false, 'message' => 'Invalid credentials'], 401);
+        }
+        RateLimiter::clear($key);
+
+        if (! $user->is_active) {
+            return response()->json(['success' => false, 'message' => 'Account is disabled'], 403);
+        }
+
+        $organizations = [];
+        foreach ($user->organizations()->orderBy('name')->get() as $org) {
+            /** @var Organization $org */
+            $organizations[] = [
+                'id' => $org->id,
+                'slug' => $org->slug,
+                'name' => $org->name,
+                'role' => $org->getRelationValue('pivot')?->role,
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'is_superadmin' => (bool) $user->is_superadmin,
+                ],
+                'organizations' => $organizations,
+            ],
+        ]);
+    }
+
     /**
      * Login user and create token.
      */
@@ -100,13 +183,25 @@ class AuthController extends Controller
             ], 422);
         }
 
+        // Failed attempts are counted per email *and* address: guessing at one
+        // account is stopped without letting a stranger lock its owner out
+        // from elsewhere. The route adds a per-IP ceiling against trying many
+        // emails (password spraying).
+        $key = 'login:'.Str::lower((string) $request->input('email')).'|'.$request->ip();
+        if ($limited = $this->tooManyAttempts($key)) {
+            return $limited;
+        }
+
         // Attempt to authenticate user
         if (! Auth::attempt($request->only('email', 'password'))) {
+            RateLimiter::hit($key, self::ATTEMPT_WINDOW_SECONDS);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Invalid credentials',
             ], 401);
         }
+        RateLimiter::clear($key);
 
         $user = Auth::user();
 

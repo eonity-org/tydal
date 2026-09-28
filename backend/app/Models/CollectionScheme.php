@@ -108,6 +108,30 @@ class CollectionScheme extends Model
     }
 
     /**
+     * Whether an uploaded MIME type is accepted by this scheme. An empty list
+     * accepts anything; wildcards work ("image/*" matches "image/jpeg").
+     */
+    public function acceptsMime(string $mime): bool
+    {
+        $accepted = $this->accepted_mimetypes ?? [];
+
+        if ($accepted === []) {
+            return true;
+        }
+
+        foreach ($accepted as $pattern) {
+            if ($pattern === '*' || $pattern === '*/*' || $pattern === $mime) {
+                return true;
+            }
+            if (str_ends_with($pattern, '/*') && str_starts_with($mime, substr($pattern, 0, -2).'/')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Vaults whose projected index depends on this scheme: those with an
      * explicit overlay for it, plus those projecting resources of any
      * collection using it (via workspaces, or has_public_workspace vaults
