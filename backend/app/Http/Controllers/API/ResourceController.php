@@ -382,8 +382,9 @@ class ResourceController extends Controller
 
         // MIME type validation against the collection scheme's accepted_mimetypes
         $resource->loadMissing('collection.scheme');
-        $acceptedMimetypes = $resource->collection?->scheme?->accepted_mimetypes ?? [];
-        if (! empty($acceptedMimetypes) && ! $this->mimeTypeAllowed($file->getMimeType(), $acceptedMimetypes)) {
+        $scheme = $resource->collection?->scheme;
+        $acceptedMimetypes = $scheme?->accepted_mimetypes ?? [];
+        if ($scheme && ! $scheme->acceptsMime((string) $file->getMimeType())) {
             return response()->json([
                 'success' => false,
                 'message' => 'File type not allowed for this collection.',
@@ -557,30 +558,6 @@ class ResourceController extends Controller
             ],
             'message' => 'Download URL generated successfully',
         ]);
-    }
-
-    /**
-     * Check whether an uploaded MIME type matches any entry in an accepted list.
-     * Supports wildcards: "image/*" matches "image/jpeg", "image/png", etc.
-     */
-    private function mimeTypeAllowed(string $mime, array $accepted): bool
-    {
-        foreach ($accepted as $pattern) {
-            if ($pattern === '*' || $pattern === '*/*') {
-                return true;
-            }
-            if ($pattern === $mime) {
-                return true;
-            }
-            if (str_ends_with($pattern, '/*')) {
-                $prefix = substr($pattern, 0, -2);
-                if (str_starts_with($mime, $prefix.'/')) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
     }
 
     /**
