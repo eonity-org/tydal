@@ -84,5 +84,4 @@ subproject.
 
 ## License
 
-TYDAL is released under the [Apache License 2.0](LICENSE). Copyright 2026 John Pree (eonity.org).
-See the [NOTICE](NOTICE) file for attribution and trademark information.
+TYDAL is released under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for attribution and trademark terms.
