@@ -10,6 +10,25 @@ All notable changes to TYDAL are documented here. The format follows
 
 ### Added
 
+- **Purpose-agnostic vault write ops `ingest` / `update` / `withdraw`.**
+  Every purpose's `ingest` now lands in the vault's ingest target, and
+  `gallery` vaults gain all three next to `activate`/`open`/`close` (curator
+  uploads for Full Frame). The payload is one flat `metadata` document:
+  `name` and `description` go onto the resource, every other key into its
+  metadata. `update` and `withdraw` only accept resources that vault's
+  `ingest` created; the write-info probe lists them (`ingested`) and reports
+  `max_upload_bytes`. See [VAULT_WRITE_METHODS.md](docs/architecture/VAULT_WRITE_METHODS.md) §3.
+- **`exhibitions:setup` / `exhibitions:create`**: provision Full Frame photo
+  exhibitions. `setup` runs once per organization (photo scheme, index and
+  Photos collection); `create` runs once per exhibition (workspace, private
+  gallery vault, its read + write keys, and optionally a curator account).
+- **`POST /api/v1/auth/identify`**: an identity check for products that use
+  TYDAL as their identity provider (Full Frame curators sign in with their
+  TYDAL account). No token or session is issued; rate-limited per email and
+  per IP.
+- **Workspaces chosen by name when creating a vault.** The vault form picks
+  the workspaces it reads from (`workspace_ids` on vault create/update), and
+  the workspaces dialog manages the same links from the other side.
 - **`tools/clients/fullframe.sh setup|create`**: a tier-aware front for
   `exhibitions:setup` / `exhibitions:create`, so provisioning Full Frame
   exhibitions no longer needs `docker exec -w /var/www/html …`.
@@ -33,6 +52,12 @@ All notable changes to TYDAL are documented here. The format follows
 
 ### Changed
 
+- **`ai` vault `ingest` payload.** `name` and `source_hash` now travel inside
+  the `metadata` JSON field instead of as top-level form fields, which are no
+  longer read. `@tydal/client` ≥ 1.5.0 and `@tydal/vault-mcp` already send the
+  new shape; raw multipart callers must update.
+- **Login and registration are throttled per IP** (20 and 10 a minute), on top
+  of the existing per-email limit on failed logins.
 - **`tools/` reorganized by role.** `deploy/` keeps the stack lifecycle.
   `clients/` holds what sits at TYDAL's border (`vault-apps.sh`, formerly
   `deploy/clients.sh`, plus `fullframe.sh`). `dev/` holds seeding and smoke
@@ -46,6 +71,9 @@ All notable changes to TYDAL are documented here. The format follows
 
 ### Fixed
 
+- **Uploads over 50 MB on the docker tier.** The app image's nginx capped
+  every request body at 50 MB, below PHP's limits. Its body limit now matches
+  `PHP_POST_MAX_SIZE` (310 MB).
 - **`seed-vault.sh`** works against the current API again. Resources are created
   with `state: live`, and the vault with `organization_id`, `state: public` and
   `workspace_ids`. The removed `visibility` / `is_published` fields made every
