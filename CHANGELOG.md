@@ -6,6 +6,8 @@ All notable changes to TYDAL are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-09-29
+
 ### Added
 
 - **`tools/clients/fullframe.sh setup|create`**: a tier-aware front for
@@ -299,5 +301,6 @@ layer); as a shipped product it is version 1.0.0.
   [`MIGRATION_V1_V2.md`](docs/planning/MIGRATION_V1_V2.md), CLI guide, and
   OpenAPI 3.0 spec.
 
-[Unreleased]: https://github.com/eonity-org/tydal/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/eonity-org/tydal/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/eonity-org/tydal/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/eonity-org/tydal/releases/tag/v1.0.0
