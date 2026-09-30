@@ -109,6 +109,12 @@ export interface VaultMeta {
   /** `disabled` | `private` (credential required) | `public` (address alone). */
   state: 'disabled' | 'private' | 'public'
   resource_count: number
+  /**
+   * Language the vault's texts are written in (ISO code: `es`, `pt-BR`…) — its
+   * ingest target collection's. Null for a vault with no ingest target;
+   * absent on older backends.
+   */
+  language?: string | null
   tiers: { identity: boolean; chunks: boolean; binary: boolean; ask?: boolean }
   address_roles: string[]
   chunk_roles: string[]

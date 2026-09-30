@@ -552,7 +552,9 @@ enforced by the boundary itself), while the vault-scoped server stays data + com
 
 - `get_vault` doubles as **self-description**: purpose, exposure policy,
   available facets, `search_modes` — an agent discovers what it may do
-  before trying.
+  before trying. It also carries `language`, the language the vault's texts
+  are written in (its ingest target collection's; null without one), so a
+  client can render them — and default its own interface — accordingly.
 - The diagram's camelCase names map 1:1 (`searchVault → search_resources`,
   `resolveSlug → resolve`, `getRelated → list_related`,
   `embedQuery → embed_query`). `summarizeVault` is deliberately **not**
