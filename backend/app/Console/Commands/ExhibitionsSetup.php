@@ -25,7 +25,7 @@ class ExhibitionsSetup extends Command
     {
         $organization = $provisioner->organization((string) $this->option('org'));
         if (! $organization) {
-            $this->error('Organization not found. Pass --org=<slug|uuid>.');
+            $this->error('Organization not found. Pass --org=<slug|uuid>, or create it first: php artisan org:create --name="…" --owner=<email>.');
 
             return self::FAILURE;
         }

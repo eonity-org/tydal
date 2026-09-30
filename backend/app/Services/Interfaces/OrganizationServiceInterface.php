@@ -3,6 +3,7 @@
 namespace App\Services\Interfaces;
 
 use App\Models\Organization;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 
 interface OrganizationServiceInterface
@@ -28,9 +29,9 @@ interface OrganizationServiceInterface
     public function getOrganizationBySlug(string $slug): ?Organization;
 
     /**
-     * Create a new organization.
+     * Create a new organization owned by `$owner`, else the signed-in user.
      */
-    public function createOrganization(array $data): Organization;
+    public function createOrganization(array $data, ?User $owner = null): Organization;
 
     /**
      * Update an organization.

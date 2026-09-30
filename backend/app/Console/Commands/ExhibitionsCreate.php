@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Models\User;
+use App\Console\Concerns\AsksForNewPassword;
 use App\Services\ExhibitionProvisioner;
 use Illuminate\Console\Command;
 use RuntimeException;
@@ -15,6 +15,8 @@ use RuntimeException;
  */
 class ExhibitionsCreate extends Command
 {
+    use AsksForNewPassword;
+
     protected $signature = 'exhibitions:create
         {--org= : Organization slug or UUID}
         {--name= : Exhibition name (the vault and workspace are named after it)}
@@ -30,7 +32,7 @@ class ExhibitionsCreate extends Command
     {
         $organization = $provisioner->organization((string) $this->option('org'));
         if (! $organization) {
-            $this->error('Organization not found. Pass --org=<slug|uuid>.');
+            $this->error('Organization not found. Pass --org=<slug|uuid>, or create it first: php artisan org:create --name="…" --owner=<email>.');
 
             return self::FAILURE;
         }
@@ -57,7 +59,8 @@ class ExhibitionsCreate extends Command
         }
         $password = null;
         if ($curatorEmail !== null) {
-            $password = $this->curatorPassword($curatorEmail);
+            $given = $this->option('curator-password');
+            $password = $this->newPassword($curatorEmail, $given !== null ? (string) $given : null, '--curator-password', 'curator');
             if ($password === false) {
                 return self::FAILURE;
             }
@@ -117,43 +120,5 @@ class ExhibitionsCreate extends Command
         });
 
         return self::SUCCESS;
-    }
-
-    /**
-     * The password a NEW curator account gets: --curator-password, else asked
-     * (hidden, confirmed) when interactive, else null (generated). An existing
-     * account keeps its own. False when the choice is invalid — reported here,
-     * before anything is created.
-     */
-    private function curatorPassword(string $email): string|false|null
-    {
-        $given = $this->option('curator-password');
-        if (User::where('email', $email)->exists()) {
-            if ($given !== null) {
-                $this->warn("{$email} already has a TYDAL account — --curator-password ignored; their password is left unchanged.");
-            }
-
-            return null;
-        }
-
-        if ($given === null && $this->input->isInteractive()) {
-            $given = (string) $this->secret("Password for the new curator {$email} (leave empty to generate one)");
-            if ($given === '') {
-                return null;
-            }
-            if ($given !== (string) $this->secret('Repeat the password')) {
-                $this->error('The passwords do not match — nothing was created.');
-
-                return false;
-            }
-        }
-
-        if ($given !== null && strlen((string) $given) < ExhibitionProvisioner::MIN_PASSWORD_LENGTH) {
-            $this->error('The curator password must be at least '.ExhibitionProvisioner::MIN_PASSWORD_LENGTH.' characters — nothing was created.');
-
-            return false;
-        }
-
-        return $given !== null ? (string) $given : null;
     }
 }
