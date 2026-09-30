@@ -244,6 +244,43 @@ php artisan graph:materialize --org=acme
 php artisan graph:materialize --min-size=3      # ignore tiny clusters
 ```
 
+## Users and organizations
+
+Two composable steps, the same things the admin UI does. A user can exist
+without an organization (registration allows it too), so the usual order for
+a new tenant is: create the person, then the organization they own.
+
+```bash
+php artisan user:create --email=owner@lucila.org --name="Lucila Owner"   # password asked (hidden)
+php artisan org:create  --name="Lucila" --owner=owner@lucila.org          # → slug lucila
+```
+
+### `user:create`
+
+Creates one account. `--password=` sets it (min 8); omitted, an interactive run
+asks for it hidden and typed twice (empty = generated), a non-interactive one
+generates it. A generated password is printed **once**. Prefer the prompt: a
+value on the command line lands in shell history. Refuses an email that
+already has an account (including a soft-deleted one) and leaves it untouched.
+
+`--superadmin` makes them a platform administrator. `--org=SLUG` adds them to
+an existing organization with `--role=` viewer | editor (default) | admin, and
+makes it the one they land in. Ownership is never given here; it comes from
+`org:create --owner`.
+
+### `org:create`
+
+Creates an organization with its default **All Resources** workspace.
+`--slug=` defaults to one derived from `--name` and must be free. `--type=`
+is business (default), individual, educational, government or non_profit.
+`--description=` is optional.
+
+`--owner=EMAIL` must be an **existing** user (run `user:create` first; the
+command never creates one as a side effect). They become its `owner`, own
+the default workspace, and land in it on their next login if they had no
+organization yet. Without `--owner`, the oldest platform admin owns it, and
+the command fails if there is none.
+
 ## MCP access
 
 ### `mcp:token`

@@ -70,11 +70,13 @@ Tip for the docker tier: `alias art='docker exec -w /var/www/html tydal_app php 
 | `docker exec -w /var/www/html tydal_app php artisan vault:validate-policy` | `cd backend && php artisan vault:validate-policy` | Vault exposure policies vs the capability vocabulary | stack |
 | `docker exec -w /var/www/html tydal_app php artisan resources:audit-roles [--fix]` | `cd backend && php artisan resources:audit-roles [--fix]` | File-role composition invariants (single canonical, snapshots) | stack |
 
-## Exhibitions, MCP, graph (artisan)
+## Users, organizations, exhibitions, MCP, graph (artisan)
 
 | Docker | Native | Provides | Needs |
 |---|---|---|---|
-| `docker exec -w /var/www/html tydal_app php artisan exhibitions:setup --org=SLUG [--index=…]` | `cd backend && php artisan exhibitions:setup …` | Same as `fullframe.sh setup` | stack, org |
+| `docker exec -it -w /var/www/html tydal_app php artisan user:create --email=… [--org=SLUG --role=editor] [--superadmin]` | `cd backend && php artisan user:create …` | A user account (password asked hidden, or generated and shown once) | stack |
+| `docker exec -w /var/www/html tydal_app php artisan org:create --name="…" [--owner=EMAIL]` | `cd backend && php artisan org:create …` | An organization + its default workspace, owned by an existing user (default: oldest platform admin) | stack, the owner exists |
+| `docker exec -w /var/www/html tydal_app php artisan exhibitions:setup --org=SLUG [--index=…]` | `cd backend && php artisan exhibitions:setup …` | Same as `fullframe.sh setup` | stack, org (`org:create`) |
 | `docker exec -w /var/www/html tydal_app php artisan exhibitions:create --org=SLUG --name="…" [--curator=…]` | `cd backend && php artisan exhibitions:create …` | Same as `fullframe.sh create` | `setup` done |
 | `docker exec -w /var/www/html tydal_app php artisan mcp:token --org=SLUG` | `cd backend && php artisan mcp:token --org=SLUG` | Scoped API key on a machine user for `org-mcp` | seeded |
 | `docker exec -w /var/www/html tydal_app php artisan graph:rebuild --org=SLUG --tags --semantic` | `cd backend && php artisan graph:rebuild …` | `RELATED` edges from tag co-occurrence / embeddings | stack (embeddings for `--semantic`) |
