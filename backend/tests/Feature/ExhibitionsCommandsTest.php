@@ -154,6 +154,17 @@ class ExhibitionsCommandsTest extends TestCase
             ->assertJsonPath('ok', true);
     }
 
+    public function test_the_vault_reports_the_photos_language_so_a_client_can_default_to_it(): void
+    {
+        $provisioner = app(ExhibitionProvisioner::class);
+        $provisioner->setup($this->org, null, 'Photos', 'es');
+        $exhibition = $provisioner->create($this->org, 'Semana 42');
+
+        $this->getJson("/h/{$exhibition['vault']->hash}/meta", ['X-Vault-Key' => $exhibition['read_key']])
+            ->assertOk()
+            ->assertJsonPath('language', 'es');
+    }
+
     // =========================================================================
     // --curator
     // =========================================================================

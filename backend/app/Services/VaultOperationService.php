@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Enums\ResourceState;
+use App\Enums\VaultCapability;
+use App\Models\Collection as CollectionModel;
 use App\Models\File;
 use App\Models\Resource;
 use App\Models\ResourceRelation;
@@ -137,6 +139,10 @@ class VaultOperationService
             'organization' => $vault->organization->slug,
             'state' => $vault->state->value,
             'resource_count' => $this->vaultResourceQuery($vault)->count(),
+            // The language its texts are written in — the ingest target
+            // collection's, so a client can render them (and default its own
+            // interface) in it. Null when the vault has no ingest target.
+            'language' => $this->ingestLanguage($vault),
             'tiers' => [
                 'identity' => true,
                 'chunks' => $vault->allowsChunks(),
@@ -161,6 +167,17 @@ class VaultOperationService
             ],
             'search_modes' => ['keyword', 'semantic'],
         ];
+    }
+
+    /** The ingest target collection's language, if the vault has one in its organization. */
+    private function ingestLanguage(Vault $vault): ?string
+    {
+        $target = $vault->exposure_policy[VaultCapability::INGEST->value] ?? null;
+        $collectionId = is_array($target) ? ($target['collection_id'] ?? null) : null;
+
+        return $collectionId
+            ? CollectionModel::where('organization_id', $vault->organization_id)->whereKey($collectionId)->value('language')
+            : null;
     }
 
     /**
