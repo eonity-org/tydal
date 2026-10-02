@@ -333,8 +333,8 @@ Schema Overlay** (§5.2) from the API and renders per the mode's field roles:
 | `mixed` | composite shell | combines the above |
 
 The existing `tydal/frontend` MUI SPA becomes **one app in the suite** (its
-TYDAL theme — primary `#911A2C`, secondary `#214F61` — is one app's style, not a
-global constraint), and the MCP server (§3.4) becomes another `@tydal/client`
+colour themes — default TYDAL, primary `#1A5D7D` from the logo — are one app's
+style, not a global constraint), and the MCP server (§3.4) becomes another `@tydal/client`
 consumer.
 
 **External consuming products (built the same way, one per vault purpose):**
@@ -551,7 +551,7 @@ v2 ✅ (extend, not rebuild — full spec in
 
 **Frontend** ✅
 - React **18** + **Vite 6** + TypeScript **5.6**
-- Material-UI **v6** (TYDAL theme: primary `#911A2C`, secondary `#214F61`),
+- Material-UI **v6** (default TYDAL theme: primary `#1A5D7D`, dark `#08435E`),
   no inline styles — this is **one app's** style, not a global constraint (§3.5)
 - **Shared client** `@tydal/client` ✅: framework-agnostic SDK; single transport
   layer for every TYDAL-operated surface (consolidates `frontend/src/api/*` and

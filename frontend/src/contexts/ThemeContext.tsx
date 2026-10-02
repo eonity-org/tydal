@@ -10,7 +10,7 @@ declare module '@mui/material/styles' {
   }
 }
 
-export type ColorThemeName = 'blue' | 'william' | 'plum' | 'graphite' | 'copper'
+export type ColorThemeName = 'tydal' | 'william' | 'plum' | 'graphite' | 'copper'
 export type SurfaceScheme = 'grey' | 'white'
 export type TransparencyBackdrop = 'checker' | 'light' | 'dark'
 
@@ -250,9 +250,18 @@ const WILLIAM_PALETTE = {
   ...SHARED_PALETTE,
 }
 
-const BLUE_PALETTE = {
-  primary: { main: '#006E95', light: '#2A8FB0', dark: '#005373', contrastText: '#FFFFFF', subtle: '#E0F4F8' },
-  secondary: { main: '#005373', light: '#336F86', dark: '#003B52', contrastText: '#FFFFFF', subtle: '#E3EFF4' },
+// TYDAL theme — the brand blues as redefined in sRGB (2026-10): large ball
+// #1A5D7D as primary (passes as button and as text everywhere), a derived
+// #08435E as dark — the wordmark's #0A5475 sits only ΔE≈4 from the primary,
+// too close to read as hover/emphasis — and the medium ball #287C9C as light
+// (large elements only: 4.4:1 on grey fails small text). The small ball
+// #5295B3 is decoration only. Greys, background and text are a cool
+// slate. It replaced the earlier Blue theme
+// (#006E95), derived from the previous, over-saturated logo; a saved 'blue'
+// choice falls back to this default.
+const TYDAL_PALETTE = {
+  primary: { main: '#1A5D7D', light: '#287C9C', dark: '#08435E', contrastText: '#FFFFFF', subtle: '#E8F2F7' },
+  secondary: { main: '#08435E', light: '#3A6E88', dark: '#052F42', contrastText: '#FFFFFF', subtle: '#E6EEF2' },
   grey: {
     50:  '#F8FAFC',
     100: '#F1F5F9',
@@ -275,7 +284,7 @@ const BLUE_PALETTE = {
 // deliberately bends convention rule 2: its hue sits ~12° from both `error` (1°)
 // and `warning` (26°), so a contained primary button and a DELETE button are
 // separated by saturation and lightness rather than hue. Legible for typical
-// vision, but the pair collapses under protanopia/deuteranopia — prefer Blue or
+// vision, but the pair collapses under protanopia/deuteranopia — prefer TYDAL or
 // Graphite where destructive actions sit next to primary ones for CVD users.
 const COPPER_PALETTE = {
   primary: { main: '#7A4A3C', light: '#9F6656', dark: '#5B3429', contrastText: '#FFFFFF', subtle: '#F8EFED' },
@@ -307,7 +316,7 @@ const typography = {
 // Key order here is the order the theme picker renders (Header iterates
 // Object.keys(THEME_LABELS)); `themes` is kept in the same order to match.
 export const themes: Record<ColorThemeName, Theme> = {
-  blue:     createTheme({ palette: BLUE_PALETTE,     typography, components: inputLabelOverride }),
+  tydal:    createTheme({ palette: TYDAL_PALETTE,    typography, components: inputLabelOverride }),
   william:  createTheme({ palette: WILLIAM_PALETTE,  typography, components: inputLabelOverride }),
   plum:     createTheme({ palette: PLUM_PALETTE,     typography, components: inputLabelOverride }),
   graphite: createTheme({ palette: GRAPHITE_PALETTE, typography, components: inputLabelOverride }),
@@ -315,7 +324,7 @@ export const themes: Record<ColorThemeName, Theme> = {
 }
 
 export const THEME_LABELS: Record<ColorThemeName, string> = {
-  blue:     'Blue',
+  tydal:    'TYDAL',
   william:  'William',
   plum:     'Plum',
   graphite: 'Graphite',
@@ -336,9 +345,9 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  colorTheme: 'blue',
+  colorTheme: 'tydal',
   setColorTheme: () => {},
-  theme: themes.blue,
+  theme: themes.tydal,
   surfaceScheme: 'grey',
   setSurfaceScheme: () => {},
   surfaces: SURFACE_SCHEMES.grey,
@@ -350,7 +359,7 @@ const ThemeContext = createContext<ThemeContextValue>({
 export function ThemeContextProvider({ children }: { children: ReactNode }) {
   const [colorTheme, setColorThemeState] = useState<ColorThemeName>(() => {
     const saved = localStorage.getItem('tydal-color-theme') as ColorThemeName
-    return saved && saved in themes ? saved : 'blue'
+    return saved && saved in themes ? saved : 'tydal'
   })
 
   const [surfaceScheme, setSurfaceSchemeState] = useState<SurfaceScheme>(() => {
