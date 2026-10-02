@@ -254,6 +254,13 @@ export interface VaultWriteCapabilities {
    * bytes, so a consumer can refuse a file before uploading it.
    */
   max_upload_bytes?: number
+  /**
+   * The organization the vault belongs to. Its id and name are told only to
+   * a write-key holder (the slug is public: `VaultMeta.organization`), so a
+   * product can file what it builds on the vault under its owner (Full
+   * Frame's per-organization studio). Absent on older backends.
+   */
+  organization?: { id: string; slug: string; name: string }
 }
 
 export interface VaultWriteResult {

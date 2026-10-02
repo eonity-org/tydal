@@ -136,6 +136,8 @@ class VaultOperationService
             'hash' => $vault->hash,
             'description' => $vault->description,
             'purpose' => $vault->purpose->value,
+            // The slug only (public anyway: it's in every /v/{org}/… address);
+            // id and name go to write-key holders alone (the /w probe).
             'organization' => $vault->organization->slug,
             'state' => $vault->state->value,
             'resource_count' => $this->vaultResourceQuery($vault)->count(),
