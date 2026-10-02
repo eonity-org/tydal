@@ -23,7 +23,7 @@ export interface AityStateStyle {
    * Colour for the three isotype circles. Can be:
    *   - a MUI palette path  ('info.main', 'success.main', 'text.disabled')
    *   - a raw CSS colour    ('#A77B45')
-   *   - 'brand'             → native brand teal trio (auto punched up when pulsing)
+   *   - 'brand'             → native brand blue trio (the logo's balls) (auto punched up when pulsing)
    *   - 'brand-active'      → vivid cyan-teal trio with faster, breathing pulse;
    *                           reserved for actively-working AITY states.
    */
@@ -59,13 +59,13 @@ export const AITY_STATES: Record<AityStatus, AityStateStyle> = {
   },
   automatic_review_done: {
     tooltip: 'AITY auto-reviewed',
-    // Green → "machine-approved". A different hue family from brand teal so it
+    // Green → "machine-approved". A different hue family from the brand blue so it
     // contrasts clearly with the user_review_done state.
     palette: 'success.main',
   },
   user_review_done: {
     tooltip: 'User reviewed',
-    // Final human-blessed state → uses the native brand teal isotype (no pulse).
+    // Final human-blessed state → uses the native brand blue isotype (no pulse).
     palette: 'brand',
   },
 }
@@ -73,7 +73,7 @@ export const AITY_STATES: Record<AityStatus, AityStateStyle> = {
 /**
  * Overlay applied when a `suggestions_made` resource still belongs to a
  * workspace whose auto-approve job is queued or running. Renders as pulsing
- * brand teal so the user is not prompted to review something the job will
+ * brand blue so the user is not prompted to review something the job will
  * shortly consume on their behalf.
  */
 export const AITY_UNDER_AUTO_APPROVE: AityStateStyle = {

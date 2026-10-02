@@ -2,7 +2,7 @@ type TydalIsotypeVariant = 'brand' | 'brand-active' | 'white'
 
 interface TydalIsotypeProps {
   size?: number
-  /** 'brand'        — teal palette, for outlined buttons and light surfaces (default).
+  /** 'brand'        — the logo's three blues, for outlined buttons and light surfaces (default).
    *  'brand-active' — vivid cyan-teal, used for actively-working AITY indicators.
    *                   Pulses faster and "breathes" (radius grows slightly) so it
    *                   reads as live work, not a static state.
@@ -21,10 +21,11 @@ interface TydalIsotypeProps {
 }
 
 const COLORS: Record<TydalIsotypeVariant, { large: string; medium: string; small: string }> = {
+  // The logo's balls exactly (sRGB, 2026-10): large / medium (also "DAL") / small.
   brand: {
-    large:  '#1a5d7b',
-    medium: '#1f7b92',
-    small:  '#5299a9',
+    large:  '#1A5D7D',
+    medium: '#287C9C',
+    small:  '#5295B3',
   },
   'brand-active': {
     // Cyan-leaning, more saturated than brand. Used for aity_in_progress so the
@@ -40,13 +41,15 @@ const COLORS: Record<TydalIsotypeVariant, { large: string; medium: string; small
   },
 }
 
-// Darker / more saturated teal trio used only while the plain 'brand' variant is
-// pulsing (AITY queued, or under-auto-approve overlay). Brand-active has its own
-// palette in COLORS above and does not use this override.
+// The brand trio one step darker, still the logo's own colours (the wordmark's
+// #0A5475, then the large and medium balls), used only while the plain 'brand'
+// variant is pulsing (AITY queued, or under-auto-approve overlay) so the pulse
+// reads against light surfaces. Brand-active has its own palette in COLORS
+// above and does not use this override.
 const BRAND_PULSING: { large: string; medium: string; small: string } = {
-  large:  '#134d68',
-  medium: '#176d85',
-  small:  '#2a8499',
+  large:  '#0A5475',
+  medium: '#1A5D7D',
+  small:  '#287C9C',
 }
 
 // Per-variant pulse cadence. Active variants pulse faster and breathe (radius
