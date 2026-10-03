@@ -65,8 +65,10 @@ const PULSE: Record<TydalIsotypeVariant, {
 }
 
 /**
- * The three overlapping circles from the TYDAL logo isotype.
- * Sizes follow the 5:4:3 ratio of the original brand mark (150/120/90).
+ * The three overlapping circles from the TYDAL logo isotype, at the logo's own
+ * geometry: radii 75/60/45 with centres 120 and 90 apart, scaled
+ * by 0.06 into the 20 × 10 box (radii 4.5/3.6/2.7, centres 15.3/8.1/2.7), so
+ * the small ball touches the left edge and the large one ends at 19.8.
  *
  * When `color` is supplied the three circles take that colour with descending
  * opacity (back → front: 0.55 / 0.78 / 1.00) so the depth reads identically to
@@ -107,26 +109,28 @@ function TydalIsotype({ size = 20, variant = 'brand', color, opacity, pulsing = 
     />
   ) : null
 
-  // Pulse sweep reads left → right: small (cx=3.5) first, then medium (cx=8.5),
-  // then large (cx=14.5).
+  // Pulse sweep reads left → right: small (cx=2.7) first, then medium (cx=8.1),
+  // then large (cx=15.3).
   return (
     <svg
       width={size}
       height={size * 0.5}
-      viewBox="0 0 20 10"
+      // A hair of margin (same 2:1 shape) so the breathing balls' peak (r × 1.07)
+      // stays inside: the outer balls reach -0.19 and 20.12 at full breath.
+      viewBox="-0.25 -0.125 20.5 10.25"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       style={opacity !== undefined ? { opacity } : undefined}
     >
-      <circle cx="14.5" cy="5" r="4.5" fill={tones.large}  fillOpacity={stops.large}>
+      <circle cx="15.3" cy="5" r="4.5" fill={tones.large}  fillOpacity={stops.large}>
         {animateOpacity(pulseCfg.stagger.large,  stops.large)}
         {animateRadius (pulseCfg.stagger.large,  4.5)}
       </circle>
-      <circle cx="8.5"  cy="5" r="3.6" fill={tones.medium} fillOpacity={stops.medium}>
+      <circle cx="8.1"  cy="5" r="3.6" fill={tones.medium} fillOpacity={stops.medium}>
         {animateOpacity(pulseCfg.stagger.medium, stops.medium)}
         {animateRadius (pulseCfg.stagger.medium, 3.6)}
       </circle>
-      <circle cx="3.5"  cy="5" r="2.7" fill={tones.small}  fillOpacity={stops.small}>
+      <circle cx="2.7"  cy="5" r="2.7" fill={tones.small}  fillOpacity={stops.small}>
         {animateOpacity(pulseCfg.stagger.small,  stops.small)}
         {animateRadius (pulseCfg.stagger.small,  2.7)}
       </circle>
