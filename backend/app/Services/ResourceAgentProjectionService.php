@@ -40,7 +40,6 @@ class ResourceAgentProjectionService
 
         return [
             'id' => $resource->id,
-            'slug' => $resource->slug,
             'name' => $resource->name,
             'description' => $resource->description,
             'type' => $resource->type->value,

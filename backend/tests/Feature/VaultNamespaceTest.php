@@ -11,8 +11,10 @@ use App\Models\Organization;
 use App\Models\Resource;
 use App\Models\SemanticTag;
 use App\Models\Vault;
+use App\Models\VaultLink;
 use App\Models\Workspace;
 use App\Services\VaultLinkService;
+use Hashids\Hashids;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -128,11 +130,83 @@ class VaultNamespaceTest extends TestCase
     }
 
     // =========================================================================
-    // File-slug scoping — per resource, not per vault (spec §4.3)
+    // File slugs (spec §4.3) — a per-vault code by default, the filename on opt-in
     // =========================================================================
 
-    public function test_file_slug_may_equal_its_resource_slug(): void
+    public function test_file_slug_is_a_short_code_never_the_uploaded_filename(): void
     {
+        $vault = $this->makeVault(VaultPurpose::GALLERY);
+        $resource = $this->addResource('Las Médulas at dusk');
+        $photo = File::factory()->for($resource)->create([
+            'role' => FileRole::CANONICAL, 'filename' => '199008_InmaLimon_K23_23.jpg',
+        ]);
+
+        $slug = $this->links->getOrCreateLink($vault, null, $resource->id, $photo->id)->slug;
+
+        $this->assertMatchesRegularExpression('/^[0-9a-z]{3}$/', $slug);
+        foreach (['inmalimon', 'k23', '199008', 'medulas'] as $fragment) {
+            $this->assertStringNotContainsString($fragment, $slug);
+        }
+    }
+
+    public function test_file_code_is_stable_per_vault_and_unrelated_across_vaults(): void
+    {
+        $one = $this->makeVault(VaultPurpose::GALLERY);
+        $two = $this->makeVault(VaultPurpose::GALLERY, ['slug' => 'other']);
+        $resource = $this->addResource('Album');
+        $photo = File::factory()->for($resource)->create(['role' => FileRole::COMPONENT, 'filename' => 'a.jpg', 'position' => 1]);
+
+        $inOne = $this->links->getOrCreateLink($one, null, $resource->id, $photo->id)->slug;
+        $inTwo = $this->links->getOrCreateLink($two, null, $resource->id, $photo->id)->slug;
+        $this->assertNotSame($inOne, $inTwo, 'the same file must not be recognisable across vaults');
+
+        // Renaming, reordering or re-roling the file never moves its address
+        $photo->update(['filename' => 'renamed.jpg', 'position' => 7, 'role' => FileRole::SUPPORTING]);
+        $resource->update(['name' => 'Renamed album']);
+        $links = $this->links->reslugFileLinks($one, $resource->id);
+        $this->assertSame([], $links);
+        $this->assertSame($inOne, VaultLink::where('vault_id', $one->id)->where('file_id', $photo->id)->value('slug'));
+    }
+
+    public function test_link_hash_survives_a_clash_with_another_vault(): void
+    {
+        $vault = $this->makeVault(VaultPurpose::GALLERY);
+        $other = $this->makeVault(VaultPurpose::GALLERY, ['slug' => 'other']);
+        $resource = $this->addResource('Album');
+
+        // Another vault already holds the exact string this vault would give
+        // the next link id (salts differ, so encodings can coincide). The
+        // squatter takes an id first; the link under test gets the next one.
+        $elsewhere = $this->addResource('Elsewhere');
+        $squatter = VaultLink::create([
+            'vault_id' => $other->id, 'resource_id' => $elsewhere->id,
+            'link_key' => hash('sha256', 'squatter'), 'slug' => 'squatter', 'hash' => 'placeholder',
+        ]);
+        $expected = (new Hashids($vault->salt, 8))->encode($squatter->id + 1);
+        $squatter->update(['hash' => $expected]);
+
+        $link = $this->links->getOrCreateLink($vault, null, $resource->id, null);
+
+        $this->assertNotSame($expected, $link->hash);
+        $this->assertGreaterThan(8, strlen($link->hash));
+    }
+
+    public function test_sibling_codes_are_distinct(): void
+    {
+        $vault = $this->makeVault(VaultPurpose::GALLERY);
+        $resource = $this->addResource('Album');
+        $slugs = [];
+        for ($i = 1; $i <= 30; $i++) {
+            $file = File::factory()->for($resource)->create(['role' => FileRole::COMPONENT, 'filename' => "p{$i}.jpg", 'position' => $i]);
+            $slugs[] = $this->links->getOrCreateLink($vault, null, $resource->id, $file->id)->slug;
+        }
+
+        $this->assertCount(30, array_unique($slugs));
+    }
+
+    public function test_filename_slugs_on_opt_in_may_equal_the_resource_slug(): void
+    {
+        config(['tydal.export_visible_filenames' => true]);
         $vault = $this->makeVault(VaultPurpose::GALLERY);
         $resource = $this->addResource('Doc');
         File::factory()->for($resource)->create(['role' => FileRole::CANONICAL, 'filename' => 'doc.pdf']);
@@ -148,8 +222,9 @@ class VaultNamespaceTest extends TestCase
             ->assertJsonPath('slug', 'doc');
     }
 
-    public function test_same_filename_reusable_across_resources_in_one_vault(): void
+    public function test_filename_slugs_on_opt_in_are_sibling_scoped(): void
     {
+        config(['tydal.export_visible_filenames' => true]);
         $vault = $this->makeVault(VaultPurpose::GALLERY);
         $one = $this->addResource('Album One');
         $two = $this->addResource('Album Two');
@@ -167,24 +242,39 @@ class VaultNamespaceTest extends TestCase
             ->assertStatus(200)->assertJsonPath('filename', 'cover.jpg');
         $this->getJson('/v/acme/my-vault/album-two/cover/meta')
             ->assertStatus(200)->assertJsonPath('filename', 'cover.jpg');
+
+        // …and a resource named "Cover" still gets the clean resource slug:
+        // resource slugs only compete with other resource slugs
+        $link = $this->links->getOrCreateLink($vault, null, $this->addResource('Cover')->id, null);
+        $this->assertSame('cover', $link->slug);
     }
 
-    public function test_resource_slugs_do_not_compete_with_file_slugs(): void
+    public function test_reslug_command_replaces_filename_slugs_with_codes_and_keeps_hashes(): void
     {
         $vault = $this->makeVault(VaultPurpose::GALLERY);
-        $album = $this->addResource('Album');
-        File::factory()->for($album)->create(['role' => FileRole::COMPONENT, 'filename' => 'cover.jpg', 'position' => 1]);
-        File::factory()->for($album)->create(['role' => FileRole::COMPONENT, 'filename' => 'back.jpg', 'position' => 2]);
+        $resource = $this->addResource('Album');
+        $p1 = File::factory()->for($resource)->create(['role' => FileRole::COMPONENT, 'filename' => 'IMG_0412.jpg', 'position' => 1]);
+        $p2 = File::factory()->for($resource)->create(['role' => FileRole::COMPONENT, 'filename' => 'IMG_0413.jpg', 'position' => 2]);
 
-        $this->mintIndex();
-        $this->getJson('/v/acme/my-vault/album')->assertStatus(200); // mints file slug "cover"
+        // Links minted under the old rule carried the filename
+        $l1 = $this->links->getOrCreateLink($vault, null, $resource->id, $p1->id);
+        $l2 = $this->links->getOrCreateLink($vault, null, $resource->id, $p2->id);
+        $codes = [$l1->slug, $l2->slug];
+        $l1->update(['slug' => 'img-0412']);
+        $l2->update(['slug' => 'img-0413']);
+        $hashes = [$l1->hash, $l2->hash];
 
-        // A resource named "Cover" still gets the clean resource slug —
-        // it only competes with other RESOURCE slugs
-        $coverResource = $this->addResource('Cover');
-        $link = $this->links->getOrCreateLink($vault, null, $coverResource->id, null);
+        $this->artisan('vault:reslug-files', ['--dry-run' => true])->assertSuccessful();
+        $this->assertSame(['img-0412', 'img-0413'], [$l1->fresh()->slug, $l2->fresh()->slug]);
 
-        $this->assertSame('cover', $link->slug);
+        $this->artisan('vault:reslug-files')->assertSuccessful();
+        $this->assertSame($codes, [$l1->fresh()->slug, $l2->fresh()->slug]);
+        $this->assertSame($hashes, [$l1->fresh()->hash, $l2->fresh()->hash]);
+
+        // Idempotent: a second run has nothing to change
+        $this->artisan('vault:reslug-files')
+            ->expectsOutputToContain('nothing to change')
+            ->assertSuccessful();
     }
 
     // =========================================================================
@@ -297,6 +387,46 @@ class VaultNamespaceTest extends TestCase
             ->assertHeader('Content-Type', 'image/jpeg');
     }
 
+    public function test_download_name_is_the_code_never_the_uploaded_filename(): void
+    {
+        Storage::fake('s3');
+        Storage::disk('s3')->put('files/x.jpg', 'jpeg-bytes');
+
+        $this->makeVault(VaultPurpose::GALLERY);
+        $resource = $this->addResource('Single Photo');
+        File::factory()->for($resource)->create([
+            'role' => FileRole::CANONICAL, 'filename' => '199008_InmaLimon_K23_23.JPG',
+            'path' => 'files/x.jpg', 'disk' => 's3', 'mime_type' => 'image/jpeg',
+        ]);
+
+        $this->mintIndex();
+        $disposition = $this->get('/v/acme/my-vault/single-photo')->assertStatus(200)->headers->get('Content-Disposition');
+
+        // A single-file resource streams from the resource address, so no file
+        // link exists yet: the name still carries the file's code
+        $this->assertMatchesRegularExpression('/single-photo-[0-9a-z]{3}\.jpg/', (string) $disposition);
+        $this->assertStringNotContainsString('InmaLimon', (string) $disposition);
+    }
+
+    public function test_download_name_is_the_uploaded_filename_when_exported(): void
+    {
+        config(['tydal.export_visible_filenames' => true]);
+        Storage::fake('s3');
+        Storage::disk('s3')->put('files/x.jpg', 'jpeg-bytes');
+
+        $this->makeVault(VaultPurpose::GALLERY);
+        $resource = $this->addResource('Single Photo');
+        File::factory()->for($resource)->create([
+            'role' => FileRole::CANONICAL, 'filename' => 'portrait-of-ana.jpg',
+            'path' => 'files/x.jpg', 'disk' => 's3', 'mime_type' => 'image/jpeg',
+        ]);
+
+        $this->mintIndex();
+        $disposition = $this->get('/v/acme/my-vault/single-photo')->assertStatus(200)->headers->get('Content-Disposition');
+
+        $this->assertStringContainsString('portrait-of-ana.jpg', (string) $disposition);
+    }
+
     public function test_multiple_exposed_files_return_ordered_manifest(): void
     {
         $vault = $this->makeVault(VaultPurpose::GALLERY);
@@ -314,8 +444,10 @@ class VaultNamespaceTest extends TestCase
 
         $files = $response->json('files');
         $this->assertCount(2, $files); // supporting is unaddressed
-        $this->assertSame('track-a.mp3', $files[0]['filename']);
-        $this->assertSame('track-b.mp3', $files[1]['filename']);
+        $this->assertSame([1, 2], [$files[0]['position'], $files[1]['position']]);
+        // Uploaded names stay inside TYDAL: each file goes by its resource and code
+        $this->assertSame('album-'.$files[0]['slug'].'.mp3', $files[0]['filename']);
+        $this->assertSame('album-'.$files[1]['slug'].'.mp3', $files[1]['filename']);
         $this->assertNotNull($files[0]['url']); // gallery exposes binary addresses
     }
 
@@ -455,10 +587,11 @@ class VaultNamespaceTest extends TestCase
         // Manifest mints the file slugs
         $this->getJson('/v/acme/my-vault/album')->assertStatus(200);
 
-        $this->getJson('/v/acme/my-vault/album/track-one/meta')
+        $first = VaultLink::where('vault_id', $vault->id)->where('file_id', File::where('position', 1)->value('id'))->value('slug');
+        $this->getJson("/v/acme/my-vault/album/{$first}/meta")
             ->assertStatus(200)
             ->assertJsonPath('type', 'file')
-            ->assertJsonPath('filename', 'track-one.mp3')
+            ->assertJsonPath('filename', "album-{$first}.mp3")
             ->assertJsonPath('role', 'component')
             ->assertJsonPath('position', 1);
     }
@@ -490,7 +623,8 @@ class VaultNamespaceTest extends TestCase
 
         $this->getJson('/v/acme/my-vault/album')->assertStatus(200);
 
-        $this->getJson('/v/acme/my-vault/album/a/download')->assertStatus(403);
+        $first = VaultLink::where('vault_id', $vault->id)->where('file_id', File::where('position', 1)->value('id'))->value('slug');
+        $this->getJson("/v/acme/my-vault/album/{$first}/download")->assertStatus(403);
     }
 
     // =========================================================================

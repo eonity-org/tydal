@@ -539,7 +539,7 @@ class VaultOperationService
                 $fileLink->setRelation('vault', $vault);
 
                 return [
-                    'filename' => $file->filename,
+                    'filename' => $this->links->publicFilename($vault, $file),
                     'slug' => $fileLink->slug,
                     'url' => $this->links->buildUrl($fileLink),
                 ];
@@ -636,7 +636,7 @@ class VaultOperationService
 
         return [
             'type' => 'file',
-            'filename' => $file->filename,
+            'filename' => $this->links->publicFilename($vault, $file),
             'slug' => $link->slug,
             'mime_type' => $file->mime_type,
             'size' => $file->size,
@@ -724,7 +724,8 @@ class VaultOperationService
             return null;
         }
 
-        $media = $link->file()->with('media')->first()?->media;
+        $file = $link->file()->with('media')->first();
+        $media = $file?->media;
 
         if (! $media || empty($media->getGeneratedConversions()[$name])) {
             return null;
@@ -737,7 +738,8 @@ class VaultOperationService
             'disk' => $disk,
             'path' => $path,
             'mime_type' => Storage::disk($disk)->mimeType($path) ?: 'application/octet-stream',
-            'filename' => basename($path),
+            // The media library names conversions after the original file
+            'filename' => $this->links->publicFilename($vault, $file, $name, basename($path)),
         ];
     }
 
@@ -915,7 +917,7 @@ class VaultOperationService
                 return null;
             }
 
-            return $this->conversionPreview($media, $rendition);
+            return $this->conversionPreview($vault, $resource->snapshotFile, $media, $rendition);
         }
 
         // An explicit ?rendition=original is a deliberate ask for the untouched
@@ -932,7 +934,7 @@ class VaultOperationService
         if (! $wantsOriginalExplicitly && ! $vault->is_downloadable && $media) {
             foreach (['large', 'medium', 'small', 'thumbnail'] as $name) {
                 if (! empty($media->getGeneratedConversions()[$name])
-                    && $preview = $this->conversionPreview($media, $name)) {
+                    && $preview = $this->conversionPreview($vault, $resource->snapshotFile, $media, $name)) {
                     return $preview;
                 }
             }
@@ -943,7 +945,7 @@ class VaultOperationService
                 'disk' => $file->disk,
                 'path' => $file->path,
                 'mime_type' => $file->mime_type,
-                'filename' => $file->filename,
+                'filename' => $this->links->publicFilename($vault, $file),
             ];
         }
 
@@ -952,7 +954,7 @@ class VaultOperationService
                 'disk' => $sf->disk,
                 'path' => $sf->path,
                 'mime_type' => $sf->mime_type,
-                'filename' => basename($sf->path),
+                'filename' => $this->links->publicResourceFilename($link, 'preview', basename($sf->path)),
             ];
         }
 
@@ -960,7 +962,7 @@ class VaultOperationService
     }
 
     /** @return array{disk: string, path: string, mime_type: string, filename: string}|null */
-    private function conversionPreview(Media $media, string $name): ?array
+    private function conversionPreview(Vault $vault, File $file, Media $media, string $name): ?array
     {
         $disk = $media->conversions_disk ?? $media->disk;
         $path = $media->getPathRelativeToRoot($name);
@@ -972,7 +974,8 @@ class VaultOperationService
             'disk' => $disk,
             'path' => $path,
             'mime_type' => Storage::disk($disk)->mimeType($path) ?: 'application/octet-stream',
-            'filename' => basename($path),
+            // The media library names conversions after the original file
+            'filename' => $this->links->publicFilename($vault, $file, $name, basename($path)),
         ];
     }
 
@@ -1015,7 +1018,7 @@ class VaultOperationService
 
             return [
                 'position' => $file->position,
-                'filename' => $file->filename,
+                'filename' => $this->links->publicFilename($vault, $file),
                 'slug' => $fileLink->slug,
                 'mime_type' => $file->mime_type,
                 'size' => $file->size,

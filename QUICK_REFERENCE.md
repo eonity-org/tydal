@@ -68,6 +68,7 @@ Tip for the docker tier: `alias art='docker exec -w /var/www/html tydal_app php 
 |---|---|---|---|
 | `docker exec -w /var/www/html tydal_app php artisan schema:validate` | `cd backend && php artisan schema:validate` | Scheme fields vs the field contract | stack |
 | `docker exec -w /var/www/html tydal_app php artisan vault:validate-policy` | `cd backend && php artisan vault:validate-policy` | Vault exposure policies vs the capability vocabulary | stack |
+| `docker exec -w /var/www/html tydal_app php artisan vault:reslug-files [--dry-run]` | `cd backend && php artisan vault:reslug-files [--dry-run]` | File-link slugs rewritten to the current rule (codes by default, no uploaded filenames in `/v/` addresses) | stack |
 | `docker exec -w /var/www/html tydal_app php artisan resources:audit-roles [--fix]` | `cd backend && php artisan resources:audit-roles [--fix]` | File-role composition invariants (single canonical, snapshots) | stack |
 
 ## Users, organizations, exhibitions, MCP, graph (artisan)

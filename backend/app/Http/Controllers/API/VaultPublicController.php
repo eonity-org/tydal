@@ -110,7 +110,7 @@ class VaultPublicController extends Controller
 
         return Storage::disk($file->disk)->response(
             $file->path,
-            $file->filename,
+            $this->vaultLinkService->publicFilename($link->vault, $file),
             ['Content-Type' => $file->mime_type]
         );
     }
@@ -132,7 +132,7 @@ class VaultPublicController extends Controller
             return $this->vaultJson([
                 'type' => 'file',
                 'id' => $link->hash,
-                'filename' => $file->filename,
+                'filename' => $this->vaultLinkService->publicFilename($vault, $file),
                 'mime_type' => $file->mime_type,
                 'size' => $file->size,
                 'url' => $this->vaultLinkService->buildUrl($link),
@@ -152,7 +152,7 @@ class VaultPublicController extends Controller
 
                 return [
                     'id' => $fileLink->hash,
-                    'filename' => $f->filename,
+                    'filename' => $this->vaultLinkService->publicFilename($vault, $f),
                     'mime_type' => $f->mime_type,
                     'size' => $f->size,
                     'url' => $this->vaultLinkService->buildUrl($fileLink),
@@ -176,7 +176,7 @@ class VaultPublicController extends Controller
 
         return Storage::disk($file->disk)->download(
             $file->path,
-            $file->filename
+            $this->vaultLinkService->publicFilename($link->vault, $file)
         );
     }
 
