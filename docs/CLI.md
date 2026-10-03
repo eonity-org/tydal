@@ -202,6 +202,27 @@ accepts `ingest` with no target configured at all. Notices: an `ai` vault with
 `allow_binary` on (the transforming-consumer recipe), a non-AI vault answering
 `/ask`, and `write_methods` widened past the purpose vocabulary.
 
+### `vault:reslug-files`
+
+Rewrite the human slugs of vault **file** links with the current rule
+([VAULT_SYSTEM.md](architecture/VAULT_SYSTEM.md) §4.3): a 3-character code per
+file and vault by default (`/v/acme/expo/album/k7q`), or the filename's slug when
+`TYDAL_EXPORT_VISIBLE_FILENAMES=true`. File slugs used to come from the uploaded
+filename, and a slug is stored when its link is first minted, so links minted
+before the change still publish filenames in their `/v/` address — camera
+serials, dates, the names of people photographed. Run it once after upgrading,
+and again after switching the setting.
+
+```
+php artisan vault:reslug-files --dry-run          # list old → new, write nothing
+php artisan vault:reslug-files                    # all vaults
+php artisan vault:reslug-files --vault=figures    # one vault (id, hash or slug)
+```
+
+Hash addresses (`/h/…`) don't change; old `/v/…/{file}` paths stop resolving,
+so anything that stored them (a FullFrame exhibition, a bookmark) should use the
+new path or the hash. Idempotent: a second run reports nothing to change.
+
 ## Resource graph (Epic 4.3)
 
 ### `graph:rebuild`

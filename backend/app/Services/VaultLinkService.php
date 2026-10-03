@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\FileRole;
 use App\Enums\VaultCredential;
 use App\Enums\VaultState;
 use App\Models\File;
@@ -115,9 +116,16 @@ class VaultLinkService
                         : null,
                 ]);
 
-                // Hash depends on the auto-increment PK — generated after insert
-                $hashids = new Hashids($vault->salt, 8);
-                $link->update(['hash' => $hashids->encode($link->id)]);
+                // Hash depends on the auto-increment PK — generated after insert.
+                // Hashes are unique across ALL vaults (the legacy /vault/{hash}
+                // route looks them up globally), but each vault encodes with its
+                // own salt, so two vaults can turn two ids into the same string.
+                // On that rare clash, a longer encoding of the same id differs.
+                $length = 8;
+                do {
+                    $hash = (new Hashids($vault->salt, $length++))->encode($link->id);
+                } while (VaultLink::where('hash', $hash)->exists());
+                $link->update(['hash' => $hash]);
             }
 
             return $link;
@@ -161,24 +169,17 @@ class VaultLinkService
     /**
      * Slug for a vault-purpose link — never a grammar word. Scoping follows
      * the hierarchical /v/ grammar (spec §4.3): resource slugs are unique per
-     * VAULT; file slugs are unique per RESOURCE (siblings only), so
-     * album-one/cover and album-two/cover coexist and a file may carry its
-     * resource's name (/doc/doc).
+     * VAULT and come from the resource name; file slugs are unique per
+     * RESOURCE (siblings only).
+     *
+     * A file slug is, by default, a short code derived from the file's id and
+     * the vault's salt (fileCode) — never the uploaded filename, which can
+     * carry what a public address must not (camera serials, dates, the names
+     * of people photographed). An installation whose filenames are clean can
+     * opt into filename slugs with TYDAL_EXPORT_VISIBLE_FILENAMES.
      */
     private function generateLinkSlug(Vault $vault, string $resourceId, ?string $fileId): string
     {
-        if ($fileId !== null) {
-            $filename = File::whereKey($fileId)->value('filename') ?? $fileId;
-            $base = Str::slug(pathinfo($filename, PATHINFO_FILENAME));
-        } else {
-            $name = Resource::whereKey($resourceId)->value('name') ?? $resourceId;
-            $base = Str::slug($name);
-        }
-
-        if ($base === '') {
-            $base = 'item';
-        }
-
         $taken = fn (string $slug) => $fileId !== null
             ? VaultLink::where('vault_id', $vault->id)
                 ->where('resource_id', $resourceId)
@@ -189,15 +190,190 @@ class VaultLinkService
                 ->whereNull('file_id')
                 ->where('slug', $slug)
                 ->exists();
+        $free = fn (string $slug) => ! in_array($slug, self::RESERVED_SLUGS, true) && ! $taken($slug);
+
+        if ($fileId !== null && ! config('tydal.export_visible_filenames')) {
+            foreach ($this->fileCodes($vault, $fileId) as $code) {
+                if ($free($code)) {
+                    return $code;
+                }
+            }
+            $base = $this->fileCodes($vault, $fileId)[0];
+        } elseif ($fileId !== null) {
+            $filename = File::whereKey($fileId)->value('filename') ?? '';
+            $base = Str::slug(pathinfo($filename, PATHINFO_FILENAME)) ?: 'file';
+        } else {
+            $base = Str::slug(Resource::whereKey($resourceId)->value('name') ?? '') ?: 'item';
+        }
 
         $slug = $base;
         $n = 2;
-        while (in_array($slug, self::RESERVED_SLUGS, true) || $taken($slug)) {
+        while (! $free($slug)) {
             $slug = "{$base}-{$n}";
             $n++;
         }
 
         return $slug;
+    }
+
+    /**
+     * The name a file goes by on the public vault surfaces — in JSON and as the
+     * name a download or inline view is saved under. With
+     * TYDAL_EXPORT_VISIBLE_FILENAMES off, uploaded filenames never leave TYDAL:
+     * the file is named after its resource and its address code (pepe-k7q.jpg),
+     * a rendition after those and its name (pepe-k7q-large.jpg). The resource
+     * part keeps a downloaded file recognisable once it's out of its vault (a
+     * Downloads folder, an agent's attachment); it is the author's name, never
+     * the uploader's. On, the real name.
+     *
+     * $realName is what would be shown otherwise — the file's filename, or a
+     * rendition's storage basename (which the media library builds from the
+     * original filename, so it leaks just the same); its extension is kept.
+     */
+    public function publicFilename(Vault $vault, File $file, ?string $variant = null, ?string $realName = null): string
+    {
+        $realName ??= $file->filename;
+
+        if (config('tydal.export_visible_filenames')) {
+            return $realName;
+        }
+
+        // The file's own address code in this vault when it has one (it can
+        // differ from the first window on a sibling clash), else that window.
+        $slug = VaultLink::where('vault_id', $vault->id)
+            ->where('file_id', $file->id)
+            ->whereNull('workspace_id')
+            ->value('slug');
+        $code = is_string($slug) && preg_match('/^[0-9a-z]{3}$/', $slug) === 1
+            ? $slug
+            : $this->fileCodes($vault, $file->id)[0];
+
+        return $this->withExtension(
+            $this->resourceSlugIn($vault, $file->resource_id)."-{$code}".($variant !== null ? "-{$variant}" : ''),
+            $realName,
+        );
+    }
+
+    /**
+     * The public name of a file that belongs to a resource rather than to one
+     * of its files (a generated preview): the resource's slug in the vault.
+     */
+    public function publicResourceFilename(VaultLink $resourceLink, string $variant, string $realName): string
+    {
+        if (config('tydal.export_visible_filenames')) {
+            return $realName;
+        }
+
+        return $this->withExtension(($resourceLink->slug ?? $resourceLink->hash)."-{$variant}", $realName);
+    }
+
+    /**
+     * The resource's slug in this vault (its /v/ address), else — on vaults
+     * without human addresses, such as delivery — the slug of its name.
+     */
+    private function resourceSlugIn(Vault $vault, string $resourceId): string
+    {
+        $slug = VaultLink::where('vault_id', $vault->id)
+            ->where('resource_id', $resourceId)
+            ->whereNull('file_id')
+            ->whereNull('workspace_id')
+            ->value('slug');
+
+        return is_string($slug) && $slug !== ''
+            ? $slug
+            : (Str::slug(Resource::whereKey($resourceId)->value('name') ?? '') ?: 'item');
+    }
+
+    private function withExtension(string $name, string $from): string
+    {
+        $extension = strtolower(pathinfo($from, PATHINFO_EXTENSION));
+
+        return $extension !== '' ? "{$name}.{$extension}" : $name;
+    }
+
+    /**
+     * Candidate codes for a file slug: successive 3-character windows of an
+     * HMAC of the file id keyed with the vault's salt, in base 36 (k7q, 2mx…).
+     * Keyed per vault so the same file has unrelated codes in two vaults (no
+     * cross-vault correlation) and the id can't be worked back from it;
+     * deterministic so re-slugging reproduces it; independent of name, role
+     * and order so none of those changes moves the address. A sibling clash
+     * takes the next window.
+     *
+     * @return list<string>
+     */
+    private function fileCodes(Vault $vault, string $fileId): array
+    {
+        $digits = '';
+        foreach (str_split(hash_hmac('sha256', $fileId, (string) $vault->salt), 12) as $chunk) {
+            $digits .= str_pad(base_convert($chunk, 16, 36), 10, '0', STR_PAD_LEFT); // 48 bits → ≤10 base-36 digits
+        }
+
+        return array_map(fn (int $i) => substr($digits, $i, 3), range(0, strlen($digits) - 3, 3));
+    }
+
+    /**
+     * Re-derive the slugs of a resource's file links in one vault with the
+     * current rule (a per-vault code, or the filename when
+     * TYDAL_EXPORT_VISIBLE_FILENAMES is on). For links minted under the other
+     * rule — above all, filename slugs minted before codes became the default.
+     * The hash address is untouched; only the human /v/ path changes.
+     *
+     * Siblings are cleared and minted again in a fixed order (canonical,
+     * components by position, supporting) inside one transaction, so the
+     * per-resource unique index never sees a transient clash.
+     *
+     * @return array<int, array{file_id: string, from: string|null, to: string}> only the changed links
+     */
+    public function reslugFileLinks(Vault $vault, string $resourceId, bool $dryRun = false): array
+    {
+        $links = VaultLink::where('vault_id', $vault->id)
+            ->where('resource_id', $resourceId)
+            ->whereNull('workspace_id')
+            ->whereNotNull('file_id')
+            ->with('file:id,role,position')
+            ->get()
+            ->sortBy(fn (VaultLink $l) => [
+                match ($l->file?->role) {
+                    FileRole::CANONICAL => 0,
+                    FileRole::COMPONENT => 1,
+                    default => 2,
+                },
+                $l->file->position ?? PHP_INT_MAX,
+                $l->id,
+            ])
+            ->values();
+
+        if ($links->isEmpty()) {
+            return [];
+        }
+
+        // A dry run does the same writes and rolls them back, so it reports
+        // exactly what a real run would (numbering included).
+        DB::beginTransaction();
+        try {
+            $before = $links->pluck('slug', 'id')->all();
+            VaultLink::whereIn('id', $links->pluck('id'))->update(['slug' => null]);
+
+            $changes = [];
+            foreach ($links as $link) {
+                $slug = $this->generateLinkSlug($vault, $resourceId, $link->file_id);
+                // A query, not $link->update(): the model still holds the old
+                // slug, so an unchanged slug would look clean and never be
+                // written back after the reset above.
+                VaultLink::whereKey($link->id)->update(['slug' => $slug]);
+                if ($before[$link->id] !== $slug) {
+                    $changes[] = ['file_id' => $link->file_id, 'from' => $before[$link->id], 'to' => $slug];
+                }
+            }
+
+            $dryRun ? DB::rollBack() : DB::commit();
+
+            return $changes;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            throw $e;
+        }
     }
 
     /**

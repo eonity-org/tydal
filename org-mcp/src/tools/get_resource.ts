@@ -4,7 +4,7 @@ import { client, apiError } from '../client.js';
 export const definition: Tool = {
   name: 'get_resource',
   description:
-    'Retrieve a single TYDAL resource in one call: name, description, slug, tags, '
+    'Retrieve a single TYDAL resource in one call: name, description, tags, '
     + 'custom metadata, files (each with a direct URL, MIME type, role, and its own '
     + 'Vault links if published), resource-level Vault links, chunk/embedding availability, '
     + 'and workspace memberships. Use `list_resource_chunks` to read the underlying '

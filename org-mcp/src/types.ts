@@ -36,7 +36,6 @@ export interface ResourceFile {
 /** Shape returned by GET /resources/{id}/agent-view (get_resource tool). */
 export interface AgentResourceView {
   id: string;
-  slug: string | null;
   name: string;
   description: string | null;
   type: string;

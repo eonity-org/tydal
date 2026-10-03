@@ -174,6 +174,11 @@ export interface VaultTags {
 
 export interface VaultFileEntry {
   position: number | null
+  /**
+   * The file's public name. By default the resource slug, the address code and
+   * the original extension (`pepe-k7q.jpg`): uploaded filenames never leave TYDAL unless the
+   * installation sets TYDAL_EXPORT_VISIBLE_FILENAMES=true.
+   */
   filename: string
   slug: string | null
   mime_type: string

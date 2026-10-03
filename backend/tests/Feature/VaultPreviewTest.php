@@ -158,6 +158,8 @@ class VaultPreviewTest extends TestCase
 
         $response->assertStatus(200)->assertHeader('Content-Type', 'image/png');
         $this->assertSame('rendered-first-page', $response->streamedContent());
+        // A resource-level preview is named after the resource, not its storage file
+        $this->assertStringContainsString('tourism-declaration-preview.png', (string) $response->headers->get('Content-Disposition'));
     }
 
     public function test_snapshot_file_wins_over_rendered_system_file(): void
@@ -229,6 +231,11 @@ class VaultPreviewTest extends TestCase
         foreach (['/h/'.$vault->hash.'/'.$card['id'], '/v/acme/my-vault/converted-face'] as $path) {
             $response = $this->get($path.'/preview?rendition=medium')->assertOk()->assertHeader('Content-Type', 'image/webp');
             $this->assertSame($bytes, $response->streamedContent());
+            // The media library names conversions after the original ("face-medium");
+            // outside, a rendition goes by its resource, the file's code and its name
+            $disposition = (string) $response->headers->get('Content-Disposition');
+            $this->assertMatchesRegularExpression('/converted-face-[0-9a-z]{3}-medium\.webp/', $disposition);
+            $this->assertStringNotContainsString('"face-medium', $disposition);
         }
         $this->get('/h/'.$vault->hash.'/'.$card['id'].'/download')->assertForbidden();
         $this->get($card['preview'].'?rendition=small')->assertNotFound();
@@ -393,9 +400,9 @@ class VaultPreviewTest extends TestCase
 
         $this->mintIndex();
         // File slugs are minted by the manifest op.
-        $this->getJson('/v/acme/my-vault/winter-catalogue/files')->assertStatus(200);
+        $fileSlug = $this->getJson('/v/acme/my-vault/winter-catalogue/files')->assertStatus(200)->json('files.0.slug');
 
-        $payload = $this->getJson('/v/acme/my-vault/winter-catalogue/cover/renditions')
+        $payload = $this->getJson("/v/acme/my-vault/winter-catalogue/{$fileSlug}/renditions")
             ->assertStatus(200)
             ->json();
 
