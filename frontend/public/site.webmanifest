@@ -1,7 +1,7 @@
 {
-  "name": "TYDAL — Schema-Driven Semantic Vaults for AI Agents",
+  "name": "TYDAL — The typed Digital Asset Layer",
   "short_name": "TYDAL",
-  "description": "A multi-tenant, schema-driven semantic knowledge system that projects digital assets into searchable, workspace-ready knowledge.",
+  "description": "An open-source Semantic Asset Platform for structuring, enriching and sharing digital resources through contextual Vaults for people, applications and AI agents.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

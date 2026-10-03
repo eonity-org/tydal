@@ -89,7 +89,7 @@ class ProductionSeeder extends Seeder
             [
                 'name' => 'TYDAL',
                 'slug' => 'tydal',
-                'description' => 'TYDAL — Schema-Driven Semantic Vaults for AI Agents',
+                'description' => 'TYDAL — the typed Digital Asset Layer',
                 'type' => 'business',
                 'logo_url' => null,
                 'website_url' => 'https://tydal.test',
