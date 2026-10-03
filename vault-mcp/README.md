@@ -30,7 +30,8 @@ Platform Administration).
         "TYDAL_BASE_URL": "http://localhost:8000",
         "TYDAL_VAULT": "acme/press-kit",              // or TYDAL_VAULT_HASH
         "TYDAL_VAULT_KEY": "tvk_…",                   // read: private vaults only
-        "TYDAL_VAULT_WRITE_KEY": "tvk_…"              // write: turns on ingest (ai vaults)
+        "TYDAL_VAULT_WRITE_KEY": "tvk_…",             // write: turns on ingest (ai vaults)
+        "TYDAL_IMAGE_MAX_BYTES": "716800"             // optional: read_image budget (default fits Claude Desktop)
       }
     }
   }
@@ -89,7 +90,12 @@ vault), optional `rendition`, and optional `max_bytes`:
 { "resource_slug": "RESOURCE_REFERENCE", "rendition": "medium" }
 ```
 
-The default rendition is `ai-prepared`, with a **5 MiB** binary limit. Fitting
+The default rendition is `ai-prepared`, prepared on the fly to a budget of
+**700 KiB** (716,800 bytes before base64), which keeps the result under the
+1 MB per tool result that Claude Desktop accepts; the budget is always sent, so
+TYDAL never falls back to its own 5 MiB vision-pipeline default here. Set
+`TYDAL_IMAGE_MAX_BYTES` on the connection for clients that take larger results
+(Claude Code, API-based agents), or pass `max_bytes` per call. Fitting
 originals retain their bytes except PNG orientation normalization. Larger images
 use JPEG quality 95, reducing dimensions only if needed. `max_bytes` accepts
 65,536–20,971,520, only for `ai-prepared`. The budget excludes base64 overhead

@@ -13,9 +13,13 @@
 
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { client, apiError, vaultPath } from '../client.js';
+import { config } from '../config.js';
 
 const renditions = ['ai-prepared', 'original', 'thumbnail', 'small', 'medium', 'large'];
-const defaultMaxBytes = 5 * 1024 * 1024;
+// The budget is always sent, so TYDAL prepares (VisionImagePreparer) an image
+// that fits the MCP client — not its own 5 MiB vision-pipeline default, which
+// overflows clients such as Claude Desktop (1 MB per tool result after base64).
+const defaultMaxBytes = config.imageMaxBytes;
 
 function dimension(value: unknown): number | null {
   const n = Number(value);
@@ -31,7 +35,8 @@ export const readImage = {
       + 'or diagram and describe it), not just its metadata. Returns the image inline (Tier 2 preview: '
       + 'viewing, not downloading a copy), fetched server-side — so it works even when link_resource '
       + 'would hand back an address your environment cannot reach. Denied if the vault does not expose '
-      + 'binary. Defaults to ai-prepared (5 MiB maximum before base64): preserves fitting bytes except PNG orientation normalization, '
+      + `binary. Defaults to ai-prepared, sized to fit an MCP tool result (${defaultMaxBytes} bytes before base64 on this connection; `
+      + 'pass max_bytes for a sharper image if your client accepts larger results): preserves fitting bytes except PNG orientation normalization, '
       + 'otherwise uses high-quality JPEG and reduces dimensions only as needed. Choose original for unchanged '
       + 'source bytes or an advertised thumbnail/small/medium/large rendition. Returns actual image metadata too. '
       + 'Resource references come from list_resources or search_resources.',
@@ -43,7 +48,7 @@ export const readImage = {
         rendition: { type: 'string', enum: renditions, default: 'ai-prepared' },
         max_bytes: {
           type: 'integer', minimum: 65536, maximum: 20971520,
-          description: 'AI-prepared binary byte limit before base64 (default 5242880). Only valid with ai-prepared.',
+          description: `AI-prepared binary byte limit before base64 (default ${defaultMaxBytes} on this connection). Only valid with ai-prepared.`,
         },
       },
     },
@@ -64,7 +69,7 @@ export const readImage = {
     const maxBytes = typeof max_bytes === 'number' ? max_bytes : defaultMaxBytes;
     try {
       const res = await client.getBinary(vaultPath(resource_slug, 'preview'), {
-        params: { rendition, ...(max_bytes !== undefined ? { max_bytes } : {}) },
+        params: { rendition, ...(rendition === 'ai-prepared' ? { max_bytes: maxBytes } : {}) },
         ...(rendition === 'ai-prepared' ? { maxBytes } : {}),
         headers: { Accept: 'image/*' },
       });

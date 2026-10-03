@@ -317,11 +317,18 @@ php artisan mcp:token --org=acme --role=viewer \
 ```
 
 Options: `--email=` machine user (created if missing) · `--org=` slug or UUID
-· `--role=` viewer|editor|admin · `--abilities=` read,ask,write · `--name=`
+· `--role=` viewer|editor|admin — a new machine user defaults to editor; an
+existing one keeps its role unless `--role` is given, which then changes it ·
+`--abilities=` read,ask,write · `--name=`
 identifies the token (re-issuing with the same name revokes the old one —
 name it after the client/machine, e.g. `claude-desktop`, so you can rotate it
 later without accumulating orphaned tokens) · `--days=` lifetime (default: no
 expiry).
+
+**Which role an agent needs.** An editor may only change resources it owns, so
+an agent that only adds its own uploads works as editor; an agent that edits
+the organization's existing resources (titles, descriptions, fields of photos a
+curator uploaded) needs `--role=admin` together with `--abilities=read,write`.
 
 The **vault** MCP server (`vault-mcp/`) does not use tokens — published
 vaults connect keyless; private vaults use a **vault key** minted via

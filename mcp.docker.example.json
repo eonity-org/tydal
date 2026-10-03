@@ -24,6 +24,7 @@
         "-e", "TYDAL_VAULT=acme/press-kit",
         "-e", "TYDAL_VAULT_KEY=tvk_… (private vaults only)",
         "-e", "TYDAL_VAULT_WRITE_KEY=tvk_… (optional — enables ingest on ai vaults)",
+        "-e", "TYDAL_IMAGE_MAX_BYTES=716800 (optional — read_image budget in bytes before base64; the default fits Claude Desktop's 1 MB tool results, raise it for clients that accept more)",
         "node:22", "node", "dist/index.js"
       ]
     }

@@ -45,6 +45,51 @@ class McpTokenCommandTest extends TestCase
         $this->assertSame(1, $user->tokens()->where('name', 'claude-desktop')->count());
     }
 
+    private function roleOf(Organization $organization): ?string
+    {
+        $user = User::where('email', 'mcp@tydal.test')->first();
+
+        return $organization->users()->where('users.id', $user->id)->first()?->pivot->role;
+    }
+
+    public function test_a_new_machine_user_is_an_editor_by_default(): void
+    {
+        $organization = Organization::factory()->create(['slug' => 'acme']);
+
+        $this->artisan('mcp:token', ['--org' => 'acme'])->assertSuccessful();
+
+        $this->assertSame('editor', $this->roleOf($organization));
+    }
+
+    public function test_an_explicit_role_changes_an_existing_members_role(): void
+    {
+        // An editor may only change resources it owns: an agent curating
+        // others' resources has to be raised to admin, and re-issuing must do it.
+        $organization = Organization::factory()->create(['slug' => 'acme']);
+        $this->artisan('mcp:token', ['--org' => 'acme'])->assertSuccessful();
+
+        $this->artisan('mcp:token', ['--org' => 'acme', '--role' => 'admin'])
+            ->expectsOutputToContain('Role changed from editor to admin')
+            ->expectsOutputToContain('(admin @')
+            ->assertSuccessful();
+
+        $this->assertSame('admin', $this->roleOf($organization));
+    }
+
+    public function test_reissuing_without_a_role_keeps_the_existing_role(): void
+    {
+        $organization = Organization::factory()->create(['slug' => 'acme']);
+        $this->artisan('mcp:token', ['--org' => 'acme', '--role' => 'admin'])->assertSuccessful();
+
+        // No --role: the key is renewed, the admin is not downgraded, and the
+        // output reports the role actually held
+        $this->artisan('mcp:token', ['--org' => 'acme'])
+            ->expectsOutputToContain('(admin @')
+            ->assertSuccessful();
+
+        $this->assertSame('admin', $this->roleOf($organization));
+    }
+
     public function test_rejects_invalid_abilities(): void
     {
         Organization::factory()->create(['slug' => 'acme']);

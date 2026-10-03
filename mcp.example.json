@@ -17,7 +17,8 @@
         "TYDAL_BASE_URL": "http://localhost:8000",
         "TYDAL_VAULT": "acme/press-kit",
         "TYDAL_VAULT_KEY": "tvk_… (private vaults only)",
-        "TYDAL_VAULT_WRITE_KEY": "tvk_… (optional — enables ingest on ai vaults)"
+        "TYDAL_VAULT_WRITE_KEY": "tvk_… (optional — enables ingest on ai vaults)",
+        "TYDAL_IMAGE_MAX_BYTES": "716800 (optional — read_image budget in bytes before base64; the default fits Claude Desktop's 1 MB tool results, raise it for clients that accept more)"
       }
     }
   }

@@ -15,13 +15,18 @@ use Illuminate\Support\Str;
  * Creates (or reuses) a service account, attaches it to the organization,
  * revokes any previous token with the same name, and prints the new key
  * once, together with a ready-to-paste MCP env block.
+ *
+ * The role: a new member gets --role (editor when omitted). An existing member
+ * keeps theirs unless --role is given explicitly, so re-issuing a key never
+ * silently downgrades an admin. Editors may only change resources they own;
+ * an agent that curates other people's resources needs --role=admin.
  */
 class McpToken extends Command
 {
     protected $signature = 'mcp:token
         {--email=mcp@tydal.test : Machine user email (created if missing)}
         {--org= : Organization slug or UUID (default: first organization)}
-        {--role=editor : Role for the machine user in the organization (viewer|editor|admin)}
+        {--role= : Role for the machine user in the organization (viewer|editor|admin). New member: default editor. Existing member: changed only when given}
         {--name=claude-desktop : Token name (previous token with this name is revoked)}
         {--abilities=read,ask : Comma-separated abilities (read, ask, write)}
         {--days= : Token lifetime in days (default: no expiry)}';
@@ -45,7 +50,8 @@ class McpToken extends Command
             return self::FAILURE;
         }
 
-        $role = (string) $this->option('role');
+        $requestedRole = $this->option('role');
+        $role = $requestedRole !== null ? (string) $requestedRole : 'editor';
         if (! in_array($role, ['viewer', 'editor', 'admin'], true)) {
             $this->error('Role must be one of: viewer, editor, admin');
 
@@ -70,8 +76,14 @@ class McpToken extends Command
             ]
         );
 
-        if (! $organization->users()->where('users.id', $user->id)->exists()) {
+        $currentRole = $organization->users()->where('users.id', $user->id)->value('organization_user.role');
+        if ($currentRole === null) {
             $organization->users()->attach($user->id, ['role' => $role]);
+        } elseif ($requestedRole !== null && $currentRole !== $role) {
+            $organization->users()->updateExistingPivot($user->id, ['role' => $role]);
+            $this->line("Role changed from {$currentRole} to {$role} in {$organization->name}.");
+        } else {
+            $role = (string) $currentRole; // report the role they actually have
         }
 
         // Fallback org context for requests that omit X-Organization-ID
