@@ -67,7 +67,7 @@ class ResourceAgentViewTest extends TestCase
                 'success',
                 'data' => [
                     'resource' => [
-                        'id', 'slug', 'name', 'description', 'type', 'state',
+                        'id', 'name', 'description', 'type', 'state',
                         'tags', 'metadata', 'collection', 'files', 'vault_links',
                         'content' => ['has_chunks', 'chunk_count'],
                         'workspaces', 'created_at', 'updated_at',
@@ -82,20 +82,22 @@ class ResourceAgentViewTest extends TestCase
         $this->assertArrayNotHasKey('promoted_file_metadata', $body);
     }
 
-    public function test_agent_view_includes_tags_and_slug(): void
+    public function test_agent_view_includes_tags_and_no_resource_slug(): void
     {
         $tag = SemanticTag::factory()->create([
             'organization_id' => $this->organization->id,
             'label' => 'Astrophysics',
         ]);
         $this->resource->semanticTags()->attach($tag->id);
+        // resources.slug is never set by the app; an agent would mistake it for
+        // an address. Addresses are the vault links (resource.vault_links).
         $this->resource->update(['slug' => 'nebula-report']);
 
         $response = $this->withToken($this->token())
             ->getJson("/api/v1/resources/{$this->resource->id}/agent-view");
 
         $response->assertStatus(200)
-            ->assertJsonPath('data.resource.slug', 'nebula-report')
+            ->assertJsonMissingPath('data.resource.slug')
             ->assertJsonPath('data.resource.tags.0.label', 'Astrophysics');
     }
 

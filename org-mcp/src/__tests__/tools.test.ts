@@ -352,6 +352,26 @@ describe('update_resource_metadata', () => {
     const result = await updateResourceMetadata({ resource_id: 'res-abc', name: 'Renamed Resource' }) as any;
     expect(result.name).toBe('Renamed Resource');
   });
+
+  it('confirms only the changed fields, as saved, not the whole record', async () => {
+    mock.onPut('/resources/res-abc').reply(200, { success: true, data: { resource: {
+      id: 'res-abc', name: 'Song Against Stone', description: 'A barefoot singer…',
+      updated_at: '2026-10-03T19:00:00Z',
+      metadata: { author: 'Elena Shaw', year: 2024, icc_profile: 'x'.repeat(5000) },
+      embedding: new Array(1024).fill(0.1),
+    } } });
+
+    const result = await updateResourceMetadata({
+      resource_id: 'res-abc', name: 'Song Against Stone', description: 'A barefoot singer…', metadata: { year: 2024 },
+    }) as any;
+
+    expect(result).toEqual({
+      id: 'res-abc', updated: ['name', 'description', 'metadata'],
+      name: 'Song Against Stone', description: 'A barefoot singer…', metadata: { year: 2024 },
+      updated_at: '2026-10-03T19:00:00Z',
+    });
+    expect(JSON.stringify(result).length).toBeLessThan(400);
+  });
 });
 
 // ── sync_tags ──────────────────────────────────────────────────────────────────

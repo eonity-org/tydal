@@ -1,6 +1,6 @@
 {
   "name": "@tydal/org-mcp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "TYDAL org-management MCP server — exposes workspace intelligence and asset management to AI agents via the Model Context Protocol",
   "license": "Apache-2.0",
   "type": "module",

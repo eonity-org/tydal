@@ -11,6 +11,7 @@ import {
 import Button from '../components/ui/Button'
 import TextField from '../components/ui/TextField'
 import authService from '../api/authService'
+import tydalLogo from '../assets/tydal-logo.png'
 
 /**
  * TYDAL Login Page Component
@@ -118,20 +119,18 @@ function LoginPage() {
         }}
       >
         <Stack spacing={3}>
-          {/* Logo/Title */}
+          {/* Logo. The PNG is 140 px tall: shown at exactly half, it stays crisp
+              on 1x screens and maps pixel for pixel on Retina. (The SVG's thin line
+              showed artifacts in Chrome at this size.) */}
           <Box sx={{ textAlign: 'center' }}>
-            <Typography
-              sx={{
-                fontSize: '1.5rem',
-                color: 'primary.main',
-                fontWeight: 700,
-                mb: 1,
-              }}
-            >
-              TYDAL
-            </Typography>
+            <Box
+              component="img"
+              src={tydalLogo}
+              alt="TYDAL"
+              sx={{ height: 70, width: 'auto', display: 'block', mx: 'auto', mb: 1.5 }}
+            />
             <Typography variant="body2" color="text.secondary">
-              Schema-Driven Semantic Vaults for AI Agents
+              The typed Digital Asset Layer
             </Typography>
           </Box>
 

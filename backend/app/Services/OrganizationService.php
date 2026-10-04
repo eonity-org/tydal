@@ -4,11 +4,14 @@ namespace App\Services;
 
 use App\Enums\OrganizationRole;
 use App\Models\Organization;
+use App\Models\User;
 use App\Models\Workspace;
 use App\Repositories\Interfaces\OrganizationRepositoryInterface;
 use App\Services\Interfaces\OrganizationServiceInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 class OrganizationService implements OrganizationServiceInterface
 {
@@ -66,39 +69,51 @@ class OrganizationService implements OrganizationServiceInterface
     }
 
     /**
-     * Create a new organization.
+     * Create a new organization, owned by `$owner` — else the signed-in user
+     * (the API path). Whoever owns it is attached as `owner`, owns its default
+     * workspace, and lands in it on their next login if they had nowhere yet.
+     *
+     * An owner is required: without one this used to write the organization's
+     * own id into `workspaces.user_owner_id` (a users FK), so creating an
+     * organization outside an HTTP request always failed.
      */
-    public function createOrganization(array $data): Organization
+    public function createOrganization(array $data, ?User $owner = null): Organization
     {
-        $organization = $this->organizationRepository->create($data);
-
-        // Whoever creates an organization owns it.
-        //
-        // This used to attach them as 'org-admin' AND pass an 'id' column that
-        // `organization_user` does not have — its primary key is the composite
-        // (organization_id, user_id) — so every call threw
-        // SQLSTATE[42S22] and POST /organizations was simply broken. That is
-        // also why 'org-admin' never existed in any database despite policies
-        // requiring it.
-        if (Auth::check()) {
-            $organization->users()->attach(Auth::id(), [
-                'role' => OrganizationRole::OWNER->value,
-            ]);
+        $owner ??= Auth::user();
+        if (! $owner instanceof User) {
+            throw new RuntimeException('An organization needs an owner: pass one, or create it as a signed-in user.');
         }
 
-        // Create the default workspace (contains all org resources without explicit pivot)
-        Workspace::create([
-            'organization_id' => $organization->id,
-            'user_owner_id' => Auth::id() ?? $organization->id,
-            'name' => 'All Resources',
-            'slug' => $organization->slug.'-all',
-            'description' => 'All resources in this organization',
-            'is_active' => true,
-            'is_default' => true,
-            'is_system' => false,
-        ]);
+        return DB::transaction(function () use ($data, $owner): Organization {
+            /** @var Organization $organization */
+            $organization = $this->organizationRepository->create($data);
 
-        return $organization;
+            // (This used to attach 'org-admin' AND pass an 'id' column that
+            // `organization_user` does not have — its primary key is the
+            // composite (organization_id, user_id) — so every call threw and
+            // POST /organizations was simply broken.)
+            $organization->users()->attach($owner->id, [
+                'role' => OrganizationRole::OWNER->value,
+            ]);
+
+            // Create the default workspace (contains all org resources without explicit pivot)
+            Workspace::create([
+                'organization_id' => $organization->id,
+                'user_owner_id' => $owner->id,
+                'name' => 'All Resources',
+                'slug' => $organization->slug.'-all',
+                'description' => 'All resources in this organization',
+                'is_active' => true,
+                'is_default' => true,
+                'is_system' => false,
+            ]);
+
+            if ($owner->last_organization_id === null) {
+                $owner->forceFill(['last_organization_id' => $organization->id])->save();
+            }
+
+            return $organization;
+        });
     }
 
     /**

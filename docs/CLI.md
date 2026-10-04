@@ -202,6 +202,27 @@ accepts `ingest` with no target configured at all. Notices: an `ai` vault with
 `allow_binary` on (the transforming-consumer recipe), a non-AI vault answering
 `/ask`, and `write_methods` widened past the purpose vocabulary.
 
+### `vault:reslug-files`
+
+Rewrite the human slugs of vault **file** links with the current rule
+([VAULT_SYSTEM.md](architecture/VAULT_SYSTEM.md) §4.3): a 3-character code per
+file and vault by default (`/v/acme/expo/album/k7q`), or the filename's slug when
+`TYDAL_EXPORT_VISIBLE_FILENAMES=true`. File slugs used to come from the uploaded
+filename, and a slug is stored when its link is first minted, so links minted
+before the change still publish filenames in their `/v/` address — camera
+serials, dates, the names of people photographed. Run it once after upgrading,
+and again after switching the setting.
+
+```
+php artisan vault:reslug-files --dry-run          # list old → new, write nothing
+php artisan vault:reslug-files                    # all vaults
+php artisan vault:reslug-files --vault=figures    # one vault (id, hash or slug)
+```
+
+Hash addresses (`/h/…`) don't change; old `/v/…/{file}` paths stop resolving,
+so anything that stored them (a FullFrame exhibition, a bookmark) should use the
+new path or the hash. Idempotent: a second run reports nothing to change.
+
 ## Resource graph (Epic 4.3)
 
 ### `graph:rebuild`
@@ -244,6 +265,43 @@ php artisan graph:materialize --org=acme
 php artisan graph:materialize --min-size=3      # ignore tiny clusters
 ```
 
+## Users and organizations
+
+Two composable steps, the same things the admin UI does. A user can exist
+without an organization (registration allows it too), so the usual order for
+a new tenant is: create the person, then the organization they own.
+
+```bash
+php artisan user:create --email=owner@lucila.org --name="Lucila Owner"   # password asked (hidden)
+php artisan org:create  --name="Lucila" --owner=owner@lucila.org          # → slug lucila
+```
+
+### `user:create`
+
+Creates one account. `--password=` sets it (min 8); omitted, an interactive run
+asks for it hidden and typed twice (empty = generated), a non-interactive one
+generates it. A generated password is printed **once**. Prefer the prompt: a
+value on the command line lands in shell history. Refuses an email that
+already has an account (including a soft-deleted one) and leaves it untouched.
+
+`--superadmin` makes them a platform administrator. `--org=SLUG` adds them to
+an existing organization with `--role=` viewer | editor (default) | admin, and
+makes it the one they land in. Ownership is never given here; it comes from
+`org:create --owner`.
+
+### `org:create`
+
+Creates an organization with its default **All Resources** workspace.
+`--slug=` defaults to one derived from `--name` and must be free. `--type=`
+is business (default), individual, educational, government or non_profit.
+`--description=` is optional.
+
+`--owner=EMAIL` must be an **existing** user (run `user:create` first; the
+command never creates one as a side effect). They become its `owner`, own
+the default workspace, and land in it on their next login if they had no
+organization yet. Without `--owner`, the oldest platform admin owns it, and
+the command fails if there is none.
+
 ## MCP access
 
 ### `mcp:token`
@@ -259,11 +317,18 @@ php artisan mcp:token --org=acme --role=viewer \
 ```
 
 Options: `--email=` machine user (created if missing) · `--org=` slug or UUID
-· `--role=` viewer|editor|admin · `--abilities=` read,ask,write · `--name=`
+· `--role=` viewer|editor|admin — a new machine user defaults to editor; an
+existing one keeps its role unless `--role` is given, which then changes it ·
+`--abilities=` read,ask,write · `--name=`
 identifies the token (re-issuing with the same name revokes the old one —
 name it after the client/machine, e.g. `claude-desktop`, so you can rotate it
 later without accumulating orphaned tokens) · `--days=` lifetime (default: no
 expiry).
+
+**Which role an agent needs.** An editor may only change resources it owns, so
+an agent that only adds its own uploads works as editor; an agent that edits
+the organization's existing resources (titles, descriptions, fields of photos a
+curator uploaded) needs `--role=admin` together with `--abilities=read,write`.
 
 The **vault** MCP server (`vault-mcp/`) does not use tokens — published
 vaults connect keyless; private vaults use a **vault key** minted via

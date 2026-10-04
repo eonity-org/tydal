@@ -6,6 +6,73 @@ All notable changes to TYDAL are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-10-04
+
+### Added
+
+- **`user:create` and `org:create`.** Create a user (`--email`, optionally
+  `--org=SLUG --role=…` or `--superadmin`; the password is asked hidden, or
+  generated) and an organization (`--name`, `--slug`, `--owner=EMAIL`; the
+  owner must exist, and defaults to the oldest platform admin). See
+  [CLI.md](docs/CLI.md), "Users and organizations".
+- **A vault reports its language.** `/meta` carries `language`, the ingest
+  target collection's language (null for a vault with no ingest target), so a
+  product can default to it (Full Frame's exhibition language).
+  `@tydal/client` 1.6.0 types it.
+- **`vault:reslug-files [--vault=SLUG] [--dry-run]`** brings existing file-link
+  slugs to the current rule. Run it after upgrading, or after changing
+  `TYDAL_EXPORT_VISIBLE_FILENAMES`.
+- **`TYDAL_IMAGE_MAX_BYTES` for `@tydal/vault-mcp`** (default 716800, about
+  700 KB). `read_image` always asks for the `ai-prepared` rendition within this
+  budget, so a tool result fits Claude Desktop's 1 MB limit.
+
+### Changed
+
+- **Uploaded filenames no longer leave TYDAL.** A vault's file links, the
+  public JSON `filename` and download names used to come from the uploaded
+  file's name, which can carry private details (a person's name, a date).
+  Now a file's slug is a 3-character code derived from the file and the
+  vault's salt, and downloads are named after the resource:
+  `{resource-slug}-{code}.ext`, `{resource-slug}-{code}-{variant}.ext` for a
+  rendition, `{resource-slug}-preview.ext` for a preview. Set
+  `TYDAL_EXPORT_VISIBLE_FILENAMES=true` to keep the old behaviour. The
+  resource agent view and `@tydal/org-mcp`'s `get_resource` no longer return
+  the file `slug`. See [VAULT_SYSTEM.md](docs/architecture/VAULT_SYSTEM.md) §4.3.
+- **`mcp:token` keeps an existing member's role.** Re-issuing a token used to
+  reset the machine user to `editor`. Now a new member gets `--role` (default
+  `editor`), and an existing one keeps their role unless `--role` is given,
+  which changes it and says so. Editors may only change resources they own: an
+  agent that edits other people's resources needs `--role=admin`.
+- **`@tydal/org-mcp`'s `update_resource_metadata` answers briefly**: the
+  resource id, the fields updated with their saved values, and `updated_at`,
+  instead of the whole resource.
+- **`exhibitions:create`** asks for a new curator's password with the same
+  hidden, confirmed prompt as `user:create`.
+- **Brand.** The SPA's default theme is now **TYDAL**, in the logo's blues
+  (primary `#1A5D7D`), with the new logo, the "ty" isotype as favicon, an
+  `apple-touch-icon` and a 512 px icon. The tagline is "the typed Digital Asset
+  Layer" throughout. SVG versions of the logos are in
+  `frontend/src/assets/brand/`.
+- `@tydal/vault-mcp` and `@tydal/org-mcp` are now 1.1.0.
+
+### Fixed
+
+- **Vault link hashes could clash across vaults.** A link's hash must be
+  unique across the installation, but each vault encodes with its own salt, so
+  two vaults could produce the same hash. Creating the link then failed. The
+  hash now grows by a character until it's free.
+
+### Upgrading
+
+1. Add `TYDAL_EXPORT_VISIBLE_FILENAMES=false` to `backend/.env` (the
+   templates have it, with a comment). Leaving it out means the same.
+2. Run `php artisan vault:reslug-files`. **Human file addresses change**: a
+   `/v/{org}/{vault}/{resource}/{file}` address shared before the upgrade ends
+   in the old filename-based slug and stops resolving. Machine addresses
+   (`/h/{vault}/{link}`) and resource addresses are unchanged.
+3. MCP clients: add `TYDAL_IMAGE_MAX_BYTES` to the vault MCP's environment only
+   if you need a budget other than the default (see `mcp.example.json`).
+
 ## [1.1.0] — 2026-09-29
 
 ### Added
@@ -329,6 +396,7 @@ layer); as a shipped product it is version 1.0.0.
   [`MIGRATION_V1_V2.md`](docs/planning/MIGRATION_V1_V2.md), CLI guide, and
   OpenAPI 3.0 spec.
 
-[Unreleased]: https://github.com/eonity-org/tydal/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/eonity-org/tydal/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/eonity-org/tydal/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/eonity-org/tydal/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/eonity-org/tydal/releases/tag/v1.0.0

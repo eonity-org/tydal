@@ -159,16 +159,44 @@ silently kills its addresses — no cleanup jobs.
 
 ### 4.3 Resource & file slugs
 
-`vault_links` carries a `slug` generated from the resource name (resource
-links) or the filename (file links) — LLM-polished later, per the naming
-canon: slug = machine, name = human. This is the "Vault Indexing / Slug Map"
-of the architecture diagram — the human address form of the same link row the
-hash addresses.
+`vault_links` carries a `slug`, per the naming canon: slug = machine,
+name = human. This is the "Vault Indexing / Slug Map" of the architecture
+diagram — the human address form of the same link row the hash addresses.
+Slugs are written once, when a link is minted; renames don't move them.
+
+- **Resource links:** the slug of the resource name (`winter-catalogue`,
+  then `winter-catalogue-2` on a clash).
+- **File links, by default:** a 3-character code (`k7q`), base 36, from an
+  HMAC of the file id keyed with the vault salt. Never the uploaded filename
+  (settled 2026-10-03): filenames carry what a public address must not —
+  camera serials, dates, the names of people photographed — and files have no
+  name an author sets for the public. Keyed per vault, so the same file has
+  unrelated codes in two vaults and the id can't be worked back; independent of
+  name, role and order, so none of those changes moves the address. A sibling
+  clash takes the next 3 characters of the same HMAC.
+- **File links with `TYDAL_EXPORT_VISIBLE_FILENAMES=true`:** the slug of the
+  uploaded filename (`cover`), for installations whose filenames are written
+  for the public.
+
+The same setting governs every other place a filename could leave through a
+public vault surface (`/v/`, `/h/`, legacy `/vault/{hash}`): the `filename`
+field in JSON, and the name a download or inline view is saved under
+(`Content-Disposition`). Off, a file is named after its resource and its code
+(`winter-catalogue-k7q.jpg`, so a downloaded file stays recognisable outside the
+vault), a rendition after those and its name (`winter-catalogue-k7q-large.jpg` — the media library
+names conversions after the original file, so their storage names leak too),
+and a resource-level generated preview after the resource
+(`winter-catalogue-preview.png`). The extension is kept. On, the uploaded name
+everywhere — for the rare case where the exact original must be retrievable.
+One rule for both: if filenames are fit for addresses, they are fit to show.
+
+`vault:reslug-files` rewrites existing file links to the current rule — after
+upgrading from filename slugs, or after switching the setting.
 
 **Scoping follows the hierarchy** (settled 2026-07-03): resource slugs are
 unique per **vault**; file slugs are unique per **resource** (siblings only).
-So `album-one/cover` and `album-two/cover` coexist, and a file may carry its
-resource's name (`/doc/doc`). MySQL has no partial indexes, so each rule is
+So two albums can both hold a file `cover` (filename mode), and a file may
+carry its resource's name (`/doc/doc`). MySQL has no partial indexes, so each rule is
 enforced through a conditional generated column
 (`resource_slug_key`/`file_slug_key`) with its own unique index. Grammar
 words (§5 operations) are reserved in both scopes.
@@ -552,7 +580,9 @@ enforced by the boundary itself), while the vault-scoped server stays data + com
 
 - `get_vault` doubles as **self-description**: purpose, exposure policy,
   available facets, `search_modes` — an agent discovers what it may do
-  before trying.
+  before trying. It also carries `language`, the language the vault's texts
+  are written in (its ingest target collection's; null without one), so a
+  client can render them — and default its own interface — accordingly.
 - The diagram's camelCase names map 1:1 (`searchVault → search_resources`,
   `resolveSlug → resolve`, `getRelated → list_related`,
   `embedQuery → embed_query`). `summarizeVault` is deliberately **not**

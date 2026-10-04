@@ -109,6 +109,12 @@ export interface VaultMeta {
   /** `disabled` | `private` (credential required) | `public` (address alone). */
   state: 'disabled' | 'private' | 'public'
   resource_count: number
+  /**
+   * Language the vault's texts are written in (ISO code: `es`, `pt-BR`…) — its
+   * ingest target collection's. Null for a vault with no ingest target;
+   * absent on older backends.
+   */
+  language?: string | null
   tiers: { identity: boolean; chunks: boolean; binary: boolean; ask?: boolean }
   address_roles: string[]
   chunk_roles: string[]
@@ -168,6 +174,11 @@ export interface VaultTags {
 
 export interface VaultFileEntry {
   position: number | null
+  /**
+   * The file's public name. By default the resource slug, the address code and
+   * the original extension (`pepe-k7q.jpg`): uploaded filenames never leave TYDAL unless the
+   * installation sets TYDAL_EXPORT_VISIBLE_FILENAMES=true.
+   */
   filename: string
   slug: string | null
   mime_type: string
@@ -248,6 +259,13 @@ export interface VaultWriteCapabilities {
    * bytes, so a consumer can refuse a file before uploading it.
    */
   max_upload_bytes?: number
+  /**
+   * The organization the vault belongs to. Its id and name are told only to
+   * a write-key holder (the slug is public: `VaultMeta.organization`), so a
+   * product can file what it builds on the vault under its owner (Full
+   * Frame's per-organization studio). Absent on older backends.
+   */
+  organization?: { id: string; slug: string; name: string }
 }
 
 export interface VaultWriteResult {

@@ -406,16 +406,17 @@ describe('read_image', () => {
     'x-tydal-image-width': '640', 'x-tydal-image-height': '400',
   });
 
-  it('defaults to AI preparation and returns actual bytes and metadata', async () => {
+  it('defaults to AI preparation sized for an MCP client, and returns actual bytes and metadata', async () => {
     mock.onGet(`${V}/face/preview`).reply(cfg => {
-      expect(cfg.params).toEqual({ rendition: 'ai-prepared' });
+      // The budget always goes out, so TYDAL never prepares its 5 MiB default
+      expect(cfg.params).toEqual({ rendition: 'ai-prepared', max_bytes: '716800' });
       return [200, bytes, headers()];
     });
     const result = await readImage.handler({ resource_slug: 'face' }) as any;
     expect(result.content[0]).toEqual({ type: 'image', data: bytes.toString('base64'), mimeType: 'image/png' });
     expect(JSON.parse(result.content[1].text)).toEqual({
       rendition: 'ai-prepared', mime_type: 'image/png', bytes: 4,
-      width: 640, height: 400, max_bytes: 5242880,
+      width: 640, height: 400, max_bytes: 716800,
     });
   });
 

@@ -276,7 +276,7 @@ class VaultNamespaceController extends Controller
 
         $entry = $this->ops->resourceEntry($vault, $link);
 
-        return $entry instanceof File ? $this->stream($entry) : $this->vaultJson($entry);
+        return $entry instanceof File ? $this->stream($vault, $entry) : $this->vaultJson($entry);
     }
 
     public function resourceOperation(string $orgSlug, string $vaultSlug, string $resourceSlug, string $op, Request $request): StreamedResponse|JsonResponse
@@ -304,7 +304,7 @@ class VaultNamespaceController extends Controller
 
         $file = $this->ops->fileEntry($vault, $link);
 
-        return $file ? $this->stream($file) : $this->denied();
+        return $file ? $this->stream($vault, $file) : $this->denied();
     }
 
     public function fileOperation(string $orgSlug, string $vaultSlug, string $resourceSlug, string $fileSlug, string $op, Request $request): StreamedResponse|JsonResponse
@@ -404,9 +404,10 @@ class VaultNamespaceController extends Controller
         }
 
         $body = ['ok' => true, 'methods' => $probe['methods']];
-        // Only a write-key holder learns whose vault this is — the hash
-        // address itself keeps revealing nothing. A product uses it to file an
-        // exhibition under its organization (Full Frame's per-org studio).
+        // Only a write-key holder learns the organization's id and name; its
+        // slug is no secret (it's in every /v/{org}/… address and in the
+        // vault's /meta). A product uses this to file an exhibition under its
+        // organization (Full Frame's per-org studio).
         $vault->loadMissing('organization:id,slug,name');
         $body['organization'] = $vault->organization->only(['id', 'slug', 'name']);
         if (in_array('ingest', $probe['methods'], true)) {
@@ -539,12 +540,12 @@ class VaultNamespaceController extends Controller
         if ($link->file_id !== null) {
             $file = $this->ops->fileEntry($link->vault, $link);
 
-            return $file ? $this->stream($file) : $this->denied();
+            return $file ? $this->stream($link->vault, $file) : $this->denied();
         }
 
         $entry = $this->ops->resourceEntry($link->vault, $link);
 
-        return $entry instanceof File ? $this->stream($entry) : $this->vaultJson($entry);
+        return $entry instanceof File ? $this->stream($link->vault, $entry) : $this->vaultJson($entry);
     }
 
     public function hashOperation(string $vaultHash, string $linkHash, string $op, Request $request): StreamedResponse|JsonResponse
@@ -574,7 +575,7 @@ class VaultNamespaceController extends Controller
                 $file = $this->ops->firstExposedFile($vault, $link);
 
                 return $file
-                    ? Storage::disk($file->disk)->download($file->path, $file->filename)
+                    ? Storage::disk($file->disk)->download($file->path, $this->links->publicFilename($vault, $file))
                     : $this->notFound();
             case 'meta':
                 return $this->vaultJson($this->ops->resourceMeta($vault, $link));
@@ -706,7 +707,7 @@ class VaultNamespaceController extends Controller
                 $file = $this->ops->fileDownload($vault, $link);
 
                 return $file
-                    ? Storage::disk($file->disk)->download($file->path, $file->filename)
+                    ? Storage::disk($file->disk)->download($file->path, $this->links->publicFilename($vault, $file))
                     : $this->denied();
             case 'renditions':
                 $payload = $this->ops->fileRenditions($vault, $link);
@@ -778,11 +779,11 @@ class VaultNamespaceController extends Controller
             : null;
     }
 
-    private function stream(File $file): StreamedResponse
+    private function stream(Vault $vault, File $file): StreamedResponse
     {
         return Storage::disk($file->disk)->response(
             $file->path,
-            $file->filename,
+            $this->links->publicFilename($vault, $file),
             ['Content-Type' => $file->mime_type]
         );
     }

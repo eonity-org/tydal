@@ -17,9 +17,17 @@ The SDK versions independently of the TYDAL product release documented in
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-10-02
+
 ### Added
 - `VaultWriteCapabilities.max_upload_bytes` — reported with `w:ingest`: the
   largest file TYDAL accepts, so a consumer can refuse a file before uploading.
+- `VaultMeta.language` — the language the vault's texts are written in (its
+  ingest target collection's; null without one), so a client can default its
+  own interface to it.
+- `VaultWriteCapabilities.organization` — `{ id, slug, name }` of the vault's
+  organization, which the write probe already returned to a write-key holder;
+  now typed.
 
 ## [1.5.0] — 2026-09-25
 

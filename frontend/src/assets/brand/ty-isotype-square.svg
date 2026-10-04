@@ -1,6 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-27.5 -43 1260 1260" width="32" height="32">
-<title>TYDAL</title>
-<style>@media (prefers-color-scheme: dark) { path { fill: #fff } }</style>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-98 -114 1400 1400" width="140" height="140" role="img" aria-label="ty">
+<title>ty</title>
 <defs><linearGradient id="ty-line" x1="433" x2="685" y1="0" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#1a5d7d"/><stop offset="1" stop-color="#0a5475"/></linearGradient></defs>
 <path fill="url(#ty-line)" d="M431 1088H687V1108H431Z"/>
 <path fill="#5295b3" d="M100 1051C124.9 1051 145 1071.1 145 1096C145 1120.9 124.9 1141 100 1141C75.1 1141 55 1120.9 55 1096C55 1071.1 75.1 1051 100 1051Z"/>

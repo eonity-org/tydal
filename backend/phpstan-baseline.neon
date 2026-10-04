@@ -415,30 +415,6 @@ parameters:
 			path: app/Services/FileStorageService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/OrganizationService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$slug\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/OrganizationService.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:users\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Services/OrganizationService.php
-
-		-
-			message: '#^Method App\\Services\\OrganizationService\:\:createOrganization\(\) should return App\\Models\\Organization but returns Illuminate\\Database\\Eloquent\\Model\.$#'
-			identifier: return.type
-			count: 1
-			path: app/Services/OrganizationService.php
-
-		-
 			message: '#^Method App\\Services\\OrganizationService\:\:getOrganizationById\(\) should return App\\Models\\Organization\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
 			identifier: return.type
 			count: 1
