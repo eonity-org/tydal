@@ -70,7 +70,7 @@ const toolHandlers = new Map(TOOLS.map((t) => [t.definition.name, t.handler]));
 // ── Server setup ──────────────────────────────────────────────────────────────
 
 const server = new Server(
-  { name: 'tydal-vault-mcp', version: '1.0.0' },
+  { name: 'tydal-vault-mcp', version: '1.1.0' },
   { capabilities: { tools: {} } },
 );
 

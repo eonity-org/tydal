@@ -65,7 +65,7 @@ const toolHandlers = new Map(
 // ── Server setup ──────────────────────────────────────────────────────────────
 
 const server = new Server(
-  { name: 'tydal-mcp', version: '1.0.0' },
+  { name: 'tydal-mcp', version: '1.1.0' },
   { capabilities: { tools: {} } },
 );
 
