@@ -18,7 +18,7 @@ import {
   Snackbar,
   Alert,
 } from '@mui/material'
-import { Unarchive, ArrowUpward, ArrowDownward, ChevronLeft, ChevronRight } from '@mui/icons-material'
+import { ArrowUpward, ArrowDownward, ChevronLeft, ChevronRight } from '@mui/icons-material'
 import Header from '../components/layout/Header'
 import NarrowDivider from '../components/ui/NarrowDivider'
 import SegmentedChoice from '../components/ui/SegmentedChoice'
@@ -270,12 +270,13 @@ function ArchivedPage() {
                                 sx={{ height: 18, fontSize: '0.75rem', fontWeight: 500, letterSpacing: 0.5, bgcolor: 'grey.100', color: 'text.disabled', borderRadius: '4px' }}
                               />
                               {mayUpdate && (
-                                <Tooltip title="Set live">
+                                <Tooltip title="Show it again in listings, search and vaults">
                                   <span>
-                                    <IconButton size="small" aria-label="Set live" disabled={isActing} onClick={() => handleSetLive(resource)}
-                                      sx={{ p: 0.5, color: 'text.secondary', '&:hover': { color: 'primary.main' } }}>
-                                      {isActing ? <CircularProgress size={14} /> : <Unarchive sx={{ fontSize: '1rem' }} />}
-                                    </IconButton>
+                                    <Button size="small" variant="text" aria-label="Set live" disabled={isActing} onClick={() => handleSetLive(resource)}
+                                      startIcon={isActing ? <CircularProgress size={12} /> : undefined}
+                                      sx={{ minWidth: 0, px: 1, py: 0.25, fontSize: '0.75rem', fontWeight: 600, lineHeight: 1.4 }}>
+                                      Set live
+                                    </Button>
                                   </span>
                                 </Tooltip>
                               )}

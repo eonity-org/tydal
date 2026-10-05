@@ -209,7 +209,7 @@ export function BulkActions({ ids, onChanged, onRemoved, size = 'small' }: BulkA
         )}
 
         {mayState && (
-        <Tooltip title="Publish, withdraw, or send back to draft">
+        <Tooltip title="Publish or archive">
           <span>
             <Button
               variant="contained"
