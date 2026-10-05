@@ -341,6 +341,12 @@ paths:
       summary: Restore all trashed resources
       responses:
         "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/archived:
+    get:
+      tags: [Resources]
+      summary: List archived resources
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
   /resources/{id}:
     get:
       tags: [Resources]

@@ -22,6 +22,17 @@ All notable changes to TYDAL are documented here. The format follows
   and [CLI.md](docs/CLI.md#index-prefix-elasticsearch_index_prefix), with the
   migration recipe for an existing installation. The test suite forces
   `test_`, so it never touches a dev installation's indices.
+- **Archived page** (#25): archived resources left every listing, search and
+  vault, and no page listed them, so once out of the basket they couldn't be
+  found again in the web app. New `GET /api/v1/resources/archived` (MySQL, not
+  Elasticsearch) lists the current organization's `state = archived`
+  resources with the trash's rule — editors and viewers see their own,
+  administrators and owners see all — sorting (date, name, ID) and
+  pagination. The SPA's new **Archived** page (`/archived`, linked beside
+  *Deleted resources*) is modelled on the trash: **Set live** per card and
+  **Set all live**, both through `POST /resources/bulk/state` in batches of
+  up to 200, reporting skipped resources like the basket and leaving them
+  listed. User guide chapters 5 and 7.
 
 ### Fixed
 

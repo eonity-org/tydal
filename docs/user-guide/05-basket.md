@@ -61,6 +61,14 @@ A resource's **state** decides whether anyone sees it:
   TYDAL asks you to confirm before archiving, and you can set the resource back to
   Live at any time.
 
+Archived resources no longer appear in the library or in searches. To find them
+again, open **Archived**, next to *Deleted resources* at the far right of the
+second row. It works like the trash ([chapter 7](07-trash.md)): editors see the
+resources they own, administrators and owners see every archived resource in the
+organization, sorted by date, name or ID. The icon on each card sets that
+resource **live** again; **Set all live** does it for the whole list. If some
+can't be changed, TYDAL says how many it skipped and they stay on the page.
+
 ### When some resources can't be changed
 
 You may gather resources you aren't allowed to change, for example an editor's

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Enums\FileRelation;
 use App\Enums\FileRole;
+use App\Enums\ResourceState;
 use App\Enums\SystemFilePurpose;
 use App\Exceptions\InvalidResourceComposition;
 use App\Http\Controllers\API\Concerns\RespondsToBulkActions;
@@ -1291,6 +1292,44 @@ class ResourceController extends Controller
             ->orderBy($sortBy, $sortDir);
 
         // Non-admins only see their own deleted resources
+        if (! in_array(currentOrganizationRole(), ['admin', 'owner'])) {
+            $query->where('user_owner_id', $user->id);
+        }
+
+        $resources = $query->paginate($request->input('limit', 48));
+
+        return response()->json([
+            'success' => true,
+            'data' => $resources->items(),
+            'total' => $resources->total(),
+            'per_page' => $resources->perPage(),
+            'current_page' => $resources->currentPage(),
+            'last_page' => $resources->lastPage(),
+        ]);
+    }
+
+    /**
+     * List archived resources for the current organisation.
+     *
+     * Archiving takes a resource out of every listing, search and vault, so
+     * this is the one place it can be found again (#25). Same scope and rule
+     * as the trash: non-admins see only their own. Reads MySQL, not ES —
+     * archived resources are removed from the indices on purpose.
+     */
+    public function archived(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $orgId = currentOrganizationId();
+
+        $sortBy = in_array($request->input('sort_by'), ['name', 'updated_at', 'id']) ? $request->input('sort_by') : 'updated_at';
+        $sortDir = $request->input('sort_dir', 'desc') === 'asc' ? 'asc' : 'desc';
+
+        $query = Resource::where('state', ResourceState::ARCHIVED)
+            ->where('organization_id', $orgId)
+            ->with(['snapshotFile.media', 'previewSnapshotSystemFile', 'collection'])
+            ->orderBy($sortBy, $sortDir);
+
+        // Non-admins only see their own archived resources
         if (! in_array(currentOrganizationRole(), ['admin', 'owner'])) {
             $query->where('user_owner_id', $user->id);
         }

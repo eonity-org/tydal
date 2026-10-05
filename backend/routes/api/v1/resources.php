@@ -24,6 +24,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/resources/trashed/restore-all', [ResourceController::class, 'restoreAll'])
         ->name('resources.trashed.restore-all');
 
+    // Archived resources (state = archived, not soft-deleted) — the Archived
+    // page. Literal path, so it must stay above any /resources/{id} route.
+    Route::get('/resources/archived', [ResourceController::class, 'archived'])
+        ->name('resources.archived');
+
     Route::patch('/resources/{id}/restore', [ResourceController::class, 'restore'])
         ->name('resources.restore');
 
