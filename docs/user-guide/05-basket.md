@@ -65,9 +65,10 @@ Archived resources no longer appear in the library or in searches. To find them
 again, open **Archived**, next to *Deleted resources* at the far right of the
 second row. It works like the trash ([chapter 7](07-trash.md)): editors see the
 resources they own, administrators and owners see every archived resource in the
-organization, sorted by date, name or ID. The icon on each card sets that
-resource **live** again; **Set all live** does it for the whole list. If some
-can't be changed, TYDAL says how many it skipped and they stay on the page.
+organization, sorted by date, name or ID. Each card has two icons: the first
+sets that resource **live** again, the second moves it to the **trash** (after
+confirming). **Set all live** brings back the whole list. If some can't be
+changed, TYDAL says how many it skipped and they stay on the page.
 
 ### When some resources can't be changed
 

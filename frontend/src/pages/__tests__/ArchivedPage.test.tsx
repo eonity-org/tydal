@@ -11,12 +11,13 @@ import { usePermissions } from '../../hooks/usePermissions'
 
 vi.mock('../../hooks/usePermissions', () => ({ usePermissions: vi.fn() }))
 vi.mock('../../components/layout/Header', () => ({ default: () => null }))
-const { getArchivedResources, bulkState } = vi.hoisted(() => ({
+const { getArchivedResources, bulkState, deleteResource } = vi.hoisted(() => ({
   getArchivedResources: vi.fn(),
   bulkState: vi.fn(),
+  deleteResource: vi.fn(),
 }))
 vi.mock('../../api/resourceService', () => ({
-  default: { getArchivedResources, bulkState },
+  default: { getArchivedResources, bulkState, deleteResource },
 }))
 
 const archived = {
@@ -68,6 +69,24 @@ describe('ArchivedPage', () => {
 
     await waitFor(() => expect(bulkState).toHaveBeenCalledWith([archived.id], 'live'))
     await waitFor(() => expect(screen.queryByText('Harbour at dawn')).toBeNull())
+  })
+
+  it('moves a resource to the trash after confirming', async () => {
+    withPermissions(['resources.update', 'resources.delete'])
+    deleteResource.mockReset().mockResolvedValue(true)
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Move to the trash' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Move to trash' }))
+
+    await waitFor(() => expect(deleteResource).toHaveBeenCalledWith(archived.id))
+    await waitFor(() => expect(screen.queryByText('Harbour at dawn')).toBeNull())
+  })
+
+  it('offers no delete without the delete permission', async () => {
+    withPermissions(['resources.update'])
+    renderPage()
+    expect(await screen.findByRole('button', { name: 'Set live' })).not.toBeNull()
+    expect(screen.queryByRole('button', { name: 'Move to the trash' })).toBeNull()
   })
 
   it('keeps a skipped resource listed', async () => {

@@ -18,7 +18,7 @@ import {
   Snackbar,
   Alert,
 } from '@mui/material'
-import { ArrowUpward, ArrowDownward, ChevronLeft, ChevronRight } from '@mui/icons-material'
+import { Restore, Delete, ArrowUpward, ArrowDownward, ChevronLeft, ChevronRight } from '@mui/icons-material'
 import Header from '../components/layout/Header'
 import NarrowDivider from '../components/ui/NarrowDivider'
 import SegmentedChoice from '../components/ui/SegmentedChoice'
@@ -49,6 +49,7 @@ function ArchivedPage() {
   const [lastPage, setLastPage] = useState(1)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [confirmSetAll, setConfirmSetAll] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<ResourceData | null>(null)
   const [setAllLoading, setSetAllLoading] = useState(false)
   const [sortBy, setSortBy] = useState<SortKey>('updated_at')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -57,6 +58,7 @@ function ArchivedPage() {
   // Viewers may list (like the trash) but not change state: hide what can only fail.
   const { can, ready: permissionsReady } = usePermissions()
   const mayUpdate = permissionsReady && can('resources.update')
+  const mayDelete = permissionsReady && can('resources.delete')
 
   const limit = 48
 
@@ -98,6 +100,22 @@ function ArchivedPage() {
       } else {
         setReport({ message: `${resource.name} was skipped — you may not have permission.`, severity: 'warning' })
       }
+    } catch (error) {
+      setReport({ message: getApiError(error).message, severity: 'error' })
+    }
+    setActionLoading(null)
+  }
+
+  // Deleting from here works as it does in the library: the resource moves to
+  // the trash (soft delete), where it can be restored or deleted for good.
+  const handleDelete = async (resource: ResourceData) => {
+    setConfirmDelete(null)
+    setActionLoading(resource.id)
+    try {
+      await resourceService.deleteResource(resource.id)
+      setResources((prev) => prev.filter((r) => r.id !== resource.id))
+      setTotal((prev) => prev - 1)
+      setReport({ message: `${resource.name} moved to the trash.`, severity: 'success' })
     } catch (error) {
       setReport({ message: getApiError(error).message, severity: 'error' })
     }
@@ -269,16 +287,29 @@ function ArchivedPage() {
                                 size="small"
                                 sx={{ height: 18, fontSize: '0.75rem', fontWeight: 500, letterSpacing: 0.5, bgcolor: 'grey.100', color: 'text.disabled', borderRadius: '4px' }}
                               />
-                              {mayUpdate && (
-                                <Tooltip title="Show it again in listings, search and vaults">
-                                  <span>
-                                    <Button size="small" variant="text" aria-label="Set live" disabled={isActing} onClick={() => handleSetLive(resource)}
-                                      startIcon={isActing ? <CircularProgress size={12} /> : undefined}
-                                      sx={{ minWidth: 0, px: 1, py: 0.25, fontSize: '0.75rem', fontWeight: 600, lineHeight: 1.4 }}>
-                                      Set live
-                                    </Button>
-                                  </span>
-                                </Tooltip>
+                              {(mayUpdate || mayDelete) && (
+                                <Stack direction="row" spacing={0.5}>
+                                  {mayUpdate && (
+                                    <Tooltip title="Set live">
+                                      <span>
+                                        <IconButton size="small" aria-label="Set live" disabled={isActing} onClick={() => handleSetLive(resource)}
+                                          sx={{ p: 0.5, color: 'text.secondary', '&:hover': { color: 'primary.main' } }}>
+                                          {isActing ? <CircularProgress size={14} /> : <Restore sx={{ fontSize: '1rem' }} />}
+                                        </IconButton>
+                                      </span>
+                                    </Tooltip>
+                                  )}
+                                  {mayDelete && (
+                                    <Tooltip title="Move to the trash">
+                                      <span>
+                                        <IconButton size="small" aria-label="Move to the trash" disabled={isActing} onClick={() => setConfirmDelete(resource)}
+                                          sx={{ p: 0.5, color: 'text.secondary', '&:hover': { color: 'error.main' } }}>
+                                          <Delete sx={{ fontSize: '1rem' }} />
+                                        </IconButton>
+                                      </span>
+                                    </Tooltip>
+                                  )}
+                                </Stack>
                               )}
                             </Stack>
 
@@ -348,6 +379,23 @@ function ArchivedPage() {
           <Button variant="contained" onClick={handleSetAllLive} disabled={setAllLoading}
             startIcon={setAllLoading ? <CircularProgress size={14} color="inherit" /> : undefined}>
             Set all live
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirm move to trash */}
+      <Dialog open={Boolean(confirmDelete)} onClose={() => setConfirmDelete(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Move to the trash?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            <strong>{confirmDelete?.name}</strong> will be moved to the trash. You can restore it from
+            Deleted resources; it is deleted for good after 30 days there.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDelete(null)}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={() => confirmDelete && handleDelete(confirmDelete)}>
+            Move to trash
           </Button>
         </DialogActions>
       </Dialog>
