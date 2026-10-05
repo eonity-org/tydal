@@ -64,7 +64,7 @@ every collection and category.
 |---|---|---|
 | `owner` | 100 | everything, including deleting the organization and appointing another owner |
 | `admin` | 75 | manage people and content; cannot delete the organization or mint an owner |
-| `editor` | 50 | create and edit content, curate workspace membership |
+| `editor` | 50 | create and edit content, curate workspace membership, open AiTy Review batches (the wizard's Auto mode; not ordinary workspaces) |
 | `viewer` | 25 | read, download |
 
 Retired: `org-admin` and `org-member`. Neither could ever reach the database —

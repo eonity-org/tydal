@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import {
-  Box, Button, Chip, Divider, IconButton, MenuItem, Select,
-  Stack, Switch, Tab, Tabs, TextField, Typography,
+  Box, Button, Chip, Divider, IconButton,
+  Stack, Tab, Tabs, TextField, Typography,
 } from '@mui/material'
 import AudiotrackIcon from '@mui/icons-material/Audiotrack'
 import ArticleIcon from '@mui/icons-material/Article'
@@ -13,6 +13,7 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
 
 import { InlineSuggestion } from '../suggestions/InlineSuggestion'
 import { SuggestionChip } from '../suggestions/SuggestionChip'
+import { SchemeFieldInput } from './SchemeFieldInput'
 import type { SchemeField } from '../../api/collectionService'
 import type { WizardResourceRecord } from './ResourceWizard'
 import type { AityPollEntry } from '../../hooks/useAityPolling'
@@ -111,61 +112,14 @@ export function CarouselResourceEditor({ record, filePollEntries, defaultFilenam
     !!suggestions?.suggestedDescription && !record.descSuggestionDismissed
 
   // ── form field renderer ──────────────────────────────────────────────────────
-  const renderSchemeField = (field: SchemeField) => {
-    const val = record.metadata[field.name] ?? ''
-    const setVal = (v: any) =>
-      onChange(record.localId, { metadata: { ...record.metadata, [field.name]: v } })
-
-    if (field.type === 'boolean') {
-      return (
-        <Stack direction="row" alignItems="center" spacing={1} key={field.name}>
-          <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
-            {field.display_name}
-          </Typography>
-          <Switch
-            size="small"
-            checked={!!val}
-            onChange={(e) => setVal(e.target.checked)}
-          />
-        </Stack>
-      )
-    }
-
-    if (field.type === 'select' && field.validators?.in) {
-      return (
-        <Select
-          key={field.name}
-          size="small"
-          fullWidth
-          displayEmpty
-          value={val}
-          onChange={(e) => setVal(e.target.value)}
-          renderValue={(v) => v || <Typography color="text.disabled">{field.display_name}</Typography>}
-        >
-          {!field.required && <MenuItem value=""><em>— none —</em></MenuItem>}
-          {field.validators.in.map((opt) => (
-            <MenuItem key={opt} value={opt}>{opt}</MenuItem>
-          ))}
-        </Select>
-      )
-    }
-
-    return (
-      <TextField
-        key={field.name}
-        size="small"
-        fullWidth
-        label={field.display_name}
-        required={field.required}
-        type={field.type === 'integer' ? 'number' : field.type === 'date' ? 'date' : 'text'}
-        multiline={field.type === 'text'}
-        rows={field.type === 'text' ? 2 : undefined}
-        value={val}
-        onChange={(e) => setVal(e.target.value)}
-        InputLabelProps={field.type === 'date' ? { shrink: true } : undefined}
-      />
-    )
-  }
+  const renderSchemeField = (field: SchemeField) => (
+    <SchemeFieldInput
+      key={field.name}
+      field={field}
+      value={record.metadata[field.name]}
+      onChange={(v) => onChange(record.localId, { metadata: { ...record.metadata, [field.name]: v } })}
+    />
+  )
 
   const editableFields = schemeFields.filter((f) => f.display_in_form && f.storage === 'metadata')
 

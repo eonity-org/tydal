@@ -177,6 +177,17 @@ class WorkspaceService {
     }
   }
 
+  /**
+   * Open an AiTy Review batch — the system-managed workspace the upload
+   * wizard's Auto mode creates (editors may). Unlike createWorkspace this
+   * throws the SDK's TydalApiError, so the caller can show why it failed.
+   */
+  async createAityReviewBatch(name: string): Promise<Workspace> {
+    const body = await tydal.workspaces.create<{ workspace?: Workspace }>({ name, purpose: 'aity_review' })
+    if (!body?.workspace) throw new Error('The server did not return the new batch.')
+    return body.workspace
+  }
+
   async updateWorkspace(id: string, data: { name?: string; description?: string }): Promise<Workspace | null> {
     try {
       const body = await tydal.workspaces.update<{ workspace?: Workspace }>(id, data)

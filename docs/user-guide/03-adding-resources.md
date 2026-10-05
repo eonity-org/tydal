@@ -29,21 +29,37 @@ Choose how the files become resources:
 
 Then drop the files onto the box or click it to browse. Files the collection
 doesn't accept are refused here. The list shows what you've chosen; remove any
-with the cross. Click **Next**.
+with the cross.
+
+If the collection has **required fields** (an *Author* on a photo-exhibition
+collection, say), a **Required by this collection** panel appears below the
+files, with one box per required field. What you type there is applied to every
+resource in this upload; you can still change it per resource in **Review**.
+**Next** stays greyed out until every required field has a value, and the panel
+names the ones still missing. Collections without required fields don't show the
+panel; their optional fields are filled in at **Review**.
+
+Click **Next**.
 
 ![Batch mode with three photographs chosen](images/03-wizard-mode-and-files.png)
 
 ### 2 · Upload
 
-The files upload one by one, each with a tick when it's done. Then choose how to
-continue:
+The files upload one by one, each with a tick when it's done. A file that fails
+shows the reason beside it. If none of them could be uploaded, the wizard says
+why and offers only **Back**, so you can correct it and try again.
+
+Then choose how to continue:
 
 - **Interactive**: stay in the wizard and review what the AI suggests for each
   resource before saving. Recommended when you want to read every title.
 - **Auto**: let AiTy finish in the background and apply its suggestions by
   itself. You choose what it may apply (name and description, tags), can let it
   merge near-identical tags (**Smart tag clustering**), and can give the batch a
-  workspace name. Follow its progress in **AiTy Review** (below).
+  workspace name. Follow its progress in **AiTy Review** (below). Auto works
+  for editors as well as administrators: the batch is a system workspace that
+  anyone who can upload resources may open. If the batch can't be created or
+  started, the wizard stays open and shows the reason instead of closing.
 
 ![Upload done: choose Interactive or Auto](images/03-wizard-upload.png)
 
@@ -69,7 +85,7 @@ Go through the resources one by one with the arrows at the top. For each, you
 can type the name and description yourself or click **Apply suggestion** to use
 AiTy's, and click a suggested tag (**+ street musician**, **+ canal**…) to add it. The
 percentage beside a tag is how confident AiTy is. Below them are the
-collection's own fields.
+collection's own fields, already filled with anything you entered at step 1.
 
 ![Reviewing one resource](images/03-wizard-review.png)
 

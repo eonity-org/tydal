@@ -11,6 +11,13 @@ use Illuminate\Auth\Access\HandlesAuthorization;
  * Workspace membership is what a vault projects, so creating and deleting
  * workspaces is an administrative act. Curating which resources sit in one is
  * content work, and editors may do it.
+ *
+ * One kind of workspace is not editorial: an AiTy Review batch
+ * (`purpose = aity_review`), which the upload wizard's Auto mode opens to
+ * group the files it just uploaded for background enrichment. It is
+ * system-managed (`is_system`, hidden from the workspace list, never indexed
+ * for a vault), so opening one is part of uploading, not a publishing
+ * decision — whoever may create resources may open one.
  */
 class WorkspacePolicy
 {
@@ -38,6 +45,16 @@ class WorkspacePolicy
     {
         return $this->belongsToCurrentOrganization($user)
             && $user->can('workspaces.create');
+    }
+
+    /**
+     * Open an AiTy Review batch. Granted to anyone who may create resources
+     * (editors and up) as well as anyone who may create workspaces at all.
+     */
+    public function createAityReviewBatch(User $user): bool
+    {
+        return $this->belongsToCurrentOrganization($user)
+            && ($user->can('workspaces.create') || $user->can('resources.create'));
     }
 
     public function update(User $user, Workspace $workspace): bool

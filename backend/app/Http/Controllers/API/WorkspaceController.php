@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Enums\AityStatus;
 use App\Enums\ResourceState;
+use App\Enums\WorkspacePurpose;
 use App\Http\Controllers\API\Concerns\RespondsToBulkActions;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AskWorkspaceRequest;
@@ -82,14 +83,19 @@ class WorkspaceController extends Controller
      */
     public function store(StoreWorkspaceRequest $request): JsonResponse
     {
-        $this->authorize('create', Workspace::class);
-
         $data = $request->validated();
+        $isAityBatch = ($data['purpose'] ?? null) === WorkspacePurpose::AITY_REVIEW->value;
+
+        // An AiTy Review batch is the system-managed workspace the upload
+        // wizard opens; editors may open one. Any other workspace is editorial
+        // and stays an admin act (WorkspacePolicy).
+        $this->authorize($isAityBatch ? 'createAityReviewBatch' : 'create', Workspace::class);
+
         $data['organization_id'] = currentOrganizationId();
         $data['user_owner_id'] = auth()->id();
 
         // Batch upload workspaces are system-managed — hide from the normal workspace list
-        if (($data['purpose'] ?? null) === 'aity_review') {
+        if ($isAityBatch) {
             $data['is_system'] = true;
         }
 

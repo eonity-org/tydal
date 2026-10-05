@@ -207,6 +207,10 @@ class AityController extends Controller
             return response()->json(['success' => false, 'message' => 'Workspace not found.'], 404);
         }
 
+        // The job writes names, descriptions and tags onto the workspace's
+        // resources: the same right as curating its membership (editors and up).
+        $this->authorize('manageResources', $workspace);
+
         if ($workspace->auto_approve_status === 'running') {
             return response()->json(['success' => false, 'message' => 'Auto-approval is already running for this workspace.'], 409);
         }

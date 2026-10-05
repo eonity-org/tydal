@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   Alert, Box, Button, Card, CardActionArea, CardContent, Checkbox,
   Chip, CircularProgress, Dialog,
@@ -13,9 +13,10 @@ import VisibilityIcon from '@mui/icons-material/Visibility'
 
 import collectionService, { Collection, SchemeField } from '../../api/collectionService'
 import resourceService, { ResourceData } from '../../api/resourceService'
-import workspaceService from '../../api/workspaceService'
+import workspaceService, { Workspace } from '../../api/workspaceService'
 import semanticTagService from '../../api/semanticTagService'
 import { dispatchAutoApproveWorkspace } from '../../api/aityService'
+import { getApiError } from '../../utils/apiError'
 
 import { useAityPolling } from '../../hooks/useAityPolling'
 import type { FileSuggestion } from '../../hooks/useAiSuggestionsPoller'
@@ -25,6 +26,7 @@ import { AbandonDialog } from './AbandonDialog'
 import { ModeUploadStep, WizardMode, WizardFileEntry } from './steps/ModeUploadStep'
 import { AiTyStep } from './steps/AiTyStep'
 import { CarouselStep } from './steps/CarouselStep'
+import { hasFieldValue, requiredFieldsMetadata, requiredMetadataFields } from './schemeFields'
 
 // ─── wizard types ─────────────────────────────────────────────────────────────
 
@@ -67,6 +69,13 @@ function inferResourceType(mimeType: string): string {
 
 function filenameWithoutExtension(filename: string): string {
   return filename.replace(/\.[^.]+$/, '')
+}
+
+/** The server's message plus any field errors it names (e.g. which required field is empty). */
+function describeError(err: unknown): string {
+  const { message, fieldErrors } = getApiError(err)
+  const details = fieldErrors ? Object.values(fieldErrors).filter((m) => m !== message) : []
+  return details.length > 0 ? `${message} ${details.join(' ')}` : message
 }
 
 function defaultWorkspaceName(): string {
@@ -130,6 +139,13 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
   // Workspace name for Auto mode
   const [workspaceName, setWorkspaceName]         = useState(defaultWorkspaceName)
   const [isSavingWorkspace, setIsSavingWorkspace] = useState(false)
+  const [autoError, setAutoError]                 = useState<string | null>(null)
+  // The batch opened by a previous, partly failed Auto attempt — reused on
+  // retry so a second click doesn't leave an empty batch behind.
+  const autoBatchRef = useRef<Workspace | null>(null)
+
+  // Step 1: batch-wide values for the scheme's required fields
+  const [requiredValues, setRequiredValues] = useState<Record<string, any>>({})
 
   // Abandon dialog
   const [abandonOpen, setAbandonOpen]     = useState(false)
@@ -164,6 +180,9 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
       setRecords([])
       setCarouselIdx(0)
       setWorkspaceName(defaultWorkspaceName())
+      setRequiredValues({})
+      setAutoError(null)
+      autoBatchRef.current = null
       setExitPath(null)
       setAutoApplyNameDesc(true)
       setAutoApplyTags(true)
@@ -280,15 +299,28 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
     restartPolling(rec.resourceId, fileId)
     try {
       await resourceService.aityEnrichFile(rec.resourceId, fileId)
-    } catch { /* non-fatal */ }
+    } catch {
+      // Non-fatal: the restarted poller reads the file's real stage, so a
+      // retry the server refused shows up as "failed" again on the card.
+    }
   }, [records, restartPolling])
 
-  const schemeFields: SchemeField[] = collection?.scheme?.fields ?? []
+  const schemeFields: SchemeField[] = useMemo(() => collection?.scheme?.fields ?? [], [collection])
   const acceptedMimeTypes: string[] = collection?.scheme?.accepted_mimetypes ?? []
+  const requiredFields = useMemo(() => requiredMetadataFields(schemeFields), [schemeFields])
+  const missingRequired = requiredFields.filter((f) => !hasFieldValue(f, requiredValues[f.name]))
+
+  const handleRequiredValueChange = useCallback((name: string, value: any) => {
+    setRequiredValues((prev) => ({ ...prev, [name]: value }))
+  }, [])
 
   // ── step 1 → step 2 transition ───────────────────────────────────────────────
   const handleProceedToStep2 = useCallback(() => {
     cancelledRef.current = false
+
+    // The step-1 required values: every resource is created with them, and
+    // Review starts from them (still editable per resource).
+    const initialMetadata = requiredFieldsMetadata(requiredFields, requiredValues)
 
     let initialRecords: WizardResourceRecord[] = []
 
@@ -305,7 +337,7 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
         description: '',
         acceptedTagLabels: [],
         pendingTags: [],
-        metadata: {},
+        metadata: { ...initialMetadata },
       }))
     } else if (mode === 'components') {
       const primary = files[0]
@@ -321,7 +353,7 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
         description: '',
         acceptedTagLabels: [],
         pendingTags: [],
-        metadata: {},
+        metadata: { ...initialMetadata },
         fileUploadStatuses: files.map(() => 'pending' as const),
       }]
     } else {
@@ -339,7 +371,7 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
         description: '',
         acceptedTagLabels: [],
         pendingTags: [],
-        metadata: {},
+        metadata: { ...initialMetadata },
         fileUploadStatuses: [primaryFe, ...supporting].map(() => 'pending' as const),
       }]
     }
@@ -362,11 +394,12 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
             type: inferResourceType(rec.file.type),
             collection_id: collectionId,
             state: 'draft',
+            ...(Object.keys(rec.metadata).length > 0 ? { metadata: rec.metadata } : {}),
           })
         } catch (err) {
           updateRecord(rec.localId, {
             uploadStatus: 'error',
-            errorMessage: err instanceof Error ? err.message : 'Create failed',
+            errorMessage: describeError(err),
           })
           continue
         }
@@ -444,10 +477,13 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
         if (uploadedFileIds.length > 0) startPolling(resource.id, uploadedFileIds)
       }
     })()
-  }, [mode, files, collectionId, updateRecord, startPolling])
+  }, [mode, files, collectionId, updateRecord, startPolling, requiredFields, requiredValues])
 
   // ── Shared: persist accepted suggestions + promote draft → live ──────────────
-  const persistSuggestions = useCallback(async () => {
+  // Returns the names of the resources it could not save: a resource left a
+  // draft is purged by the scheduler, so the caller must not carry on silently.
+  const persistSuggestions = useCallback(async (): Promise<string[]> => {
+    const failed: string[] = []
     for (const rec of records) {
       if (!rec.resourceId) continue
       try {
@@ -471,36 +507,56 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
                 reviewer:   'user',
               })
               if (created?.id) tagIds.push(created.id)
-            } catch { /* non-fatal */ }
+            } catch {
+              // Non-fatal: one tag the server refuses must not cost the
+              // resource its other tags; it can be added later in the editor.
+            }
           }
           if (tagIds.length > 0) await semanticTagService.syncResource(rec.resourceId, tagIds)
         }
-      } catch { /* record save failure is non-fatal */ }
+      } catch {
+        failed.push(rec.name || rec.placeholderName)
+      }
     }
+    return failed
   }, [records])
 
   // ── "Auto mode": create aity_review workspace + dispatch job with chosen options ─
+  // Any failure keeps the wizard open with the reason: closing as if it had
+  // worked leaves the resources live under their file names with no AI (#10).
   const handleAutoMode = useCallback(async () => {
     setIsSavingWorkspace(true)
+    setAutoError(null)
+    let stage = 'save the resources'
     try {
-      await persistSuggestions()
-      const workspace = await workspaceService.createWorkspace({
-        name: workspaceName.trim(),
-        purpose: 'aity_review',
-      })
-      if (workspace) {
-        for (const rec of records) {
-          if (rec.resourceId) await workspaceService.addResource(workspace.id, rec.resourceId)
-        }
-        await dispatchAutoApproveWorkspace(workspace.id, {
-          apply_name:        autoApplyNameDesc,
-          apply_description: autoApplyNameDesc,
-          apply_tags:        autoApplyTags,
-          dedup:             autoApplyTags && autoSmartClustering,
-        })
+      const failed = await persistSuggestions()
+      if (failed.length > 0) throw new Error(`Could not save ${failed.join(', ')}.`)
+
+      stage = 'create the AiTy Review batch'
+      const workspace = autoBatchRef.current
+        ?? await workspaceService.createAityReviewBatch(workspaceName.trim() || defaultWorkspaceName())
+      autoBatchRef.current = workspace
+
+      stage = 'add the resources to the batch'
+      for (const rec of records) {
+        if (!rec.resourceId) continue
+        const addError = await workspaceService.addResource(workspace.id, rec.resourceId)
+        if (addError) throw new Error(addError)
       }
-    } catch { /* non-fatal */ }
-    finally { setIsSavingWorkspace(false) }
+
+      stage = 'start AiTy on the batch'
+      await dispatchAutoApproveWorkspace(workspace.id, {
+        apply_name:        autoApplyNameDesc,
+        apply_description: autoApplyNameDesc,
+        apply_tags:        autoApplyTags,
+        dedup:             autoApplyTags && autoSmartClustering,
+      })
+    } catch (err) {
+      setAutoError(`Could not ${stage}: ${describeError(err)}`)
+      setIsSavingWorkspace(false)
+      return
+    }
+    setIsSavingWorkspace(false)
     stopAll()
     onClose(true)
   }, [workspaceName, autoApplyNameDesc, autoApplyTags, autoSmartClustering, records, persistSuggestions, stopAll, onClose])
@@ -513,6 +569,8 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
   ).length
   const doneCount  = records.filter((r) => r.uploadStatus === 'done').length
   const errorCount = records.filter((r) => r.uploadStatus === 'error').length
+  // Nothing to continue with: every upload failed
+  const allUploadsFailed = uploadsComplete && doneCount === 0
 
   // ── Step 4: finish ────────────────────────────────────────────────────────────
   const handleFinish = useCallback(async () => {
@@ -544,7 +602,10 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
                 reviewer:   'user',
               })
               if (created?.id) tagIds.push(created.id)
-            } catch { /* non-fatal */ }
+            } catch {
+              // Non-fatal: one tag the server refuses must not cost the
+              // resource its other tags; it can be added later in the editor.
+            }
           }
           if (tagIds.length > 0) await semanticTagService.syncResource(rec.resourceId, tagIds)
         }
@@ -612,11 +673,19 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
   const isStep1Valid =
     mode !== null &&
     files.length >= 1 &&
-    (mode !== 'canonical' || files.some((f) => f.role === 'canonical'))
+    (mode !== 'canonical' || files.some((f) => f.role === 'canonical')) &&
+    missingRequired.length === 0
+  const step1Hint =
+    mode === null || files.length === 0 || (mode === 'canonical' && !files.some((f) => f.role === 'canonical'))
+      ? 'Select a mode and at least one file'
+      : missingRequired.length > 0
+        ? `Fill in ${missingRequired.map((f) => f.display_name).join(', ')}`
+        : ''
 
   // ── step 2 subtitle ──────────────────────────────────────────────────────────
   const step2Subtitle = (() => {
     if (uploadingCount > 0) return `Uploading… (${doneCount + errorCount}/${records.length} done)`
+    if (allUploadsFailed) return 'Nothing was uploaded'
     if (uploadsComplete && errorCount > 0) return `Upload complete — ${errorCount} error(s)`
     if (uploadsComplete) return 'Upload complete — choose how to proceed'
     return 'Processing…'
@@ -741,6 +810,9 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
               collectionMimeTypes={acceptedMimeTypes}
               onModeChange={setMode}
               onFilesChange={setFiles}
+              requiredFields={requiredFields}
+              requiredValues={requiredValues}
+              onRequiredValueChange={handleRequiredValueChange}
             />
           )}
 
@@ -748,6 +820,7 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
             <Step2UploadChoice
               records={records}
               uploadsComplete={uploadsComplete}
+              allUploadsFailed={allUploadsFailed}
               exitPath={exitPath}
               autoApplyNameDesc={autoApplyNameDesc}
               autoApplyTags={autoApplyTags}
@@ -803,7 +876,7 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
               <Button onClick={handleClose} variant="outlined">
                 Cancel
               </Button>
-              <Tooltip title={!isStep1Valid ? 'Select a mode and at least one file' : ''} disableHoverListener={isStep1Valid}>
+              <Tooltip title={step1Hint} disableHoverListener={isStep1Valid}>
                 <span>
                   <Button
                     variant="contained"
@@ -822,20 +895,27 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
               <Button onClick={() => setStep(1)} variant="outlined" disabled={isSavingWorkspace}>
                 ← Back
               </Button>
-              {exitPath === 'auto' ? (
-                <Button
-                  variant="contained"
-                  onClick={handleAutoMode}
-                  disabled={!uploadsComplete || isSavingWorkspace}
-                  startIcon={isSavingWorkspace ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeIcon />}
-                >
-                  {isSavingWorkspace ? 'Saving…' : 'Save & exit'}
-                </Button>
+              {exitPath === 'auto' && !allUploadsFailed ? (
+                <Stack direction="row" spacing={1} alignItems="center">
+                  {autoError && (
+                    <Typography variant="caption" color="error" role="alert">
+                      {autoError}
+                    </Typography>
+                  )}
+                  <Button
+                    variant="contained"
+                    onClick={handleAutoMode}
+                    disabled={!uploadsComplete || isSavingWorkspace}
+                    startIcon={isSavingWorkspace ? <CircularProgress size={16} color="inherit" /> : <AutoAwesomeIcon />}
+                  >
+                    {isSavingWorkspace ? 'Saving…' : 'Save & exit'}
+                  </Button>
+                </Stack>
               ) : (
                 <Button
                   variant="contained"
                   onClick={() => setStep(3)}
-                  disabled={exitPath !== 'interactive' || !uploadsComplete}
+                  disabled={exitPath !== 'interactive' || !uploadsComplete || allUploadsFailed}
                 >
                   Interactive →
                 </Button>
@@ -901,6 +981,7 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
 interface Step2Props {
   records: WizardResourceRecord[]
   uploadsComplete: boolean
+  allUploadsFailed: boolean
   exitPath: 'interactive' | 'auto' | null
   autoApplyNameDesc: boolean
   autoApplyTags: boolean
@@ -917,6 +998,7 @@ interface Step2Props {
 function Step2UploadChoice({
   records,
   uploadsComplete,
+  allUploadsFailed,
   exitPath,
   autoApplyNameDesc,
   autoApplyTags,
@@ -1009,79 +1091,96 @@ function Step2UploadChoice({
 
       <Divider sx={{ mb: 3 }} />
 
-      {/* Mode cards */}
-      <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
-        Choose how to proceed:
-      </Typography>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+      {/* Every upload failed: say why, and offer no way forward but Back */}
+      {allUploadsFailed ? (
+        <Alert severity="error">
+          <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+            Nothing was uploaded, so there is nothing to review.
+          </Typography>
+          {[...new Set(records.map((r) => r.errorMessage).filter(Boolean))].map((msg) => (
+            <Typography key={msg} variant="body2">{msg}</Typography>
+          ))}
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            Go back to fix it and try again.
+          </Typography>
+        </Alert>
+      ) : (
+        <>
+          {/* Mode cards */}
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2 }}>
+            Choose how to proceed:
+          </Typography>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
 
-        {/* Card 1: Interactive */}
-        <ChoiceCard
-          selected={exitPath === 'interactive'}
-          disabled={!uploadsComplete}
-          icon={<VisibilityIcon />}
-          title="Interactive"
-          description="Stay in the wizard to review AI suggestions step by step, then edit and save each resource."
-          onClick={() => onSelectExitPath('interactive')}
-        />
+            {/* Card 1: Interactive */}
+            <ChoiceCard
+              selected={exitPath === 'interactive'}
+              disabled={!uploadsComplete}
+              icon={<VisibilityIcon />}
+              title="Interactive"
+              description="Stay in the wizard to review AI suggestions step by step, then edit and save each resource."
+              onClick={() => onSelectExitPath('interactive')}
+            />
 
-        {/* Card 2: Auto */}
-        <ChoiceCard
-          selected={exitPath === 'auto'}
-          disabled={!uploadsComplete}
-          icon={<AutoAwesomeIcon />}
-          title="Auto"
-          description="Let AiTy process the batch in the background and apply the selected suggestions automatically."
-          accentColor="secondary"
-          onClick={() => onSelectExitPath('auto')}
-        >
-          {exitPath === 'auto' && (
-            <Stack spacing={1} sx={{ mt: 1.5 }}>
-              {/* What to auto-apply */}
-              <FormControlLabel
-                control={
-                  <Checkbox size="small" checked={autoApplyNameDesc}
-                    onChange={(e) => onAutoApplyNameDescChange(e.target.checked)}
-                    disabled={isSavingWorkspace} />
-                }
-                label={<Typography variant="caption">Accept name &amp; description</Typography>}
-                sx={{ m: 0 }}
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox size="small" checked={autoApplyTags}
-                    onChange={(e) => onAutoApplyTagsChange(e.target.checked)}
-                    disabled={isSavingWorkspace} />
-                }
-                label={<Typography variant="caption">Accept tags per resource</Typography>}
-                sx={{ m: 0 }}
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox size="small" checked={autoApplyTags && autoSmartClustering}
-                    onChange={(e) => onAutoSmartClusteringChange(e.target.checked)}
-                    disabled={isSavingWorkspace || !autoApplyTags} />
-                }
-                label={<Typography variant="caption" color={autoApplyTags ? 'text.primary' : 'text.disabled'}>Smart tag clustering</Typography>}
-                sx={{ m: 0, pl: 2 }}
-              />
+            {/* Card 2: Auto */}
+            <ChoiceCard
+              selected={exitPath === 'auto'}
+              disabled={!uploadsComplete}
+              icon={<AutoAwesomeIcon />}
+              title="Auto"
+              description="Let AiTy process the batch in the background and apply the selected suggestions automatically."
+              accentColor="secondary"
+              onClick={() => onSelectExitPath('auto')}
+            >
+              {exitPath === 'auto' && (
+                <Stack spacing={1} sx={{ mt: 1.5 }}>
+                  {/* What to auto-apply */}
+                  <FormControlLabel
+                    control={
+                      <Checkbox size="small" checked={autoApplyNameDesc}
+                        onChange={(e) => onAutoApplyNameDescChange(e.target.checked)}
+                        disabled={isSavingWorkspace} />
+                    }
+                    label={<Typography variant="caption">Accept name &amp; description</Typography>}
+                    sx={{ m: 0 }}
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox size="small" checked={autoApplyTags}
+                        onChange={(e) => onAutoApplyTagsChange(e.target.checked)}
+                        disabled={isSavingWorkspace} />
+                    }
+                    label={<Typography variant="caption">Accept tags per resource</Typography>}
+                    sx={{ m: 0 }}
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox size="small" checked={autoApplyTags && autoSmartClustering}
+                        onChange={(e) => onAutoSmartClusteringChange(e.target.checked)}
+                        disabled={isSavingWorkspace || !autoApplyTags} />
+                    }
+                    label={<Typography variant="caption" color={autoApplyTags ? 'text.primary' : 'text.disabled'}>Smart tag clustering</Typography>}
+                    sx={{ m: 0, pl: 2 }}
+                  />
 
-              <Divider sx={{ my: 0.5 }} />
+                  <Divider sx={{ my: 0.5 }} />
 
-              {/* Optional workspace name */}
-              <TextField
-                size="small"
-                label="Workspace name (optional)"
-                value={workspaceName}
-                onChange={(e) => onWorkspaceNameChange(e.target.value)}
-                fullWidth
-                disabled={isSavingWorkspace}
-              />
-            </Stack>
-          )}
-        </ChoiceCard>
+                  {/* Optional workspace name */}
+                  <TextField
+                    size="small"
+                    label="Workspace name (optional)"
+                    value={workspaceName}
+                    onChange={(e) => onWorkspaceNameChange(e.target.value)}
+                    fullWidth
+                    disabled={isSavingWorkspace}
+                  />
+                </Stack>
+              )}
+            </ChoiceCard>
 
-      </Stack>
+          </Stack>
+        </>
+      )}
     </Box>
   )
 }
