@@ -57,6 +57,8 @@ gotchas) and [production deployment](DEPLOYMENT.md#production-deployment)
 
 ## Documentation
 
+- [User guide](docs/user-guide/README.md) — for the people who use TYDAL: browsing, uploading with AI suggestions, tags, the basket, workspaces and vaults, the trash, running an organization
+- [Agent guide](docs/AGENT_GUIDE.md) — for AI agents that use TYDAL: which door (CLI, org MCP, vault MCP), how to connect, how to behave; agents changing this code read [AGENTS.md](AGENTS.md)
 - [Deployment Guide](DEPLOYMENT.md) — development & production setup, configuration reference, troubleshooting
 - [Backend README](backend/README.md)
 - [Frontend README](frontend/README.md)
