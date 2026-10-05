@@ -19,6 +19,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Index Prefix
+    |--------------------------------------------------------------------------
+    |
+    | Prepended to every physical index name this installation creates or
+    | queries: collection indices (search_indexes.index_name stays the logical,
+    | unprefixed name), their `_chunks` companions and the per-vault
+    | `vault_<uuid>` indices. Destructive commands (search:wipe-indices,
+    | search:setup-indices --recreate, search:reconcile --fix) only reach
+    | names under this prefix.
+    |
+    | Set a distinct prefix (e.g. `prod_`, `staging_`) whenever two
+    | installations share one cluster. Empty (the default) keeps the legacy
+    | unprefixed names. Lowercase letters, digits, `_`, `-` and `.` only,
+    | starting with a letter or digit.
+    |
+    */
+
+    'index_prefix' => env('ELASTICSEARCH_INDEX_PREFIX', ''),
+
+    /*
+    |--------------------------------------------------------------------------
     | Index Settings
     |--------------------------------------------------------------------------
     |

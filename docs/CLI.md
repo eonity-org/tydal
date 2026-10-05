@@ -33,7 +33,82 @@ exits non-zero) rather than picking one; resolve it with `search:indexes
 
 ⚠️ ES cannot change an existing field's **type** — after changing a field's
 `es_type`, use `--recreate`, then `search:reindex`. Adding new fields never
-needs it.
+needs it. `--recreate` drops the companion `_chunks` index too, so chunk
+vectors have to be rebuilt afterwards (`search:reconcile --fix` or
+`search:embed`, with a queue worker running).
+
+Every name it creates or drops is the **physical** name, under this
+installation's [`ELASTICSEARCH_INDEX_PREFIX`](#index-prefix-elasticsearch_index_prefix)
+(`search_indexes.index_name` stays the logical, unprefixed name). `--recreate`
+therefore only ever drops this installation's indices.
+
+#### Upgrading: `tika_metadata` no longer indexed (#13)
+
+Resource indices used to map Tika's raw file metadata (`tika_metadata`)
+dynamically. The first file fixed each key's type for the whole index
+(`mapper [tika_metadata.xmpMM:History:When] cannot be changed from type [text]
+to [date]`) and varied XMP pushed the index past the 1000-field limit, so
+resource documents were rejected and went missing from search. The mapping is
+now `{"type": "object", "enabled": false}`: kept in `_source`, never indexed
+(nothing searched on it). A mapping can't be changed in place, so an existing
+index keeps the old one until it is rebuilt. Plain `search:setup-indices`
+leaves `tika_metadata` out of its update on such an index (and logs a warning)
+instead of failing. To apply the fix:
+
+```
+php artisan search:setup-indices --recreate   # this installation's (prefixed) indices only
+php artisan search:reindex
+php artisan search:reconcile --fix            # re-embeds the dropped _chunks (queue worker) — re-run to confirm
+```
+
+If you're also adopting an index prefix, do that instead: it builds fresh
+indices with the new mapping, so the `--recreate` isn't needed (see below).
+
+### Index prefix (`ELASTICSEARCH_INDEX_PREFIX`)
+
+Every physical index name goes through one prefix: collection indices
+(`{prefix}<index_name>`), their chunks (`{prefix}<index_name>_chunks`) and
+vault indices (`{prefix}vault_<uuid>`). Two installations pointed at the same
+cluster (production and staging, several tenants on one Elastic Cloud
+deployment) must use different prefixes. Otherwise they share indices, and
+one installation's `search:wipe-indices`, `--recreate` or `reconcile --fix`
+deletes the other's data.
+
+- Empty (the default) keeps the legacy unprefixed names.
+- Lowercase letters, digits, `_`, `-`, `.`, starting with a letter or digit.
+  A prefix starting with `tydal_` or `vault_` is refused, because an
+  unprefixed installation's wipe pattern (`tydal_*,vault_*`) would match it.
+- Don't pick prefixes where one starts with another installation's
+  `{prefix}tydal_` (e.g. `prod_` and `prod_tydal_x_`).
+- Tests (`phpunit.xml`) force `test_`.
+
+**Moving an existing installation to a prefix.** The new indices start empty
+and are rebuilt from MySQL. Search is incomplete until the reindex finishes.
+
+```
+# 1. backend/.env
+ELASTICSEARCH_INDEX_PREFIX=prod_
+php artisan config:cache          # production (cached config)
+php artisan queue:restart         # workers pick up the new prefix
+
+# 2. build and fill the prefixed indices
+php artisan search:setup-indices
+php artisan search:reindex
+php artisan search:reindex --vault=all
+php artisan search:reconcile --fix   # chunk vectors + metadata chunks (queue worker); re-run until clean
+
+# 3. remove the old unprefixed indices BY HAND, by exact name
+curl 'localhost:9200/_cat/indices/tydal_*,vault_*?v'
+curl -X DELETE 'localhost:9200/tydal_multimedia,tydal_multimedia_chunks,vault_0198…'
+```
+
+Step 2 re-embeds every chunk, which calls the embedding provider. To skip
+that, copy the old chunk indices with Elasticsearch's `_reindex` API
+(`{"source": {"index": "tydal_multimedia_chunks"}, "dest": {"index":
+"prod_tydal_multimedia_chunks"}}`) after `search:setup-indices` and before
+deleting them. Step 3 is manual on purpose: don't use `search:wipe-indices`
+for it (it now targets `prod_tydal_*,prod_vault_*`), and on a shared cluster,
+check each name belongs to this installation before deleting it.
 
 You rarely need to run this by hand for a *new* collection: `CollectionService::createCollection`
 (used by both the admin UI and the seeders) already provisions the collection's
@@ -122,6 +197,11 @@ php artisan search:reconcile --fix            # reindex missing/stale, purge orp
 php artisan search:reconcile --collection=1   # scope to one collection
 ```
 
+It lists and purges only this installation's physical (prefixed) indices. With
+an empty prefix on a cluster shared with another unprefixed installation, the
+other installation's documents look orphaned and `--fix` would delete them.
+Set a prefix first.
+
 ### `search:embed`
 
 Dispatch `EmbedFileChunks` jobs for files that have extracted text — backfill
@@ -139,7 +219,15 @@ Each completed job also refreshes the resource-level mean embedding
 
 ### `search:wipe-indices`
 
-**DEV ONLY.** Deletes every `tydal_*`/`vault_*` Elasticsearch index outright.
+**DEV ONLY.** Deletes every `{prefix}tydal_*`/`{prefix}vault_*` Elasticsearch
+index outright, where `{prefix}` is [`ELASTICSEARCH_INDEX_PREFIX`](#index-prefix-elasticsearch_index_prefix).
+With a prefix, only this installation's indices match. With the default empty
+prefix the pattern is `tydal_*,vault_*`, which also matches **any other
+unprefixed installation on the same cluster**, and the command warns. It never
+matches a prefixed installation (a prefix can't start with `tydal_`/`vault_`).
+Never run it, or `first_install.sh`, against a cluster another unprefixed
+installation uses.
+
 Exists because `migrate:fresh` only touches MySQL — Elasticsearch is a
 separate service with no hook into Laravel's migrator, so an index for a
 scheme/vault that isn't recreated by whatever runs *after* a `migrate:fresh`

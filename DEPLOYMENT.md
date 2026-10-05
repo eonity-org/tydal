@@ -53,7 +53,7 @@ Key groups (see the template for the full list):
 - **App** — `APP_KEY` (generated, never commit), `APP_ENV`, `APP_DEBUG`, `APP_URL`.
 - **Database** — `DB_HOST`, `DB_PORT` (3306), `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`.
 - **Redis** — `REDIS_HOST`, `REDIS_PORT` (6379); `QUEUE_CONNECTION=redis`, `CACHE_DRIVER=redis`, `SESSION_DRIVER=redis`.
-- **Elasticsearch** — `ELASTICSEARCH_HOST` (`http://localhost:9200`), optional auth/shards/replicas.
+- **Elasticsearch** — `ELASTICSEARCH_HOST` (`http://localhost:9200`), optional auth/shards/replicas, and `ELASTICSEARCH_INDEX_PREFIX` (see [below](#one-elasticsearch-several-installations-elasticsearch_index_prefix)).
 - **Storage** — `FILESYSTEM_DISK`/`MEDIA_DISK`; local by default, S3/MinIO available via the `AWS_*` block.
 - **Tika** — `TIKA_HOST` (`http://localhost:9998`).
 - **LLM / embeddings** — `LLM_TEXT_DRIVER`, `EMBEDDING_DRIVER`, `EMBEDDING_DIMENSIONS`, plus the provider key blocks (Claude/Gemini/Jina/OpenAI/Ollama). All optional; features degrade gracefully when unset. See [Embedding dimensions](#embedding-dimensions-are-coupled-to-the-model) below before changing these on an existing install, and [Claude vs. Z.ai](#three-llm_text_driver-values-for-claude-and-zai) if you're using a Z.ai key.
@@ -83,6 +83,26 @@ Z.ai's native endpoint while still on `LLM_TEXT_DRIVER=claude` (or
 `anthropicproxy`) is the classic mistake here: `HTTP 404` at a path like
 `/v4/v1/messages`, since the driver appends `/v1/messages` regardless of
 what the base URL actually serves.
+
+#### One Elasticsearch, several installations (`ELASTICSEARCH_INDEX_PREFIX`)
+
+Every physical index name gets this prefix: collection indices, their
+`_chunks` companions and the `vault_<uuid>` indices. It is empty by default,
+which keeps the legacy unprefixed names. If two installations share a cluster
+(production and staging on one server, several tenants on one Elastic Cloud
+deployment), give each its own prefix, e.g. `prod_` and `staging_`. Without
+one they read and write the same indices, and one installation's
+`search:wipe-indices` (run by `first_install.sh`),
+`search:setup-indices --recreate` or `search:reconcile --fix` deletes the
+other's data. With a prefix, those commands only reach this installation's
+indices.
+
+Allowed: lowercase letters, digits, `_`, `-`, `.`, starting with a letter or
+digit, and not starting with `tydal_` or `vault_`. To move an existing
+installation to a prefix: set it, `config:cache` + `queue:restart`, then
+`search:setup-indices`, `search:reindex`, `search:reindex --vault=all`,
+`search:reconcile --fix`, and delete the old unprefixed indices by hand. The
+full recipe is in [docs/CLI.md](docs/CLI.md#index-prefix-elasticsearch_index_prefix).
 
 #### Superadmin credentials (`TYDAL_SUPERADMIN_*`)
 
@@ -465,6 +485,11 @@ Set `TYDAL_SUPERADMIN_PASSWORD` in the production `.env` **before** running
 `ProductionSeeder`, or capture the random password it prints once. Rotate it
 after first login.
 
+If the Elasticsearch cluster is (or may later be) shared with another
+installation, set `ELASTICSEARCH_INDEX_PREFIX` **before** `search:setup-indices`:
+`--recreate` drops indices by name, and the prefix is what keeps it to this
+installation's.
+
 ### 3. Cache the framework config
 
 ```bash
@@ -613,6 +638,16 @@ ES cannot change an existing field's **type** at all (not just embeddings) —
 recreate the index: `php artisan search:setup-indices --recreate` then
 `php artisan search:reindex`. A merely *new* field is additive and doesn't
 need this.
+
+#### Resources missing from search: `tika_metadata` mapping errors
+
+`storage/logs/laravel.log` shows `ES index failed for resource …` with
+`mapper [tika_metadata.…] cannot be changed from type […]` or `Limit of total
+fields [1000] has been exceeded`. The index was created before Tika's raw
+metadata stopped being indexed (#13). Rebuild it:
+`php artisan search:setup-indices --recreate`, `php artisan search:reindex`,
+then `php artisan search:reconcile --fix` to re-embed the chunks (see
+[docs/CLI.md](docs/CLI.md#upgrading-tika_metadata-no-longer-indexed-13)).
 
 #### Login returns "route … could not be found" / 404
 

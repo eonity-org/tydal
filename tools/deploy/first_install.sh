@@ -10,7 +10,9 @@
 # Repeatable.
 #
 # WARNING: this DROPS and recreates the database (migrate:fresh) AND wipes
-# every tydal_*/vault_* Elasticsearch index. Dev only. It asks for confirmation
+# every {prefix}tydal_*/{prefix}vault_* Elasticsearch index (prefix =
+# ELASTICSEARCH_INDEX_PREFIX; empty also hits any other unprefixed
+# installation on the same cluster). Dev only. It asks for confirmation
 # first unless you pass -f/--force.
 #
 # Assumes the stack is already up — run tools/deploy/start.sh first (it owns
@@ -28,7 +30,8 @@ usage() {
   cat <<'EOF'
 Usage: first_install.sh [-f|--force] [--collections=LIST] [-h|--help]
 
-DESTRUCTIVE dev reset: wipes every tydal_*/vault_* Elasticsearch index, then
+DESTRUCTIVE dev reset: wipes every {prefix}tydal_*/{prefix}vault_* Elasticsearch
+index (ELASTICSEARCH_INDEX_PREFIX), then
 migrate:fresh (DROPS the database) + seeds minimal data. Tier-aware (runs
 artisan in the app container for the docker tier, on the host otherwise).
 Requires the stack to be up — run start.sh first; first_install does not start
@@ -61,7 +64,8 @@ done
 
 # --- confirmation (skipped with -f/--force): this DROPS the database ---
 if [ "$FORCE" = false ]; then
-  echo "⚠️  first_install.sh will wipe every tydal_*/vault_* Elasticsearch index, DROP"
+  echo "⚠️  first_install.sh will wipe every {prefix}tydal_*/{prefix}vault_* Elasticsearch index"
+  echo "    (prefix = ELASTICSEARCH_INDEX_PREFIX; empty = every unprefixed TYDAL index on the cluster), DROP"
   echo "    and recreate the database (migrate:fresh), and reseed minimal data —"
   echo "    all current resources/users/search data are lost."
   if [ -t 0 ]; then

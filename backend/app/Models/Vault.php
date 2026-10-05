@@ -150,7 +150,8 @@ class Vault extends Model
 
             // Drop the projected ES index with its vault (best effort)
             try {
-                app(ElasticsearchService::class)->deleteIndex('vault_'.strtolower($vault->id));
+                $es = app(ElasticsearchService::class);
+                $es->deleteIndex($es->buildVaultIndexName($vault));
             } catch (\Throwable) {
                 // index cleanup is recoverable via search:reindex --vault
             }

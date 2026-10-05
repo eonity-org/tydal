@@ -71,8 +71,11 @@ class SearchReconcileTest extends TestCase
     private function mockEs(array $listReturn, ?array $chunkDocs = null): Mockery\MockInterface
     {
         $mock = Mockery::mock(ElasticsearchService::class);
+        // The command lists and purges the PHYSICAL (prefixed) index — never
+        // the logical name, which another installation could share.
+        $mock->shouldReceive('physicalIndexName')->with('tydal_test')->andReturn('test_tydal_test');
         $mock->shouldReceive('listIndexedResources')
-            ->with('tydal_test')
+            ->with('test_tydal_test')
             ->andReturn($listReturn);
         $mock->shouldReceive('buildChunksIndexName')->with('tydal_test')->andReturn('tydal_test_chunks');
         // null = no chunks index (chunk reconciliation no-ops); array = its docs
@@ -127,7 +130,7 @@ class SearchReconcileTest extends TestCase
             ->withArgs(fn (Resource $r) => $r->id === $this->resource->id);
         $mock->shouldReceive('purgeDocument')
             ->once()
-            ->with('tydal_test', 'ghost-doc-id');
+            ->with('test_tydal_test', 'ghost-doc-id');
 
         $this->artisan('search:reconcile --fix')
             ->expectsOutputToContain('fixed: reindexed 1, purged 1')

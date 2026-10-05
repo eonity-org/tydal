@@ -6,6 +6,40 @@ All notable changes to TYDAL are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`ELASTICSEARCH_INDEX_PREFIX`** (#14): a per-installation prefix applied to
+  every physical index name — collection indices, their `_chunks`
+  companions and `vault_<uuid>` — through one helper,
+  `ElasticsearchService::physicalIndexName()`. `search_indexes.index_name`
+  stays the logical, unprefixed name. Destructive commands only reach this
+  installation's prefix: `search:wipe-indices` deletes
+  `{prefix}tydal_*,{prefix}vault_*` (and warns when the prefix is empty),
+  `search:setup-indices --recreate` and `search:reconcile --fix` act on the
+  prefixed names. A prefix with wildcards, or one starting with `tydal_` /
+  `vault_`, is refused. Empty by default, so existing installations are
+  unchanged. In every backend env template, [DEPLOYMENT.md](DEPLOYMENT.md)
+  and [CLI.md](docs/CLI.md#index-prefix-elasticsearch_index_prefix), with the
+  migration recipe for an existing installation. The test suite forces
+  `test_`, so it never touches a dev installation's indices.
+
+### Fixed
+
+- **Resources missing from search because of `tika_metadata`** (#13). Tika's
+  raw file metadata was mapped dynamically, so the first file fixed each
+  key's type for the whole index (`mapper [tika_metadata.xmpMM:History:When]
+  cannot be changed from type [text] to [date]`) and varied XMP passed the
+  1000-field limit; the resource document was rejected. It is now
+  `{"type": "object", "enabled": false}`: kept in `_source`, not indexed.
+  Existing indices need `search:setup-indices --recreate`,
+  `search:reindex` and `search:reconcile --fix` (see
+  [CLI.md](docs/CLI.md#upgrading-tika_metadata-no-longer-indexed-13)); until
+  then `search:setup-indices` skips the field instead of failing.
+- **Facets on text fields** (#13). Workspace and collection searches
+  aggregated and filtered on the analysed `text` field (`metadata.author`),
+  which failed with `Fielddata is disabled`, so workspace views fell back to
+  the database with no facets. Text facets now use their `.keyword` subfield.
+
 ## [1.3.0] — 2026-10-05
 
 ### Added
