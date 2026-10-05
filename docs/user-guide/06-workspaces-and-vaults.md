@@ -36,8 +36,10 @@ connected to.
 
 **Managed by the system.** The workspaces listed under this heading (*Drift —
 selection*, *City Lines — selection*…) are created and kept up to date by other
-processes: AiTy Review batches, or an exhibition's "open" step in FullFrame. You
-can't rename or delete them here, and they aren't offered as tabs.
+processes, such as an exhibition's "open" step in FullFrame. You can't rename or
+delete them here, and they aren't offered as tabs. The batches created by the
+upload wizard's **Auto** option aren't listed here: they live on the **AiTy
+Review** page, where they can be reviewed and deleted ([chapter 3](03-adding-resources.md)).
 
 ## Vaults: sharing outside TYDAL
 
