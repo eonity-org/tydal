@@ -29,6 +29,7 @@ import resourceService, { type ResourceData } from '../api/resourceService'
 import workspaceService from '../api/workspaceService'
 import { resolveStorageUrl } from '../utils/storageUrl'
 import { getApiError } from '../utils/apiError'
+import { shortId } from '../utils/shortId'
 
 /**
  * The basket, laid out like the trash can — a gallery of what is in it, with
@@ -273,7 +274,7 @@ function BasketPage() {
                             sx={{ color: 'text.disabled', fontFamily: 'monospace', flexShrink: 0, fontSize: '0.75rem' }}
                             title={String(resource.id)}
                           >
-                            {String(resource.id).slice(0, 8)}
+                            {shortId(resource.id)}
                           </Typography>
                         </Stack>
 

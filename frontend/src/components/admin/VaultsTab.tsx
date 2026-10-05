@@ -749,7 +749,9 @@ function VaultsTab() {
                 <Typography variant="caption" color="text.disabled">
                   A key unlocks this vault while it is private. Each carries abilities:{' '}
                   <b>read</b> consumes the vault (e.g. a jury proxy);{' '}
-                  <b>activate / open / close</b> are the gallery write methods (the opening).
+                  <b>activate / open / close</b> are the gallery write methods (the opening);{' '}
+                  <b>ingest / update / withdraw</b> add, correct and remove resources from outside
+                  (e.g. a curator's uploads).
                   The full <code>tvk_…</code> value is shown once, at mint — store it then.
                 </Typography>
 

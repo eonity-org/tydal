@@ -164,7 +164,7 @@ to the resource's metadata (the source for indexing/embeddings):
 | Component | Status | Backed by |
 |-----------|--------|-----------|
 | Resources | ✅ | `resources` |
-| Categories (hierarchical, org-scoped) | ✅ | `categories`, `category_resource` |
+| Categories (hierarchical, org-scoped) | ✅ API only | `categories`, `category_resource`; no SPA screen yet (`EditableCategoriesTags.tsx` is unused) |
 | Semantic tags | ✅ | `semantic_tags`, `semantic_tag_resource` |
 | Resource ↔ Workspace mapping | ✅ | `dam_resource_workspace` |
 | Resource events (event-driven hooks) | 🟡 | `resource_events` |
