@@ -521,6 +521,13 @@ Point the frontend at this domain at build time:
 > If you host the API and SPA on **separate** domains, configure Laravel CORS
 > and `SANCTUM_STATEFUL_DOMAINS` accordingly.
 
+> If PHP sits **behind another proxy** instead (the app in a container, a
+> load balancer) and that proxy terminates TLS, set `TRUSTED_PROXIES` in
+> `backend/.env`, or vault and file links come out as `http://`. Use `*`
+> when the app port is reachable only through the proxy (e.g. published on
+> `127.0.0.1`), otherwise the proxy's IPs/CIDRs. With fastcgi as above,
+> nothing is in between and it stays empty.
+
 Ensure file permissions: `backend/storage` and `backend/bootstrap/cache` must
 be writable by the PHP-FPM user (e.g. `www-data`).
 

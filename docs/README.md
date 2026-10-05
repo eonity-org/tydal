@@ -2,6 +2,8 @@
 
 This folder keeps the public documentation index intentionally small. Start with:
 
+- [User Guide](user-guide/README.md) — for the people who *use* TYDAL (viewers, editors, administrators, owners, platform admins), with screenshots: finding resources, the upload wizard and AiTy suggestions, tags, the basket, workspaces and vaults, the trash, organization and platform settings
+- [Agent Guide](AGENT_GUIDE.md) — for AI agents that *use* a TYDAL installation: the three rings (installation · organization · vault), which door to use, connection, tools and rules of conduct. Coding agents working on this repository read [AGENTS.md](../AGENTS.md)
 - [Deployment Guide](../DEPLOYMENT.md) — command-oriented install → configure → start → seed → (optional) plug in org-mcp/vault-mcp, everyday commands and common gotchas, plus production (nginx + PHP-FPM) setup
 - [Connecting an AI Client](CONNECTING_MCP_CLIENTS.md) — for someone connecting *their own* AI (Claude Desktop, Claude Code, Cursor, …) to an already-running TYDAL instance via org-mcp/vault-mcp; no TYDAL deployment steps needed
 - [Architecture & Roadmap](architecture/ARCHITECTURE_AND_ROADMAP.md) — architecture, shared product terminology and the historical v2 roadmap
