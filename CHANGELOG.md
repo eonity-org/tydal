@@ -6,6 +6,31 @@ All notable changes to TYDAL are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-10-05
+
+### Added
+
+- **User guide** in [`docs/user-guide/`](docs/user-guide/README.md), for the
+  people who use TYDAL rather than run it: viewers, editors, administrators,
+  owners and platform admins. Nine chapters with screenshots: getting started,
+  finding resources, the upload wizard and AiTy suggestions, tags, the basket
+  and bulk actions, workspaces and vaults, the trash, organization settings
+  and platform administration. Its *Known issues* section links to the open
+  `bug` issues on GitHub.
+- **Agent guide**, [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md), for AI agents
+  that use a TYDAL installation. It covers the three rings (installation;
+  organization, with AiTy and `@tydal/org-mcp`; vault, with
+  `@tydal/vault-mcp`), which one to use, how to connect, the tools, and rules
+  of conduct.
+- **[`AGENTS.md`](AGENTS.md)** for AI coding agents working on this
+  repository: layout, tier-aware commands, tests, and the codebase's rules.
+- **`TRUSTED_PROXIES`** (`backend/config/trustedproxy.php`): the IPs or CIDRs
+  of a TLS-terminating proxy to trust, or `*` for the direct peer. Behind a
+  host nginx, TYDAL saw plain `http` and built `http://` vault and file links;
+  with the proxy trusted, they're `https://`. Empty by default, so
+  `artisan serve` and the docker dev tier are unchanged. In every backend env
+  template and in [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ## [1.2.0] — 2026-10-04
 
 ### Added
@@ -396,7 +421,8 @@ layer); as a shipped product it is version 1.0.0.
   [`MIGRATION_V1_V2.md`](docs/planning/MIGRATION_V1_V2.md), CLI guide, and
   OpenAPI 3.0 spec.
 
-[Unreleased]: https://github.com/eonity-org/tydal/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/eonity-org/tydal/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/eonity-org/tydal/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/eonity-org/tydal/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/eonity-org/tydal/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/eonity-org/tydal/releases/tag/v1.0.0
