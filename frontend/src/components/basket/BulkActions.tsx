@@ -47,9 +47,13 @@ export interface BulkActionsProps {
   size?: 'small' | 'medium'
 }
 
+// Draft is deliberately absent: it is a creation-only state (the wizard's and
+// the New resource form's working copy), and the draft reapers
+// (resources:purge-drafts, resource:prune) hard-delete every draft past its
+// TTL — sending an existing resource back to draft would get it destroyed.
+// The server refuses it too (BulkResourceStateRequest). See #26.
 const STATES: Array<{ value: ResourceState; label: string; note: string }> = [
   { value: 'live', label: 'Live', note: 'Listed, searchable and projectable.' },
-  { value: 'draft', label: 'Draft', note: 'Not addressable; the wizard’s working copy.' },
   { value: 'archived', label: 'Archived', note: 'Withdrawn from every listing and no longer addressable.' },
 ]
 

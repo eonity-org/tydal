@@ -25,6 +25,12 @@ All notable changes to TYDAL are documented here. The format follows
 
 ### Fixed
 
+- **Setting a resource to Draft got it permanently deleted** (#26). The
+  basket's State action offered *Draft*, and `PUT /resources/{id}` and
+  `/resources/bulk/state` accepted it, but the draft reapers
+  (`resources:purge-drafts` hourly, `resource:prune` nightly) hard-delete every
+  draft past its TTL, files included. Draft is now creation-only: the basket
+  offers Live and Archived, and both endpoints refuse `draft` with a 422.
 - **Resources missing from search because of `tika_metadata`** (#13). Tika's
   raw file metadata was mapped dynamically, so the first file fixed each
   key's type for the whole index (`mapper [tika_metadata.xmpMM:History:When]

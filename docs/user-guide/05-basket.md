@@ -41,7 +41,7 @@ The buttons at the top right act on everything in the basket:
 | Button | Does |
 |---|---|
 | **Workspace** | Add the resources to a workspace, or take them out of one. |
-| **State** | Set them to *Live*, *Draft* or *Archived* (below). |
+| **State** | Set them to *Live* or *Archived* (below). |
 | **Tags** | Add or remove tags without touching their other tags ([chapter 4](04-tags.md)). |
 | **Delete** | Move them to the trash, where they can be restored ([chapter 7](07-trash.md)). |
 
@@ -54,7 +54,9 @@ A resource's **state** decides whether anyone sees it:
 - **Live**: listed, searchable, and shared through any vault that includes it.
   The normal state.
 - **Draft**: a working copy that isn't listed or shared. New resources are drafts
-  until the upload wizard finishes.
+  until the upload wizard finishes. Draft is only for resources being created:
+  you can't send an existing resource back to it, because unfinished drafts are
+  cleared automatically.
 - **Archived**: withdrawn from every listing and from every vault, but kept.
   TYDAL asks you to confirm before archiving, and you can set the resource back to
   Live at any time.
