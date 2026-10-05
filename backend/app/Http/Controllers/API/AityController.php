@@ -86,6 +86,18 @@ class AityController extends Controller
             'apply_tags' => ['sometimes', 'boolean'],
         ]);
 
+        $workspace = Workspace::where('id', $validated['workspace_id'])
+            ->where('organization_id', $orgId)
+            ->first();
+
+        if (! $workspace) {
+            return response()->json(['success' => false, 'message' => 'Workspace not found.'], 404);
+        }
+
+        // Writes names, descriptions and tags onto the workspace's resources —
+        // the same right as dispatchAutoApprove (editors and up).
+        $this->authorize('manageResources', $workspace);
+
         try {
             $result = app(AutoApprovalService::class)->approveWorkspace(
                 (int) $validated['workspace_id'],
@@ -137,6 +149,20 @@ class AityController extends Controller
             'apply_description' => ['sometimes', 'boolean'],
             'apply_tags' => ['sometimes', 'boolean'],
         ]);
+
+        $workspace = Workspace::where('id', $validated['workspace_id'])
+            ->where('organization_id', $orgId)
+            ->first();
+
+        if (! $workspace) {
+            return new StreamedResponse(function () {
+                $this->sseEmit(['type' => 'error', 'message' => 'Workspace not found.']);
+            }, 404, $this->sseHeaders());
+        }
+
+        // Checked before the stream opens, so a refusal is an ordinary 403
+        // rather than an error event inside a 200 stream.
+        $this->authorize('manageResources', $workspace);
 
         return new StreamedResponse(function () use ($validated, $orgId) {
             // Flush any existing output buffers so lines reach the browser immediately.
@@ -206,6 +232,10 @@ class AityController extends Controller
         if (! $workspace) {
             return response()->json(['success' => false, 'message' => 'Workspace not found.'], 404);
         }
+
+        // The job writes names, descriptions and tags onto the workspace's
+        // resources: the same right as curating its membership (editors and up).
+        $this->authorize('manageResources', $workspace);
 
         if ($workspace->auto_approve_status === 'running') {
             return response()->json(['success' => false, 'message' => 'Auto-approval is already running for this workspace.'], 409);

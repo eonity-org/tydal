@@ -33,7 +33,10 @@ class UpdateResourceRequest extends FormRequest
             'metadata' => ['nullable', 'array'],
             'language' => ['nullable', 'string', 'max:10'],
             'payload' => ['nullable', 'array'],
-            'state' => ['sometimes', 'required', Rule::enum(ResourceState::class)],
+            // Draft is creation-only (POST /resources): the draft reapers
+            // hard-delete every draft past its TTL, so an update must never send
+            // a resource back to draft (#26).
+            'state' => ['sometimes', 'required', Rule::enum(ResourceState::class)->except([ResourceState::DRAFT])],
             'published_at' => ['nullable', 'date'],
         ];
     }
@@ -49,7 +52,7 @@ class UpdateResourceRequest extends FormRequest
             'collection_id.exists' => 'The selected collection does not exist.',
             'name.required' => 'The resource name is required.',
             'type.in' => 'The resource type is invalid.',
-            'state.Illuminate\\Validation\\Rules\\Enum' => 'The state must be one of: draft, live, archived.',
+            'state.Illuminate\\Validation\\Rules\\Enum' => 'The state must be live or archived; draft is only for resources being created.',
         ];
     }
 }

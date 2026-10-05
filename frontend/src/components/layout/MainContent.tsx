@@ -1179,8 +1179,12 @@ function MainContent(props: MainContentProps) {
                   ? <>Delete <strong>{deleteConfirm.resourceIds.length}</strong> selected resources?</>
                   : <>Are you sure you want to delete <strong>"{deleteConfirm.resourceName}"</strong>?</>}
               </Typography>
+              {/* Deletion is soft: resources go to the trash and can be restored.
+                  "Cannot be undone" belongs only to the trash's permanent delete. */}
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                This action cannot be undone.
+                {deleteConfirm.resourceIds.length > 1
+                  ? 'They will be moved to the trash. You can restore them from Deleted resources.'
+                  : 'It will be moved to the trash. You can restore it from Deleted resources.'}
               </Typography>
             </DialogContent>
             <DialogActions>

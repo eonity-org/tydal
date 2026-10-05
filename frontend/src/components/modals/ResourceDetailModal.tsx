@@ -26,7 +26,7 @@ import {
   Popover,
 } from '@mui/material'
 import { Close, Edit, Save, Cancel, Star, Search, Hub, HubOutlined, ExpandMore, ExpandLess, Refresh, Visibility, VisibilityOff } from '@mui/icons-material'
-import resourceService, { type ResourceData, type ResourceFile, type SemanticTag, type ActivityEvent } from '../../api/resourceService'
+import resourceService, { type ResourceData, type ResourceState, type ResourceFile, type SemanticTag, type ActivityEvent } from '../../api/resourceService'
 import authService from '../../api/authService'
 import collectionService, { type Collection, getSchemeFields } from '../../api/collectionService'
 import workspaceService, { type Workspace } from '../../api/workspaceService'
@@ -73,6 +73,14 @@ export interface ResourceDetailModalProps {
    * Callback when resource is created/updated successfully
    */
   onResourceSaved?: (resource?: ResourceData) => void
+}
+
+// The resource's lifecycle state (resources.state). Same labels as the
+// basket's State action; openness belongs to the vault, not the resource.
+const STATE_CHIP: Record<ResourceState, { label: string; bgcolor: string; color: string }> = {
+  live:     { label: 'Live',     bgcolor: 'success.light', color: 'success.main' },
+  draft:    { label: 'Draft',    bgcolor: 'warning.light', color: 'warning.main' },
+  archived: { label: 'Archived', bgcolor: 'grey.100',      color: 'text.secondary' },
 }
 
 interface TabPanelProps {
@@ -790,7 +798,6 @@ function ResourceDetailModal(props: ResourceDetailModalProps) {
         name: '',
         slug: null,
         description: null,
-        active: true,
         state: 'live',
         metadata: {},
         payload: {
@@ -2032,9 +2039,9 @@ function ResourceDetailModal(props: ResourceDetailModalProps) {
 
     return (
       <Stack spacing={0}>
-        {/* Block 1: Name, Description, Type, Collection, Active Status */}
+        {/* Block 1: Name, Description, Type, Collection, State */}
         <Box sx={{ py: 2, px: 2, bgcolor: 'grey.100' }}>
-          {/* Top row: name+ID left, type+active right */}
+          {/* Top row: name+ID left, type+state right */}
           <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={2}>
             <Stack spacing={0.25} sx={{ flex: 1, minWidth: 0 }}>
               <Typography variant="h5" sx={{ fontWeight: 600, color: 'text.primary', lineHeight: 1.2 }}>
@@ -2050,14 +2057,17 @@ function ResourceDetailModal(props: ResourceDetailModalProps) {
                 size="small"
                 sx={{ bgcolor: 'primary.subtle', color: 'primary.main', fontWeight: 600, letterSpacing: 0.5 }}
               />
-              <Chip
-                label={resource.active ? 'Active' : 'Inactive'}
-                size="small"
-                sx={resource.active
-                  ? { bgcolor: 'success.light', color: 'success.main' }
-                  : { bgcolor: 'grey.100', color: 'text.secondary' }
-                }
-              />
+              {(() => {
+                // Lifecycle state (resources.state), not the pre-state `active` flag.
+                const state = STATE_CHIP[resource.state] ?? STATE_CHIP.live
+                return (
+                  <Chip
+                    label={state.label}
+                    size="small"
+                    sx={{ bgcolor: state.bgcolor, color: state.color }}
+                  />
+                )
+              })()}
             </Stack>
           </Stack>
           {/* Description below, full width */}
@@ -2221,63 +2231,6 @@ function ResourceDetailModal(props: ResourceDetailModalProps) {
             })()}
           </Box>
         )}
-
-        {/* Block 4: Visibility & Access */}
-        {(() => {
-          const visibilityChip: Record<string, { bgcolor: string; color: string }> = {
-            private:      { bgcolor: 'grey.100',       color: 'text.secondary' },
-            organization: { bgcolor: 'primary.subtle', color: 'primary.main' },
-            workspace:    { bgcolor: 'secondary.light', color: 'secondary.main' },
-            public:       { bgcolor: 'success.light',  color: 'success.main' },
-          }
-          const vis = resource.visibility ?? 'private'
-          const visStyle = visibilityChip[vis] ?? visibilityChip.private
-          const accessOptions = [
-            { key: 'downloadable', label: 'Downloadable' },
-            { key: 'public',       label: 'Public' },
-            { key: 'featured',     label: 'Featured' },
-          ]
-          return (
-            <Box sx={{ py: 2, px: 2, bgcolor: 'grey.100' }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                Visibility & Access
-              </Typography>
-              <Stack spacing={1}>
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.secondary', minWidth: 120 }}>
-                    Visibility:
-                  </Typography>
-                  <Chip
-                    label={vis.charAt(0).toUpperCase() + vis.slice(1)}
-                    size="small"
-                    sx={{ bgcolor: visStyle.bgcolor, color: visStyle.color }}
-                  />
-                </Stack>
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.secondary', minWidth: 120 }}>
-                    Access:
-                  </Typography>
-                  <Stack direction="row" spacing={0.75}>
-                    {accessOptions.map(({ key, label }) => {
-                      const on = resource.payload?.[key] ?? (key === 'downloadable')
-                      return (
-                        <Chip
-                          key={key}
-                          label={label}
-                          size="small"
-                          sx={on
-                            ? { bgcolor: 'primary.subtle', color: 'primary.main' }
-                            : { bgcolor: 'grey.100', color: 'text.disabled' }
-                          }
-                        />
-                      )
-                    })}
-                  </Stack>
-                </Stack>
-              </Stack>
-            </Box>
-          )
-        })()}
 
       </Stack>
     )
@@ -2718,7 +2671,7 @@ type:            ${resource.type}
 description:     ${resource.description || '(null)'}
 collection_id:   ${resource.collection_id || '(null)'}
 user_owner_id:   ${resource.user_owner_id || '(null)'}
-active:          ${resource.active}
+state:           ${resource.state}
 organization_id: ${resource.organization_id || '(null)'}
 slug:            ${resource.slug || '(null)'}
 published_at:    ${resource.published_at || '(null)'}

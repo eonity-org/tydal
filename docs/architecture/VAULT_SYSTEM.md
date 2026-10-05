@@ -108,8 +108,15 @@ pivot, or the org's default workspace for
 
 | Action | Who | Why |
 |---|---|---|
-| Create vault, set purpose, publish, rotate salt/keys, attach/detach workspaces | **Admin (75)+** | changes what the outside world can reach |
+| Create or delete a vault; set purpose, state and policy; mint and revoke keys; signed grants; rotate salt | **Platform admin** (`platform/vaults` routes, `superadmin` middleware) | changes what the outside world can reach, and how |
+| Attach / detach an existing vault to a workspace | **Admin (75)+** (`WorkspaceController::attachVault`, `update` on the workspace) | chooses which curated set a vault shows |
 | Populate a vault (add resources to an attached workspace) | **Editor (50)+** | ordinary curation; no new permission surface |
+| Purpose-defined writes through the boundary (`activate`/`open`/`close`, `ingest`/`update`/`withdraw`) | **Holder of a write-capable vault key** | the key, not an organization role, is the authority ([VAULT_WRITE_METHODS.md](VAULT_WRITE_METHODS.md)) |
+
+Organization admins do **not** create or configure vaults themselves today;
+they ask a platform admin (or, for photo exhibitions, run
+`exhibitions:create`). Giving organizations their own vault management would
+mean scoping the `platform/vaults` endpoints by organization role.
 
 A direct `resource_vault` cherry-pick pivot is **deliberately deferred** — a
 dedicated single-purpose workspace covers that case. If added later it becomes

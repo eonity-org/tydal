@@ -60,13 +60,16 @@ class SearchReconcile extends Command
                 continue;
             }
 
-            $this->info("Index: {$searchIndex->index_name}");
+            $physical = $es->physicalIndexName($searchIndex->index_name);
+            $this->info("Index: {$searchIndex->index_name}".($physical !== $searchIndex->index_name ? " → {$physical}" : ''));
 
             $dbMap = Resource::whereIn('collection_id', $collectionIds)
                 ->where('state', ResourceState::LIVE->value)
                 ->pluck('updated_at', 'id');
 
-            $esMap = $es->listIndexedResources($searchIndex->index_name);
+            // Physical (prefixed) name: listing and --fix purges only ever see
+            // this installation's index, never another one sharing the cluster.
+            $esMap = $es->listIndexedResources($physical);
 
             if (count($esMap) === 10000) {
                 $this->warn('  ES listing hit the 10 000-doc cap — results may be partial.');
@@ -99,7 +102,7 @@ class SearchReconcile extends Command
                 }
 
                 foreach ($orphaned as $docId) {
-                    $es->purgeDocument($searchIndex->index_name, $docId);
+                    $es->purgeDocument($physical, $docId);
                 }
 
                 if ($missing->count() + $stale->count() + $orphaned->count() > 0) {

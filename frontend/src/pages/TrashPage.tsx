@@ -22,6 +22,7 @@ import NarrowDivider from '../components/ui/NarrowDivider'
 import SegmentedChoice from '../components/ui/SegmentedChoice'
 import resourceService, { type ResourceData } from '../api/resourceService'
 import { resolveStorageUrl } from '../utils/storageUrl'
+import { shortId } from '../utils/shortId'
 
 function TrashPage() {
   const [resources, setResources] = useState<ResourceData[]>([])
@@ -274,7 +275,7 @@ function TrashPage() {
                                 {resource.name}
                               </Typography>
                               <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'monospace', flexShrink: 0, fontSize: '0.75rem' }} title={resource.id}>
-                                {resource.id.slice(0, 8)}
+                                {shortId(resource.id)}
                               </Typography>
                             </Stack>
 

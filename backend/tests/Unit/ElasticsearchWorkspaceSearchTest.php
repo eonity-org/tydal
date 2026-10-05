@@ -103,6 +103,7 @@ class ElasticsearchWorkspaceSearchTest extends TestCase
             })
             ->andReturn($this->fakeEsResponse());
 
+        config(['elasticsearch.index_prefix' => '']);
         $this->service->searchByWorkspace(['tydal_multimedia', 'tydal_documents'], 5, '', [], [], 1, 20);
 
         $this->assertSame('tydal_multimedia,tydal_documents', $capturedParams['index']);

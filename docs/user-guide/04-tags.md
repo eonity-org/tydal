@@ -66,6 +66,13 @@ Put the resources in the basket ([chapter 5](05-basket.md)), then **Tags**:
 
 ![Adding a tag to everything in the basket](images/05-basket-tags.png)
 
+## Categories
+
+TYDAL can also file resources under **categories**, a tree of headings per
+organization (for example *Photography › Portraits*). For now they're available
+only through the API: the web app has no screen for them yet. Use tags for
+everyday classification.
+
 ## The organization's vocabulary
 
 Administrators see every tag of the organization in **Organization settings →

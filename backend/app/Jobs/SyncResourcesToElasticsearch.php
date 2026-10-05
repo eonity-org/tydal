@@ -120,7 +120,7 @@ class SyncResourcesToElasticsearch implements ShouldQueue
         // the indices this run actually touched closes that window without
         // forcing a refresh on every single-document write.
         foreach (array_keys($touchedIndexes) as $indexName) {
-            $es->refreshIndex($indexName);
+            $es->refreshIndex($es->physicalIndexName($indexName));
         }
     }
 }

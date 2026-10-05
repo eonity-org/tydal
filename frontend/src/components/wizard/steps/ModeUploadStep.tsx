@@ -13,6 +13,10 @@ import ImageIcon from '@mui/icons-material/Image'
 import OndemandVideoIcon from '@mui/icons-material/OndemandVideo'
 import CloseIcon from '@mui/icons-material/Close'
 
+import type { SchemeField } from '../../../api/collectionService'
+import { SchemeFieldInput } from '../SchemeFieldInput'
+import { hasFieldValue } from '../schemeFields'
+
 export type WizardMode = 'batch' | 'components' | 'canonical'
 
 export interface WizardFileEntry {
@@ -55,6 +59,11 @@ interface Props {
   collectionMimeTypes: string[]
   onModeChange: (m: WizardMode) => void
   onFilesChange: (files: WizardFileEntry[]) => void
+  /** Required metadata fields of the collection's scheme; empty → no panel. */
+  requiredFields?: SchemeField[]
+  /** Batch-wide values for `requiredFields`, keyed by field name. */
+  requiredValues?: Record<string, any>
+  onRequiredValueChange?: (name: string, value: any) => void
 }
 
 /** Returns true if `mime` matches any of the accepted MIME types (supports wildcards like `image/*`). */
@@ -70,7 +79,10 @@ function mimeMatches(mime: string, accepted: string[]): boolean {
 /**
  * Step 1 — Mode selector + adaptive file dropzone.
  */
-export function ModeUploadStep({ mode, files, collectionMimeTypes, onModeChange, onFilesChange }: Props) {
+export function ModeUploadStep({
+  mode, files, collectionMimeTypes, onModeChange, onFilesChange,
+  requiredFields = [], requiredValues = {}, onRequiredValueChange,
+}: Props) {
   const primaryInputRef   = useRef<HTMLInputElement>(null)
   const supportingInputRef = useRef<HTMLInputElement>(null)
   const multiInputRef     = useRef<HTMLInputElement>(null)
@@ -399,6 +411,63 @@ export function ModeUploadStep({ mode, files, collectionMimeTypes, onModeChange,
           )}
         </Box>
       )}
+
+      {/* ── Required scheme fields (batch-wide), only when the scheme has any ── */}
+      {mode !== null && requiredFields.length > 0 && (
+        <RequiredFieldsPanel
+          fields={requiredFields}
+          values={requiredValues}
+          onChange={(name, value) => onRequiredValueChange?.(name, value)}
+        />
+      )}
     </Stack>
+  )
+}
+
+// ─── Required-by-this-collection panel ───────────────────────────────────────
+
+/**
+ * The wizard creates every resource at the Upload step, before Review, and the
+ * server refuses a resource whose required scheme fields are empty. So those
+ * fields are asked for here, once for the whole upload.
+ */
+function RequiredFieldsPanel({
+  fields, values, onChange,
+}: {
+  fields: SchemeField[]
+  values: Record<string, any>
+  onChange: (name: string, value: any) => void
+}) {
+  const missing = fields.filter((f) => !hasFieldValue(f, values[f.name]))
+  return (
+    <Box
+      component="section"
+      aria-label="Required by this collection"
+      sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}
+    >
+      <Box sx={{ px: 1.5, py: 0.75, bgcolor: 'action.hover', borderBottom: '1px solid', borderColor: 'divider' }}>
+        <Typography variant="caption" fontWeight={700} color="text.secondary">
+          Required by this collection
+        </Typography>
+      </Box>
+      <Stack spacing={1.5} sx={{ p: 1.5 }}>
+        {fields.map((f) => (
+          <SchemeFieldInput
+            key={f.name}
+            field={f}
+            value={values[f.name]}
+            onChange={(v) => onChange(f.name, v)}
+          />
+        ))}
+        <Typography variant="caption" color="text.secondary">
+          Applied to every resource; you can change it per resource in Review.
+        </Typography>
+        {missing.length > 0 && (
+          <Typography variant="caption" color="warning.dark" role="status">
+            Fill in {missing.map((f) => f.display_name).join(', ')} to continue.
+          </Typography>
+        )}
+      </Stack>
+    </Box>
   )
 }

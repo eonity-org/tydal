@@ -72,8 +72,9 @@ the right, in tabs:
 
 ![A resource's basic information](images/02-resource-details.png)
 
-- **Basic Info**: name, description, workspaces, tags, the collection's fields
-  and dates.
+- **Basic Info**: name, state (*Live*, *Draft* or *Archived*, beside the type at
+  the top; see [chapter 5](05-basket.md#live-draft-archived)), description,
+  workspaces, tags, the collection's fields and dates.
 - **Files**: the files that make up the resource and their **role**:
   - *Canonical*: the main file; the resource's text and metadata come from it.
   - *Supporting*: attachments, such as a cover or extra photos, that travel with
