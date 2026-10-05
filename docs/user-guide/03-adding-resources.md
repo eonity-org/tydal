@@ -108,7 +108,8 @@ uploaded; administrators and owners can edit any resource.
 
 ![Editing a resource](images/03-resource-edit.png)
 
-In edit mode you can change the name and description, the **workspaces** the
+In edit mode you can change the name and description, the **state** (*Live* or
+*Archived*; see [chapter 5](05-basket.md#live-draft-archived)), the **workspaces** the
 resource belongs to (click a workspace to add or remove it), its **tags**
 ([chapter 4](04-tags.md)) and the collection's fields. The **Aity** menu at the
 top asks the AI for fresh suggestions. Save with:

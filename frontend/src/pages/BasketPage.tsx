@@ -24,6 +24,7 @@ import Header from '../components/layout/Header'
 import NarrowDivider from '../components/ui/NarrowDivider'
 import BulkActions from '../components/basket/BulkActions'
 import { useBasket } from '../contexts/BasketContext'
+import { usePermissions } from '../hooks/usePermissions'
 import resourceService, { type ResourceData } from '../api/resourceService'
 import workspaceService from '../api/workspaceService'
 import { resolveStorageUrl } from '../utils/storageUrl'
@@ -53,6 +54,11 @@ function BasketPage() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [reload, setReload] = useState(0)
+
+  // Creating a workspace is an administrator/owner ability (workspaces.create);
+  // editors add the basket to an existing workspace with the Workspace action.
+  const { can, ready: permissionsReady } = usePermissions()
+  const mayCreateWorkspace = permissionsReady && can('workspaces.create')
 
   useEffect(() => {
     if (!ready) return
@@ -138,14 +144,16 @@ function BasketPage() {
             {count > 0 && (
               <>
                 <Button size="small" onClick={clear} sx={{ height: '2rem' }}>Empty basket</Button>
-                <Button
-                  size="small"
-                  startIcon={<WorkspacesOutlined />}
-                  onClick={() => setSaveOpen(true)}
-                  sx={{ height: '2rem' }}
-                >
-                  Save as workspace
-                </Button>
+                {mayCreateWorkspace && (
+                  <Button
+                    size="small"
+                    startIcon={<WorkspacesOutlined />}
+                    onClick={() => setSaveOpen(true)}
+                    sx={{ height: '2rem' }}
+                  >
+                    Save as workspace
+                  </Button>
+                )}
               </>
             )}
           </Box>
