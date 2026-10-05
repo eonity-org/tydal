@@ -25,6 +25,14 @@ All notable changes to TYDAL are documented here. The format follows
 
 ### Fixed
 
+- **Resources without a description couldn't be edited** (#24). The built-in
+  schemes (multimedia, documents, general) required `description`, but only
+  the edit form enforced it, so resources created by the wizard, FullFrame or
+  AI ingest, or the API — all without one — couldn't be saved or archived
+  from the form. `description` is now optional in those schemes (seeder and a
+  migration for existing installations; the 10-character minimum still applies
+  when one is given), and the edit form only enforces a scheme-required
+  description on new resources or when one was already set.
 - **Setting a resource to Draft got it permanently deleted** (#26). The
   basket's State action offered *Draft*, and `PUT /resources/{id}` and
   `/resources/bulk/state` accepted it, but the draft reapers

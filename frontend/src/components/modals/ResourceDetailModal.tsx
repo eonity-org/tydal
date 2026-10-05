@@ -1472,9 +1472,19 @@ function ResourceDetailModal(props: ResourceDetailModalProps) {
       .filter(f => f.required && f.storage === 'metadata')
       .map(f => f.name)
 
-    // Root-level resource fields required by scheme (e.g. 'description')
+    // Root-level resource fields required by scheme (e.g. 'description').
+    // Enforced when a resource is being created through this form, and when the
+    // stored resource already has a value (so it can't be cleared). Not enforced
+    // on an existing resource that never had one: every other path (the wizard,
+    // FullFrame and AI ingest, the API) creates live resources without a
+    // description, and they must stay editable — archiving or re-tagging must not
+    // demand a description first (#24).
+    const isNewResource = initialMode === 'create' || resource?.state === 'draft'
+    const storedDescription = resource?.description
+    const hadDescription = typeof storedDescription === 'string' && storedDescription.trim() !== ''
     const requiredRootFields = schemaFields
       .filter(f => f.required && f.storage === 'column' && f.name === 'description')
+      .filter(() => isNewResource || hadDescription)
       .map(f => f.name)
 
     const validationErrorsList = validateResourceData(editedResource, requiredSchemaFields, requiredRootFields)
@@ -1874,7 +1884,7 @@ function ResourceDetailModal(props: ResourceDetailModalProps) {
     } finally {
       setIsSaving(false)
     }
-  }, [editedResource, resourceId, newFiles, filesToRemove, configMap, existingFileConfigs, newPreview, snapshotFileId, pendingCanonicalChange, resourceWorkspaceIds, originalWorkspaceIds, resourceTagIds, originalTagIds, pendingSuggestedTags])
+  }, [editedResource, resourceId, newFiles, filesToRemove, configMap, existingFileConfigs, newPreview, snapshotFileId, pendingCanonicalChange, resourceWorkspaceIds, originalWorkspaceIds, resourceTagIds, originalTagIds, pendingSuggestedTags, initialMode, resource, activeCollection])
 
   // ── Unified exit flow (used by both Cancel and X) ──────────────────────────
   // Cancel and X share the same dialog. The only difference is what happens
