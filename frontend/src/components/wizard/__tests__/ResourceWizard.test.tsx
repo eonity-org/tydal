@@ -22,6 +22,7 @@ const api = vi.hoisted(() => ({
   createResource: vi.fn(),
   uploadFile: vi.fn(),
   updateResource: vi.fn(),
+  deleteResource: vi.fn(),
   getAityStatus: vi.fn(),
   createAityReviewBatch: vi.fn(),
   addResource: vi.fn(),
@@ -35,7 +36,7 @@ vi.mock('../../../api/resourceService', () => ({
     createResource: api.createResource,
     uploadFile: api.uploadFile,
     updateResource: api.updateResource,
-    deleteResource: vi.fn(),
+    deleteResource: api.deleteResource,
     setFileSnapshot: vi.fn(),
     aityEnrichFile: vi.fn(),
     getAityStatus: api.getAityStatus,
@@ -76,7 +77,7 @@ function collectionWith(fields: SchemeField[]) {
   } as never
 }
 
-const photo = () => new File(['x'], 'army-0001.jpg', { type: 'image/jpeg' })
+const photo = (name = 'army-0001.jpg') => new File(['x'], name, { type: 'image/jpeg' })
 
 async function chooseBatchAndFile(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByText('Each file becomes a separate resource'))
@@ -117,6 +118,7 @@ describe('ResourceWizard', () => {
     api.createResource.mockResolvedValue({ id: 'r1' } as never)
     api.uploadFile.mockResolvedValue({ id: 'f1' } as never)
     api.updateResource.mockResolvedValue({ id: 'r1' } as never)
+    api.deleteResource.mockResolvedValue(true as never)
     api.getAityStatus.mockResolvedValue(null as never)
     globalThis.URL.createObjectURL = vi.fn(() => 'blob:preview')
   })
@@ -193,5 +195,133 @@ describe('ResourceWizard', () => {
 
     expect(await screen.findByText('Could not create the AiTy Review batch: This action is unauthorized.')).not.toBeNull()
     expect(onClose).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Leaving the wizard (#20) and the drafts it creates (#21): no resource may
+ * silently stay a draft, because the hourly purge deletes drafts, files and all.
+ */
+describe('ResourceWizard — leaving and orphaned drafts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    api.getCollection.mockResolvedValue(collectionWith([YEAR]))
+    api.createResource.mockResolvedValue({ id: 'r1' } as never)
+    api.uploadFile.mockResolvedValue({ id: 'f1' } as never)
+    api.updateResource.mockResolvedValue({ id: 'r1' } as never)
+    api.deleteResource.mockResolvedValue(true as never)
+    api.getAityStatus.mockResolvedValue(null as never)
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:preview')
+  })
+
+  async function uploadOne(user: ReturnType<typeof userEvent.setup>) {
+    await chooseBatchAndFile(user)
+    await user.click(nextButton())
+    await screen.findByText('1 resource uploaded')
+  }
+
+  const closeWizard = (user: ReturnType<typeof userEvent.setup>) =>
+    user.click(screen.getByTestId('CloseIcon').closest('button')!)
+
+  it('keeps the exit dialog open with the reason and Retry when Keep fails, and closes once Retry works', async () => {
+    api.updateResource.mockRejectedValueOnce(new Error('The selected state is invalid.'))
+    const onClose = vi.fn()
+    const user = userEvent.setup()
+    render(<ResourceWizard open collectionId={1} onClose={onClose} onSaved={() => {}} />)
+    await uploadOne(user)
+
+    await closeWizard(user)
+    await user.click(await screen.findByRole('button', { name: 'Keep' }))
+
+    expect(await screen.findByText('Could not keep 1 resource')).not.toBeNull()
+    expect(screen.getByText(/The selected state is invalid\./)).not.toBeNull()
+    expect(screen.getByText(/deleted automatically after a while/)).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Leave anyway' })).not.toBeNull()
+    expect(onClose).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(onClose).toHaveBeenCalledWith(true))
+    expect(api.updateResource).toHaveBeenCalledTimes(2)
+    expect(api.updateResource).toHaveBeenLastCalledWith('r1', { state: 'live' })
+  })
+
+  it('reports a failed Delete all too, and Leave anyway closes', async () => {
+    api.deleteResource.mockRejectedValueOnce(new Error('This action is unauthorized.'))
+    const onClose = vi.fn()
+    const user = userEvent.setup()
+    render(<ResourceWizard open collectionId={1} onClose={onClose} onSaved={() => {}} />)
+    await uploadOne(user)
+
+    await closeWizard(user)
+    await user.click(await screen.findByRole('button', { name: 'Delete all' }))
+
+    expect(await screen.findByText('Could not delete 1 resource')).not.toBeNull()
+    expect(screen.getByText(/This action is unauthorized\./)).not.toBeNull()
+    expect(onClose).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Leave anyway' }))
+    expect(onClose).toHaveBeenCalledWith(true)
+  })
+
+  it('reuses the upload on Back → Next when nothing changed', async () => {
+    const user = userEvent.setup()
+    render(<ResourceWizard open collectionId={1} onClose={() => {}} onSaved={() => {}} />)
+    await uploadOne(user)
+
+    await user.click(screen.getByRole('button', { name: /Back/ }))
+    await user.click(nextButton())
+
+    expect(await screen.findByText('1 resource uploaded')).not.toBeNull()
+    expect(api.createResource).toHaveBeenCalledTimes(1)
+    expect(api.uploadFile).toHaveBeenCalledTimes(1)
+    expect(api.deleteResource).not.toHaveBeenCalled()
+  })
+
+  it('deletes the earlier drafts before uploading a changed selection', async () => {
+    api.createResource
+      .mockResolvedValueOnce({ id: 'r1' } as never)
+      .mockResolvedValueOnce({ id: 'r2' } as never)
+      .mockResolvedValueOnce({ id: 'r3' } as never)
+    const user = userEvent.setup()
+    render(<ResourceWizard open collectionId={1} onClose={() => {}} onSaved={() => {}} />)
+    await uploadOne(user)
+
+    await user.click(screen.getByRole('button', { name: /Back/ }))
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    await user.upload(input, photo('army-0002.jpg'))
+    await screen.findByText('army-0002.jpg')
+    await user.click(nextButton())
+
+    expect(await screen.findByText('2 resources uploaded')).not.toBeNull()
+    expect(api.deleteResource).toHaveBeenCalledTimes(1)
+    expect(api.deleteResource).toHaveBeenCalledWith('r1')
+    expect(api.createResource).toHaveBeenCalledTimes(3)
+  })
+
+  it('deletes the resource again when its file fails to upload', async () => {
+    api.uploadFile.mockRejectedValue(new Error('The file type is not accepted.'))
+    const user = userEvent.setup()
+    render(<ResourceWizard open collectionId={1} onClose={() => {}} onSaved={() => {}} />)
+    await chooseBatchAndFile(user)
+    await user.click(nextButton())
+
+    expect(await screen.findByText('Nothing was uploaded, so there is nothing to review.')).not.toBeNull()
+    expect(api.deleteResource).toHaveBeenCalledWith('r1')
+    expect(screen.getAllByText('The file type is not accepted.').length).toBeGreaterThan(0)
+
+    // Nothing is left to keep or delete, so closing asks nothing.
+    await closeWizard(user)
+    expect(screen.queryByText('Exit wizard?')).toBeNull()
+  })
+
+  it('says so when even the empty resource cannot be removed', async () => {
+    api.uploadFile.mockRejectedValue(new Error('The file type is not accepted.'))
+    api.deleteResource.mockRejectedValue(new Error('Server Error'))
+    const user = userEvent.setup()
+    render(<ResourceWizard open collectionId={1} onClose={() => {}} onSaved={() => {}} />)
+    await chooseBatchAndFile(user)
+    await user.click(nextButton())
+
+    expect((await screen.findAllByText(/could not be removed either \(Server Error\)/)).length).toBeGreaterThan(0)
   })
 })

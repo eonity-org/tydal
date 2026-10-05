@@ -46,8 +46,14 @@ Click **Next**.
 ### 2 · Upload
 
 The files upload one by one, each with a tick when it's done. A file that fails
-shows the reason beside it. If none of them could be uploaded, the wizard says
-why and offers only **Back**, so you can correct it and try again.
+shows the reason beside it, and its resource is not created. If none of them
+could be uploaded, the wizard says why and offers only **Back**, so you can
+correct it and try again.
+
+**Back** is available once the uploads finish. If you come back with the same
+files, mode and step-1 values, **Next** returns to the upload already made and
+only tries the failed files again. If you change any of them, the earlier upload
+is discarded and the files are uploaded afresh.
 
 Then choose how to continue:
 
@@ -94,8 +100,11 @@ collection's own fields, already filled with anything you entered at step 1.
 If you close the wizard after files have uploaded, it asks whether to **keep**
 the resources (they're added to the collection as they are, named after their
 files) or **delete them all**. Until the wizard finishes, the new resources are
-drafts that nobody else sees. If the wizard is interrupted (a closed tab, a lost
-connection), TYDAL clears those drafts automatically after a while.
+drafts that nobody else sees. If some of them can't be kept or deleted, the
+wizard doesn't close: it lists them with the reason and offers **Retry**, or
+**Leave anyway**, in which case those stay drafts. If the wizard is interrupted
+(a closed tab, a lost connection) or you leave anyway, TYDAL clears those drafts
+automatically after a while, files and all.
 
 ## AiTy Review: following Auto batches
 

@@ -22,7 +22,7 @@ import { useAityPolling } from '../../hooks/useAityPolling'
 import type { FileSuggestion } from '../../hooks/useAiSuggestionsPoller'
 
 import { WizardStepper } from './WizardStepper'
-import { AbandonDialog } from './AbandonDialog'
+import { AbandonDialog, AbandonFailure } from './AbandonDialog'
 import { ModeUploadStep, WizardMode, WizardFileEntry } from './steps/ModeUploadStep'
 import { AiTyStep } from './steps/AiTyStep'
 import { CarouselStep } from './steps/CarouselStep'
@@ -76,6 +76,15 @@ function describeError(err: unknown): string {
   const { message, fieldErrors } = getApiError(err)
   const details = fieldErrors ? Object.values(fieldErrors).filter((m) => m !== message) : []
   return details.length > 0 ? `${message} ${details.join(' ')}` : message
+}
+
+/**
+ * A resource the wizard created and still stands behind. A failed row may
+ * still carry the id of an empty draft that could not be removed: that one is
+ * never published, only deleted.
+ */
+function isCreated(rec: WizardResourceRecord): rec is WizardResourceRecord & { resourceId: string } {
+  return !!rec.resourceId && rec.uploadStatus !== 'error'
 }
 
 function defaultWorkspaceName(): string {
@@ -144,6 +153,12 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
   // retry so a second click doesn't leave an empty batch behind.
   const autoBatchRef = useRef<Workspace | null>(null)
 
+  // The step-1 selection (mode, files, required values) the current records
+  // were uploaded for: Back → Next with the same selection reuses them (#21).
+  const uploadedSelectionRef = useRef<string | null>(null)
+  const [isDiscarding, setIsDiscarding] = useState(false)
+  const [discardError, setDiscardError] = useState<string | null>(null)
+
   // Step 1: batch-wide values for the scheme's required fields
   const [requiredValues, setRequiredValues] = useState<Record<string, any>>({})
 
@@ -151,6 +166,7 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
   const [abandonOpen, setAbandonOpen]     = useState(false)
   const [isDeletingAll, setIsDeletingAll] = useState(false)
   const [isPublishing, setIsPublishing]   = useState(false)
+  const [abandonFailure, setAbandonFailure] = useState<AbandonFailure | null>(null)
 
   // Finish saving (step 4)
   const [isSaving, setIsSaving]   = useState(false)
@@ -183,11 +199,15 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
       setRequiredValues({})
       setAutoError(null)
       autoBatchRef.current = null
+      uploadedSelectionRef.current = null
+      setIsDiscarding(false)
+      setDiscardError(null)
       setExitPath(null)
       setAutoApplyNameDesc(true)
       setAutoApplyTags(true)
       setAutoSmartClustering(true)
       setAbandonOpen(false)
+      setAbandonFailure(null)
       setIsDeletingAll(false)
       setIsSaving(false)
       setSaveError(null)
@@ -215,6 +235,9 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
       const pickedIdx = rec.allFiles.findIndex((f) => f.name === source.filename)
       const pickedFileId = pickedIdx !== -1 ? rec.uploadedFileIds[pickedIdx] : undefined
       if (pickedFileId) {
+        // Non-fatal: this only picks which file previews the resource. The
+        // resource already has a preview from its first file, and the snapshot
+        // can be changed later in the resource editor; nothing is lost.
         resourceService.setFileSnapshot(rec.resourceId, pickedFileId).catch(() => {})
       }
     }
@@ -314,13 +337,148 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
     setRequiredValues((prev) => ({ ...prev, [name]: value }))
   }, [])
 
+  // ── step 2: create each resource and upload its files ─────────────────────────
+  // A resource is all or nothing: when a file fails after its resource was
+  // created, the resource is deleted again so no empty draft is left behind
+  // (#21). The row shows the error; Back → Next retries just the failed rows.
+  const uploadRecords = useCallback(async (toUpload: WizardResourceRecord[], uploadMode: WizardMode) => {
+    for (const rec of toUpload) {
+      if (cancelledRef.current) break
+
+      updateRecord(rec.localId, { uploadStatus: 'creating' })
+
+      let resource: ResourceData | null = null
+      try {
+        resource = await resourceService.createResource({
+          name: rec.placeholderName,
+          type: inferResourceType(rec.file.type),
+          collection_id: collectionId,
+          state: 'draft',
+          ...(Object.keys(rec.metadata).length > 0 ? { metadata: rec.metadata } : {}),
+        })
+      } catch (err) {
+        updateRecord(rec.localId, {
+          uploadStatus: 'error',
+          errorMessage: describeError(err),
+        })
+        continue
+      }
+
+      if (!resource) break
+      if (cancelledRef.current) {
+        // Created while the wizard was being discarded (Delete all): remove it
+        // too. Nobody is left to tell if this fails, and the hourly draft
+        // purge clears it anyway.
+        resourceService.deleteResource(resource.id).catch(() => {})
+        break
+      }
+
+      updateRecord(rec.localId, { resourceId: resource.id, uploadStatus: 'uploading' })
+
+      // Batch: one canonical file. Components: every file a component.
+      // Canonical: the first file canonical, the rest supporting.
+      const roles = rec.allFiles.map((_, i) =>
+        uploadMode === 'components' ? 'component' : i === 0 ? 'canonical' : 'supporting')
+      const fileStatuses = rec.allFiles.map(() => 'pending' as 'pending' | 'uploading' | 'done' | 'error')
+      const trackFiles = rec.fileUploadStatuses !== undefined
+      const uploadedFileIds: string[] = []
+      try {
+        for (let fi = 0; fi < rec.allFiles.length; fi++) {
+          if (cancelledRef.current) break
+          fileStatuses[fi] = 'uploading'
+          if (trackFiles) updateRecord(rec.localId, { fileUploadStatuses: [...fileStatuses] })
+          try {
+            const uploaded = await resourceService.uploadFile(resource.id, rec.allFiles[fi], roles[fi])
+            fileStatuses[fi] = uploaded?.id ? 'done' : 'error'
+            if (uploaded?.id) uploadedFileIds.push(uploaded.id)
+          } catch (err) {
+            fileStatuses[fi] = 'error'
+            throw err
+          } finally {
+            if (trackFiles) updateRecord(rec.localId, { fileUploadStatuses: [...fileStatuses] })
+          }
+        }
+      } catch (err) {
+        let errorMessage = describeError(err)
+        let keptId: string | undefined
+        try {
+          await resourceService.deleteResource(resource.id)
+        } catch (deleteErr) {
+          keptId = resource.id
+          errorMessage += ` The empty resource could not be removed either (${describeError(deleteErr)}); it stays a hidden draft and is cleared automatically.`
+        }
+        updateRecord(rec.localId, {
+          resourceId: keptId,
+          primaryFileId: undefined,
+          uploadedFileIds: [],
+          uploadStatus: 'error',
+          errorMessage,
+        })
+        continue
+      }
+
+      if (cancelledRef.current) break
+      updateRecord(rec.localId, {
+        primaryFileId: uploadedFileIds[0],
+        uploadedFileIds,
+        uploadStatus: 'done',
+      })
+      if (uploadedFileIds.length > 0) startPolling(resource.id, uploadedFileIds)
+    }
+  }, [collectionId, updateRecord, startPolling])
+
   // ── step 1 → step 2 transition ───────────────────────────────────────────────
-  const handleProceedToStep2 = useCallback(() => {
+  // Back → Next with the same files, mode and required values goes back to the
+  // upload already made (retrying only the rows that failed). Any change starts
+  // over: the drafts of the earlier attempt are deleted first, so they don't
+  // linger as orphans (#21).
+  const handleProceedToStep2 = useCallback(async () => {
     cancelledRef.current = false
+    if (!mode) return
 
     // The step-1 required values: every resource is created with them, and
     // Review starts from them (still editable per resource).
     const initialMetadata = requiredFieldsMetadata(requiredFields, requiredValues)
+    const selection = JSON.stringify({
+      mode,
+      files: files.map((f) => [f.localId, f.role]),
+      metadata: initialMetadata,
+    })
+
+    if (selection === uploadedSelectionRef.current && records.length > 0) {
+      const failed = records
+        .filter((r) => r.uploadStatus === 'error')
+        .map((r) => ({
+          ...r,
+          uploadStatus: 'pending' as const,
+          errorMessage: undefined,
+          fileUploadStatuses: r.fileUploadStatuses?.map(() => 'pending' as const),
+        }))
+      setStep(2)
+      if (failed.length === 0) return
+      const retry = failed.map((r) => ({ ...r, resourceId: undefined }))
+      setRecords((prev) => prev.map((r) => retry.find((f) => f.localId === r.localId) ?? r))
+      // A failed row whose empty draft could not be removed: try once more
+      // (it was already reported, and the draft purge clears it otherwise),
+      // then create the row afresh.
+      await Promise.allSettled(failed.filter((r) => r.resourceId).map((r) => resourceService.deleteResource(r.resourceId!)))
+      void uploadRecords(retry, mode)
+      return
+    }
+
+    const earlier = records.filter((r) => r.resourceId)
+    if (earlier.length > 0) {
+      setIsDiscarding(true)
+      stopAll()
+      const results = await Promise.allSettled(earlier.map((r) => resourceService.deleteResource(r.resourceId!)))
+      setIsDiscarding(false)
+      const reasons = results.flatMap((res) => res.status === 'rejected' ? [describeError(res.reason)] : [])
+      setDiscardError(reasons.length > 0
+        ? `${reasons.length} resource${reasons.length !== 1 ? 's' : ''} from the previous upload could not be deleted: ${[...new Set(reasons)].join(' ')} They stay hidden drafts and are cleared automatically.`
+        : null)
+    } else {
+      setDiscardError(null)
+    }
 
     let initialRecords: WizardResourceRecord[] = []
 
@@ -376,108 +534,12 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
       }]
     }
 
+    uploadedSelectionRef.current = selection
     setRecords(initialRecords)
     setExitPath(null)
     setStep(2)
-
-    // ── background upload loop ────────────────────────────────────────────────
-    ;(async () => {
-      for (const rec of initialRecords) {
-        if (cancelledRef.current) break
-
-        updateRecord(rec.localId, { uploadStatus: 'creating' })
-
-        let resource: ResourceData | null = null
-        try {
-          resource = await resourceService.createResource({
-            name: rec.placeholderName,
-            type: inferResourceType(rec.file.type),
-            collection_id: collectionId,
-            state: 'draft',
-            ...(Object.keys(rec.metadata).length > 0 ? { metadata: rec.metadata } : {}),
-          })
-        } catch (err) {
-          updateRecord(rec.localId, {
-            uploadStatus: 'error',
-            errorMessage: describeError(err),
-          })
-          continue
-        }
-
-        if (!resource || cancelledRef.current) break
-
-        updateRecord(rec.localId, { resourceId: resource.id, uploadStatus: 'uploading' })
-
-        let uploadedFileIds: string[] = []
-        try {
-          if (mode === 'batch') {
-            const uploaded = await resourceService.uploadFile(resource.id, rec.file, 'canonical')
-            if (cancelledRef.current) break
-            uploadedFileIds = uploaded?.id ? [uploaded.id] : []
-            updateRecord(rec.localId, {
-              primaryFileId: uploaded?.id,
-              uploadedFileIds,
-              uploadStatus: 'done',
-            })
-          } else if (mode === 'components') {
-            let primaryFileId: string | undefined
-            const fileStatuses: Array<'pending' | 'uploading' | 'done' | 'error'> = files.map(() => 'pending' as const)
-            for (let fi = 0; fi < files.length; fi++) {
-              if (cancelledRef.current) break
-              fileStatuses[fi] = 'uploading'
-              updateRecord(rec.localId, { fileUploadStatuses: [...fileStatuses] })
-              const uploaded = await resourceService.uploadFile(resource.id, files[fi].file, 'component')
-              fileStatuses[fi] = uploaded?.id ? 'done' : 'error'
-              if (uploaded?.id) {
-                uploadedFileIds.push(uploaded.id)
-                if (!primaryFileId) primaryFileId = uploaded.id
-              }
-              updateRecord(rec.localId, { fileUploadStatuses: [...fileStatuses] })
-            }
-            if (cancelledRef.current) break
-            updateRecord(rec.localId, { primaryFileId, uploadedFileIds, uploadStatus: 'done' })
-          } else {
-            const primaryFe  = files.find((f) => f.role === 'canonical')!
-            const supporting = files.filter((f) => f.role !== 'canonical')
-            const fileStatuses: Array<'pending' | 'uploading' | 'done' | 'error'> = [primaryFe, ...supporting].map(() => 'pending' as const)
-
-            fileStatuses[0] = 'uploading'
-            updateRecord(rec.localId, { fileUploadStatuses: [...fileStatuses] })
-            const uploaded = await resourceService.uploadFile(resource.id, primaryFe.file, 'canonical')
-            fileStatuses[0] = uploaded?.id ? 'done' : 'error'
-            if (uploaded?.id) uploadedFileIds.push(uploaded.id)
-            updateRecord(rec.localId, { fileUploadStatuses: [...fileStatuses] })
-
-            if (cancelledRef.current) break
-            for (let si = 0; si < supporting.length; si++) {
-              if (cancelledRef.current) break
-              fileStatuses[si + 1] = 'uploading'
-              updateRecord(rec.localId, { fileUploadStatuses: [...fileStatuses] })
-              const sfUploaded = await resourceService.uploadFile(resource.id, supporting[si].file, 'supporting')
-              fileStatuses[si + 1] = sfUploaded?.id ? 'done' : 'error'
-              if (sfUploaded?.id) uploadedFileIds.push(sfUploaded.id)
-              updateRecord(rec.localId, { fileUploadStatuses: [...fileStatuses] })
-            }
-            if (cancelledRef.current) break
-            updateRecord(rec.localId, {
-              primaryFileId: uploadedFileIds[0],
-              uploadedFileIds,
-              uploadStatus: 'done',
-            })
-          }
-        } catch (err) {
-          updateRecord(rec.localId, {
-            uploadStatus: 'error',
-            errorMessage: err instanceof Error ? err.message : 'Upload failed',
-          })
-          continue
-        }
-
-        if (cancelledRef.current) break
-        if (uploadedFileIds.length > 0) startPolling(resource.id, uploadedFileIds)
-      }
-    })()
-  }, [mode, files, collectionId, updateRecord, startPolling, requiredFields, requiredValues])
+    void uploadRecords(initialRecords, mode)
+  }, [mode, files, records, requiredFields, requiredValues, stopAll, uploadRecords])
 
   // ── Shared: persist accepted suggestions + promote draft → live ──────────────
   // Returns the names of the resources it could not save: a resource left a
@@ -485,7 +547,7 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
   const persistSuggestions = useCallback(async (): Promise<string[]> => {
     const failed: string[] = []
     for (const rec of records) {
-      if (!rec.resourceId) continue
+      if (!isCreated(rec)) continue
       try {
         await resourceService.updateResource(rec.resourceId, {
           ...(rec.suggestionsAccepted ? {
@@ -539,7 +601,7 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
 
       stage = 'add the resources to the batch'
       for (const rec of records) {
-        if (!rec.resourceId) continue
+        if (!isCreated(rec)) continue
         const addError = await workspaceService.addResource(workspace.id, rec.resourceId)
         if (addError) throw new Error(addError)
       }
@@ -580,7 +642,7 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
 
     try {
       for (const rec of records) {
-        if (!rec.resourceId) continue
+        if (!isCreated(rec)) continue
 
         const updated = await resourceService.updateResource(rec.resourceId, {
           name: rec.name || rec.placeholderName,
@@ -636,38 +698,75 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
     }
   }, [records, stopAll, onClose])
 
-  const handleKeep = useCallback(async () => {
-    setIsPublishing(true)
-    try {
-      await Promise.all(
-        records
-          .filter((r) => r.resourceId)
-          .map((r) => resourceService.updateResource(r.resourceId!, { state: 'live' }).catch(() => {}))
-      )
-    } finally {
-      setIsPublishing(false)
+  // Keep and Delete all report what they could not do, and the dialog stays
+  // open with Retry: a resource that silently stays a draft is purged later,
+  // files and all (#20). Retry acts only on the ones that failed.
+  const runAbandonAction = useCallback(async (action: 'keep' | 'delete', targets: WizardResourceRecord[]) => {
+    const results = await Promise.allSettled(targets.map((r) => action === 'keep'
+      ? resourceService.updateResource(r.resourceId!, { state: 'live' })
+      : resourceService.deleteResource(r.resourceId!)))
+    const failed = targets.flatMap((r, i) => {
+      const res = results[i]
+      return res.status === 'rejected'
+        ? [{ localId: r.localId, name: r.name || r.placeholderName, message: describeError(res.reason) }]
+        : []
+    })
+    if (action === 'delete') {
+      // Forget the deleted ones, so a retry or a later Keep can't reach them.
+      const deleted = new Set(targets.filter((r) => !failed.some((f) => f.localId === r.localId)).map((r) => r.localId))
+      setRecords((prev) => prev.map((r) => deleted.has(r.localId) ? { ...r, resourceId: undefined } : r))
     }
+    if (failed.length > 0) {
+      setAbandonFailure({ action, failed })
+      return
+    }
+    setAbandonFailure(null)
     setAbandonOpen(false)
     stopAll()
     onClose(true)
-  }, [records, stopAll, onClose])
+  }, [stopAll, onClose])
+
+  const handleKeep = useCallback(async () => {
+    setIsPublishing(true)
+    try {
+      await runAbandonAction('keep', records.filter(isCreated))
+    } finally {
+      setIsPublishing(false)
+    }
+  }, [records, runAbandonAction])
 
   const handleDeleteAll = useCallback(async () => {
     cancelledRef.current = true
     setIsDeletingAll(true)
     try {
-      await Promise.all(
-        records
-          .filter((r) => r.resourceId)
-          .map((r) => resourceService.deleteResource(r.resourceId!).catch(() => {}))
-      )
+      await runAbandonAction('delete', records.filter((r) => r.resourceId))
     } finally {
       setIsDeletingAll(false)
     }
+  }, [records, runAbandonAction])
+
+  const handleAbandonRetry = useCallback(async () => {
+    if (!abandonFailure) return
+    const { action, failed } = abandonFailure
+    const targets = records.filter((r) => r.resourceId && failed.some((f) => f.localId === r.localId))
+    const setBusy = action === 'keep' ? setIsPublishing : setIsDeletingAll
+    setBusy(true)
+    try {
+      await runAbandonAction(action, targets)
+    } finally {
+      setBusy(false)
+    }
+  }, [abandonFailure, records, runAbandonAction])
+
+  // Leave with the failures unresolved: what is left are drafts, which the
+  // dialog has warned are cleared automatically.
+  const handleAbandonLeave = useCallback(() => {
+    cancelledRef.current = true
+    setAbandonFailure(null)
     setAbandonOpen(false)
     stopAll()
     onClose(true)
-  }, [records, stopAll, onClose])
+  }, [stopAll, onClose])
 
   // ── navigation guards ────────────────────────────────────────────────────────
   const isStep1Valid =
@@ -816,6 +915,12 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
             />
           )}
 
+          {step === 2 && discardError && (
+            <Alert severity="warning" sx={{ m: 2, mb: 0 }}>
+              {discardError}
+            </Alert>
+          )}
+
           {step === 2 && (
             <Step2UploadChoice
               records={records}
@@ -880,10 +985,11 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
                 <span>
                   <Button
                     variant="contained"
-                    onClick={handleProceedToStep2}
-                    disabled={!isStep1Valid}
+                    onClick={() => void handleProceedToStep2()}
+                    disabled={!isStep1Valid || isDiscarding}
+                    startIcon={isDiscarding ? <CircularProgress size={16} color="inherit" /> : undefined}
                   >
-                    Next →
+                    {isDiscarding ? 'Clearing previous upload…' : 'Next →'}
                   </Button>
                 </span>
               </Tooltip>
@@ -892,9 +998,15 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
 
           {step === 2 && (
             <>
-              <Button onClick={() => setStep(1)} variant="outlined" disabled={isSavingWorkspace}>
-                ← Back
-              </Button>
+              {/* Back waits for the uploads: the selection may change on step 1,
+                  and the drafts of this attempt must be complete to be cleared. */}
+              <Tooltip title={uploadingCount > 0 ? 'Wait for the uploads to finish' : ''}>
+                <span>
+                  <Button onClick={() => setStep(1)} variant="outlined" disabled={isSavingWorkspace || uploadingCount > 0}>
+                    ← Back
+                  </Button>
+                </span>
+              </Tooltip>
               {exitPath === 'auto' && !allUploadsFailed ? (
                 <Stack direction="row" spacing={1} alignItems="center">
                   {autoError && (
@@ -965,11 +1077,14 @@ export function ResourceWizard({ open, collectionId, onClose, onSaved }: Props) 
       {/* ── Abandon dialog ──────────────────────────────────────────────────── */}
       <AbandonDialog
         open={abandonOpen}
-        resourceCount={records.filter((r) => r.resourceId || r.uploadStatus === 'creating' || r.uploadStatus === 'uploading').length}
+        resourceCount={records.filter((r) => isCreated(r) || r.uploadStatus === 'creating' || r.uploadStatus === 'uploading').length}
         isDeleting={isDeletingAll}
         isPublishing={isPublishing}
+        failure={abandonFailure}
         onKeep={handleKeep}
         onDeleteAll={handleDeleteAll}
+        onRetry={handleAbandonRetry}
+        onLeave={handleAbandonLeave}
         onCancel={() => setAbandonOpen(false)}
       />
     </>
