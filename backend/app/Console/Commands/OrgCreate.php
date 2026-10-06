@@ -82,7 +82,7 @@ class OrgCreate extends Command
         $this->info("✓ Owner: {$owner->name} <{$owner->email}>".($email === null ? ' — the oldest platform admin (no --owner given)' : ''));
         $this->info('✓ Default workspace: All Resources');
         $this->newLine();
-        $this->line('Next, if it runs photo exhibitions (Full Frame):');
+        $this->line('Next, if it runs photo exhibitions (FullFrame):');
         $this->line("  tools/clients/fullframe.sh setup --org={$organization->slug}");
 
         return self::SUCCESS;

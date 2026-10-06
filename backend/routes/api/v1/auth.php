@@ -24,7 +24,7 @@ Route::post('/login', [AuthController::class, 'login'])
     ->name('auth.login');
 
 // Identity check for products using TYDAL as their identity provider (e.g.
-// Full Frame's studio): no token, no session. Per-email limit in the
+// FullFrame's studio): no token, no session. Per-email limit in the
 // controller; this is the per-IP ceiling for the product's server.
 Route::post('/auth/identify', [AuthController::class, 'identify'])
     ->middleware('throttle:60,1')

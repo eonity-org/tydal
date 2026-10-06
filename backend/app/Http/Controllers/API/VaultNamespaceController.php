@@ -407,7 +407,7 @@ class VaultNamespaceController extends Controller
         // Only a write-key holder learns the organization's id and name; its
         // slug is no secret (it's in every /v/{org}/… address and in the
         // vault's /meta). A product uses this to file an exhibition under its
-        // organization (Full Frame's per-org studio).
+        // organization (FullFrame's per-org studio).
         $vault->loadMissing('organization:id,slug,name');
         $body['organization'] = $vault->organization->only(['id', 'slug', 'name']);
         if (in_array('ingest', $probe['methods'], true)) {

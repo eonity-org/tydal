@@ -8,7 +8,7 @@ use RuntimeException;
 
 /**
  * Prepare an organization for photo exhibitions served to a gallery client
- * such as Full Frame: the photo scheme, its index, and a Photos collection.
+ * such as FullFrame: the photo scheme, its index, and a Photos collection.
  * Run once per organization; safe to re-run. Then `exhibitions:create`.
  */
 class ExhibitionsSetup extends Command
@@ -19,7 +19,7 @@ class ExhibitionsSetup extends Command
         {--collection=Photos : Name of the collection to create}
         {--language= : Language of the photographs\' texts, an ISO code (en, es, pt-BR…). Asked when the collection is created interactively; default en. On a re-run it corrects the existing collection}';
 
-    protected $description = 'Prepare an organization for photo exhibitions (Full Frame): photo scheme, index and Photos collection';
+    protected $description = 'Prepare an organization for photo exhibitions (FullFrame): photo scheme, index and Photos collection';
 
     public function handle(ExhibitionProvisioner $provisioner): int
     {

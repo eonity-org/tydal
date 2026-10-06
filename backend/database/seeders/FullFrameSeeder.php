@@ -22,9 +22,9 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
 /**
- * Full Frame Seeder (Epic E0.2 of the Full Frame roadmap)
+ * FullFrame Seeder (Epic E0.2 of the FullFrame roadmap)
  *
- * Seeds everything the Full Frame exhibition platform needs to develop
+ * Seeds everything the FullFrame exhibition platform needs to develop
  * against: a dedicated organization, an images-only "photo exhibition"
  * collection scheme (PhotoSchemeSeeder: author/year/technique facets + gallery slot roles),
  * a Submissions workspace with generated demo photographs, and a private
@@ -44,7 +44,7 @@ class FullFrameSeeder extends Seeder
     public function run(): void
     {
         $this->command->info('=====================================');
-        $this->command->info('Full Frame Seeder');
+        $this->command->info('FullFrame Seeder');
         $this->command->info('=====================================');
         $this->command->newLine();
 
@@ -69,8 +69,8 @@ class FullFrameSeeder extends Seeder
         $index = SearchIndex::updateOrCreate(
             ['index_name' => 'fullframe_photo'],
             [
-                'display_name' => 'Full Frame Photo Index',
-                'description' => 'Elasticsearch index for Full Frame photo exhibitions',
+                'display_name' => 'FullFrame Photo Index',
+                'description' => 'Elasticsearch index for FullFrame photo exhibitions',
                 'index_mappings' => null,
                 'is_active' => true,
             ]
@@ -107,7 +107,7 @@ class FullFrameSeeder extends Seeder
         $admin = User::firstOrCreate(
             ['email' => $email],
             [
-                'name' => 'Full Frame Admin',
+                'name' => 'FullFrame Admin',
                 'email' => $email,
                 'password' => bcrypt($password),
                 'is_superadmin' => false,
@@ -118,9 +118,9 @@ class FullFrameSeeder extends Seeder
         $org = Organization::firstOrCreate(
             ['slug' => 'fullframe'],
             [
-                'name' => 'Full Frame',
+                'name' => 'FullFrame',
                 'slug' => 'fullframe',
-                'description' => 'Full Frame — photo exhibition & voting platform',
+                'description' => 'FullFrame — photo exhibition & voting platform',
                 'type' => 'business',
                 'is_active' => true,
             ]
@@ -130,7 +130,7 @@ class FullFrameSeeder extends Seeder
         $admin->last_organization_id = $org->id;
         $admin->save();
 
-        $this->command->info('✓ Organization: Full Frame (fullframe)');
+        $this->command->info('✓ Organization: FullFrame (fullframe)');
         $this->command->info("✓ Admin: {$email}");
         if ($admin->wasRecentlyCreated && $passwordWasGenerated) {
             $this->command->info("  Password: {$password}");
@@ -187,7 +187,7 @@ class FullFrameSeeder extends Seeder
                 'user_owner_id' => $admin->id,
                 'name' => 'Exhibition Photos',
                 'slug' => 'fullframe-photos',
-                'description' => 'Photographs submitted to Full Frame exhibitions',
+                'description' => 'Photographs submitted to FullFrame exhibitions',
                 'scheme_id' => $scheme->id,
                 'index_id' => $index->id,
                 'is_active' => true,
@@ -436,7 +436,7 @@ class FullFrameSeeder extends Seeder
             [
                 'name' => 'First Frame',
                 'slug' => 'first-frame',
-                'description' => 'Full Frame demo exhibition — private until the opening',
+                'description' => 'FullFrame demo exhibition — private until the opening',
                 'purpose' => VaultPurpose::GALLERY,
                 'state' => VaultState::PRIVATE->value,
                 'has_public_workspace' => false,
@@ -484,7 +484,7 @@ class FullFrameSeeder extends Seeder
     private function summary(Organization $org, Vault $vault, Collection $collection, ?array $keys): void
     {
         $this->command->info('=====================================');
-        $this->command->info('Full Frame seed complete');
+        $this->command->info('FullFrame seed complete');
         $this->command->info('=====================================');
         if ($keys !== null) {
             $this->command->info("Vault hash: {$vault->hash}");
@@ -492,7 +492,7 @@ class FullFrameSeeder extends Seeder
             $this->command->info("Write key (opening)    : {$keys['write']}");
             $this->command->warn('⚠️  Store them now — NOT shown again.');
             $this->command->newLine();
-            $this->command->info('Full Frame dev env (fullframe/.env) — then `npm run db:seed`:');
+            $this->command->info('FullFrame dev env (fullframe/.env) — then `npm run db:seed`:');
             $this->command->info("  DEV_VAULT_HASH={$vault->hash}");
             $this->command->info("  DEV_READ_VAULT_KEY={$keys['read']}");
             $this->command->info("  DEV_WRITE_VAULT_KEY={$keys['write']}");

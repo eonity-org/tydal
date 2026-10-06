@@ -6,6 +6,33 @@ All notable changes to TYDAL are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.1] — 2026-10-06
+
+### Added
+
+- **`tools/deploy/server/`**: the files of a working server setup, ready to
+  copy — one infrastructure compose (MySQL, Elasticsearch, Redis with a
+  password, Tika; ports on `127.0.0.1`, data on a data disk) and, per
+  installation, a compose file, a `make-env.sh` that writes the production
+  `backend/.env` and creates the database, and an nginx site. With
+  `ELASTICSEARCH_INDEX_PREFIX` and the per-installation Redis, cookie and
+  database names, several installations share one server. DEPLOYMENT.md:
+  "On a server, by hand".
+
+### Changed
+
+- **FullFrame, one word.** The photo-exhibition product is FullFrame
+  everywhere: the docs, the help of `exhibitions:setup` / `exhibitions:create`
+  and the lines they print ("Paste into FullFrame → …", which FullFrame's
+  user guide quotes), comments and seeders. The CLI guide's section anchor is
+  now `#photo-exhibitions-fullframe`.
+
+### Upgrading
+
+Nothing to do: documentation, example files and printed text only — no
+migrations, no configuration, and `@tydal/client`, `@tydal/org-mcp` and
+`@tydal/vault-mcp` keep their versions.
+
 ## [1.4.0] — 2026-10-06
 
 ### Added
@@ -615,7 +642,8 @@ layer); as a shipped product it is version 1.0.0.
   [`MIGRATION_V1_V2.md`](docs/planning/MIGRATION_V1_V2.md), CLI guide, and
   OpenAPI 3.0 spec.
 
-[Unreleased]: https://github.com/eonity-org/tydal/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/eonity-org/tydal/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/eonity-org/tydal/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/eonity-org/tydal/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/eonity-org/tydal/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/eonity-org/tydal/compare/v1.1.0...v1.2.0

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# TYDAL — provision photo exhibitions for Full Frame (a product at TYDAL's
+# TYDAL — provision photo exhibitions for FullFrame (a product at TYDAL's
 # border: it consumes one gallery vault per exhibition through @tydal/client).
 # A tier-aware front for the two artisan commands, so you never have to
 # remember where artisan runs: inside the app container (docker tier) or on the
@@ -30,7 +30,7 @@ Usage: fullframe.sh setup  --org=SLUG [--index=INDEX] [--collection=Photos] [--l
            generated) unless --curator-password is given; an existing
            account keeps its own.  → artisan exhibitions:create
            Prints the vault URL, both keys (and a generated password) ONCE —
-           paste them into Full Frame's studio → "Connect an exhibition".
+           paste them into FullFrame's studio → "Connect an exhibition".
 
 Interactive from a terminal (prompts for what you left out); from a pipe or
 script it never prompts and uses the defaults. Tier-aware (runs artisan in

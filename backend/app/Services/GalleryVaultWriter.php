@@ -18,7 +18,7 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * The write methods a `gallery` vault exposes at the boundary
- * (VAULT_WRITE_METHODS.md §3/§6). Full Frame's opening flow used to drive these
+ * (VAULT_WRITE_METHODS.md §3/§6). FullFrame's opening flow used to drive these
  * mechanics over the org-wide management API with a Sanctum admin token; they
  * now live here, behind a vault-scoped write key, so the consumer declares
  * intent ("project these works") and never touches a workspace, an org, or a

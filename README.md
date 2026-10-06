@@ -68,7 +68,7 @@ MySQL / Elasticsearch / Redis (`./configure.sh <ai> <app> --infra=shared --name=
 - [OpenAPI specification](backend/docs/openapi.yaml)
 - [Org MCP server README](org-mcp/README.md)
 - [Vault MCP server README](vault-mcp/README.md)
-- [Tools index](tools/README.md) — dev scripts by category: stack lifecycle, clients at the border (vault apps, Full Frame), dev data
+- [Tools index](tools/README.md) — dev scripts by category: stack lifecycle, clients at the border (vault apps, FullFrame), dev data
 - [Quick reference](QUICK_REFERENCE.md) — one line per script/command, docker and native forms, with preconditions
 
 Architecture specifications live in `docs/architecture/`; migration and milestone

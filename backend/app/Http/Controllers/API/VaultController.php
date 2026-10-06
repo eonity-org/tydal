@@ -71,7 +71,7 @@ class VaultController extends Controller
      * Move a vault between states — the org-scoped form. Spec §3 grants this
      * to org Admin (75)+ ("changes what the outside world can reach"); the
      * platform surface stays superadmin-only. Used by external products (e.g.
-     * Full Frame's opening flow) with an org-scoped service token.
+     * FullFrame's opening flow) with an org-scoped service token.
      */
     public function publish(Request $request, string $id): JsonResponse
     {
