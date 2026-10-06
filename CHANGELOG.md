@@ -6,6 +6,17 @@ All notable changes to TYDAL are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`tools/deploy/server/`**: the files of a working server setup, ready to
+  copy — one infrastructure compose (MySQL, Elasticsearch, Redis with a
+  password, Tika; ports on `127.0.0.1`, data on a data disk) and, per
+  installation, a compose file, a `make-env.sh` that writes the production
+  `backend/.env` and creates the database, and an nginx site. With
+  `ELASTICSEARCH_INDEX_PREFIX` and the per-installation Redis, cookie and
+  database names, several installations share one server. DEPLOYMENT.md:
+  "On a server, by hand".
+
 ## [1.4.0] — 2026-10-06
 
 ### Added
