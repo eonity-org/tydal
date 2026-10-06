@@ -13,9 +13,8 @@ usage() {
   cat <<'EOF'
 Usage: install.sh <cloud|ollama-host|ollama-docker> <host|docker>
                   [--infra=own|shared] [--name=NAME] [--url=URL] [-f] [--no-force-env] [--fresh]
-                  [--prod|--dev] [--data-dir=DIR]
 
-One-time DEV setup (or a server one with --prod): install deps + build frontend + write backend/.env + recreate
+One-time DEV setup: install deps + build frontend + write backend/.env + recreate
 containers. 
 
 A dev instance has three tiers. The backing services (Elasticsearch, Tika, MySQL,
@@ -36,11 +35,6 @@ Redis) ALWAYS run in Docker; you only choose where these two tiers run:
                     https://staging.example.org): APP_URL and the SPA's API base
                     URL, built into the frontend; kept on later runs
                     (configure.sh --help). nginx/TLS stay yours.
-  --prod            a server installation (docker tier, needs --url): ports on
-                    127.0.0.1, production .env, composer without dev packages,
-                    config cache, nginx-site.conf for the host's nginx.
-                    --data-dir=DIR keeps the data in host directories.
-                    Details: 'configure.sh --help', DEPLOYMENT.md.
   -f, --force       skip the confirmation prompt (required in CI / non-interactive)
   --no-force-env    keep an existing backend/.env instead of rewriting it
   --fresh           DELETE existing data volumes (mysql/es/redis/ollama) for a
@@ -79,7 +73,7 @@ for arg in "$@"; do
     --no-force-env)   FORCE_ENV=false ;;
     --force-env)      FORCE_ENV=true ;;   # explicit (already the default)
     --fresh)          FRESH=true ;;
-    --infra=*|--name=*|--slot=*|--infra-stack=*|--infra-network=*|--no-provision|--url=*|--prod|--dev|--data-dir=*)
+    --infra=*|--name=*|--slot=*|--infra-stack=*|--infra-network=*|--no-provision|--url=*)
                       INFRA_ARGS+=("$arg") ;;
     cloud|aicloud|ollama|ollama-host|ollama-docker) AI_ARG="$arg" ;;
     host|native|docker)                              TOPO_ARG="$arg" ;;
@@ -97,7 +91,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-echo "TYDAL setup ..."
+echo "Development setup ..."
 echo ""
 
 # Validate everything configure.sh would refuse (flags, name, slot, a clash with
@@ -194,17 +188,9 @@ OLLAMA_CONTAINER="$(infra_container ollama)"
 case "$TOPO_ARG" in docker) TOPO="docker" ;; *) TOPO="host" ;; esac
 
 # app_exec CMD… : run a command (composer/php artisan) inside the app container.
-# In production as the image's uid-1000 user, so vendor/, the .env key and the
-# caches belong to the app (php-fpm and the workers run as that user too).
 app_exec() {
-  if [ "$TYDAL_ENV" = "production" ]; then
-    docker compose -f "$COMPOSE" exec -T -u application -w /var/www/html app "$@"
-  else
-    docker compose -f "$COMPOSE" exec -T -w /var/www/html app "$@"
-  fi
+  docker compose -f "$COMPOSE" exec -T -w /var/www/html app "$@"
 }
-COMPOSER_FLAGS=(--no-interaction --no-progress --quiet)
-[ "$TYDAL_ENV" = "production" ] && COMPOSER_FLAGS+=(--no-dev --optimize-autoloader)
 
 # recreate_containers: down (+ optional volume wipe) && up so containers pick up
 # the new .env / compose toggles. Long-running containers (php-fpm, the queue
@@ -308,11 +294,9 @@ if [ "$TOPO" = "docker" ]; then
     sleep 1
   done
   echo "Installing PHP dependencies (composer, in $(stack_container app))…"
-  app_exec composer install "${COMPOSER_FLAGS[@]}"
-  grep -q '^APP_KEY=base64:' "$ROOT/backend/.env" || app_exec php artisan key:generate --force
+  app_exec composer install --no-interaction --no-progress --quiet
+  grep -q '^APP_KEY=base64:' "$ROOT/backend/.env" || app_exec php artisan key:generate
   app_exec php artisan storage:link || true
-  # Production reads a cached config (rebuilt by reload.sh after .env edits).
-  [ "$TYDAL_ENV" = "production" ] && app_exec php artisan config:cache
 else
   if ! command -v php >/dev/null 2>&1 || ! command -v composer >/dev/null 2>&1; then
     echo "install.sh: the host application tier needs php + composer on the host." >&2
@@ -321,7 +305,7 @@ else
   fi
   cd "$ROOT/backend"
   echo "Installing PHP dependencies (composer)…"
-  composer install "${COMPOSER_FLAGS[@]}"
+  composer install --no-interaction --no-progress --quiet
   grep -q '^APP_KEY=base64:' .env || php artisan key:generate
   php artisan storage:link || true
 fi
@@ -366,15 +350,10 @@ if [ "$TYDAL_INFRA_MODE" = "shared" ]; then
 else
   echo "  Installation  own infrastructure (default names)"
 fi
-[ "$TYDAL_ENV" = "production" ] && echo "  Mode          PRODUCTION — ports on 127.0.0.1, config cached (reload.sh after .env edits)$( [ -n "$(stack_env_get TYDAL_DATA_DIR "$ROOT/.env" 2>/dev/null)" ] && echo "; data in $(stack_env_get TYDAL_DATA_DIR "$ROOT/.env")")"
 echo "  Tiers         AI $AI_ARG · app $TOPO_ARG"
 echo "  App / API     http://localhost:$TYDAL_HTTP_PORT   (API: /api/v1)"
-if [ "$TYDAL_ENV" = "production" ]; then
-  echo "  Public URL    ${_url:-?}   (install nginx-site.conf in the host's nginx, then certbot)"
-else
-  echo "  Web (Vite)    http://localhost:$TYDAL_VITE_PORT   (after start.sh)"
-  [ -n "$_url" ] && echo "  Public URL    $_url   (your web server routes it to app :$TYDAL_HTTP_PORT)"
-fi
+echo "  Web (Vite)    http://localhost:$TYDAL_VITE_PORT   (after start.sh)"
+[ -n "$_url" ] && echo "  Public URL    $_url   (your web server routes it to app :$TYDAL_HTTP_PORT)"
 echo "  Database      ${_db:-?}   · index prefix ${_prefix:-(none)}"
 if docker info >/dev/null 2>&1; then
   echo "  Containers"

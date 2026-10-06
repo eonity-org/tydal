@@ -7,9 +7,7 @@ end, in two modes:
   command by command: install → configure → start → seed → (optionally) plug
   in the two MCP servers, plus the commands you'll run again later and the
   common gotchas.
-- **[Production](#production-deployment)** — on a server/VM: with the deploy
-  scripts (`--prod`: containers behind the host's nginx, one or several
-  installations), or by hand with nginx + PHP-FPM.
+- **[Production](#production-deployment)** — nginx + PHP-FPM on a server/VM.
 - **[Several installations on one server](#several-installations-on-one-server)**
   — production + staging, or dev + a clean test install, sharing one MySQL /
   Elasticsearch / Redis (`configure.sh … --infra=shared --name=NAME`).
@@ -614,66 +612,6 @@ Rebuild + restart your MCP client after any change to `org-mcp/`/`vault-mcp/`
 ---
 
 ## Production deployment
-
-Two ways: the deploy scripts with `--prod` (everything in Docker except the
-host's nginx; one installation or several sharing the infrastructure), or by
-hand with nginx + PHP-FPM ([from step 1](#1-build-artifacts) below).
-
-### Production with the deploy scripts
-
-The same `install.sh` / `configure.sh` as development, with `--prod`. Needs
-Docker and the host's nginx (+ certbot); no PHP or Node on the host. One
-checkout runs the infrastructure (MySQL, Elasticsearch, Redis, Tika) and its
-own installation; others join it as shared installations:
-
-```bash
-# The first installation, which also runs the infrastructure
-git clone https://github.com/eonity-org/tydal.git /srv/tydal-main && cd /srv/tydal-main
-git checkout v1.4.0
-./install.sh cloud docker --prod --url=https://tydal.example.org --data-dir=/srv/tydal-data
-tools/deploy/first_install.sh            # seeds; prints the superadmin password once
-
-# A second one (staging), sharing that infrastructure
-git clone https://github.com/eonity-org/tydal.git /srv/tydal-staging && cd /srv/tydal-staging
-./install.sh cloud docker --name=staging --slot=1 --prod \
-  --url=https://staging.tydal.example.org --data-dir=/srv/tydal-data
-tools/deploy/first_install.sh
-```
-
-Then, for each installation, install the `nginx-site.conf` that configure
-wrote in its checkout (the commands are at the top of the file) and run
-`certbot --nginx -d HOST`. It serves the built SPA from `frontend/build` and
-passes `/api`, `/h`, `/v`, `/vault` and `/up` to the app on `127.0.0.1`.
-
-What `--prod` changes, against development:
-
-| | development | `--prod` |
-|---|---|---|
-| published ports | all interfaces | `127.0.0.1` only — nginx is the way in |
-| `backend/.env` | `APP_ENV=local`, debug on | `APP_ENV=production`, `APP_DEBUG=false`, `LOG_LEVEL=info`, `AI_DEBUG=false`, `TRUSTED_PROXIES=*` |
-| MySQL / Redis passwords | `secret` / none | generated once, in the root `.env` (mode 600); shared installations read the Redis password from its container |
-| data | Docker volumes, `backend/storage` | with `--data-dir=DIR`: `DIR/mysql`, `DIR/elasticsearch`, `DIR/redis`, `DIR/<stack>/storage`, created with the owners the containers need (sudo when not root) |
-| Kibana | on | off (`docker compose --profile kibana up -d kibana` when needed) |
-| Elasticsearch heap | 512m | 768m (`TYDAL_ES_HEAP` in the root `.env`) |
-| PHP | dev packages, as root | `composer --no-dev`, config cached; queue and scheduler run as uid 1000 |
-| frontend | Vite dev server (`start.sh`) | built SPA served by nginx; `start.sh` starts no Vite |
-
-`--prod`, `--url` and `--data-dir` are kept on later runs; `--dev` goes back.
-After editing `backend/.env`, run `tools/deploy/reload.sh` — it recreates the
-containers and rebuilds the config cache.
-
-**Upgrading** an installation: `git fetch --tags && git checkout vX.Y.Z`, then
-`./install.sh <ai> docker` (the kept flags apply again: composer, SPA build,
-config cache), `php artisan migrate --force` in its app container, and
-whatever the release's *Upgrading* notes ask. Upgrade staging first.
-
-**Good to know.** MySQL and Redis read their passwords only when their data is
-first created, so turning an existing development installation into `--prod`
-keeps the old ones — start production on a fresh `--data-dir`. The checkout
-must belong to uid 1000 (the containers' PHP user), since composer, the
-config cache and `storage:link` write into it.
-
-### By hand: nginx + PHP-FPM
 
 Target stack: **nginx + PHP-FPM** on a Linux server/VM, with the queue worker
 supervised, and MySQL / Elasticsearch / Redis running as managed or

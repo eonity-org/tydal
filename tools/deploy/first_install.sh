@@ -110,13 +110,9 @@ echo "Application tier: $INFRA"
 TYDAL_INITIAL_COLLECTIONS=""
 
 # artisan ... : run a Laravel command in the right place for the tier.
-# Production (configure.sh --prod) runs it as the image's uid-1000 user, like
-# php-fpm and the workers, so the files it writes stay the app's.
-ARTISAN_USER=()
-[ "$TYDAL_ENV" = "production" ] && ARTISAN_USER=(-u application)
 artisan() {
   if [ "$INFRA" = "docker" ]; then
-    docker compose -f "$COMPOSE" exec -T ${ARTISAN_USER[@]+"${ARTISAN_USER[@]}"} -w /var/www/html \
+    docker compose -f "$COMPOSE" exec -T -w /var/www/html \
       -e TYDAL_INITIAL_COLLECTIONS="$TYDAL_INITIAL_COLLECTIONS" \
       app php artisan "$@"
   else
@@ -142,14 +138,10 @@ fi
 
 cd "$BACKEND_DIR"
 
-# The storage the app really uses: backend/storage, or the production data
-# directory mounted over it (TYDAL_STORAGE, configure.sh --prod --data-dir).
-STORAGE_HOST="$(stack_env_get TYDAL_STORAGE "$ROOT/.env" 2>/dev/null || true)"
-STORAGE_HOST="${STORAGE_HOST:-$BACKEND_DIR/storage}"
-mkdir -p "$STORAGE_HOST/app/public" "$STORAGE_HOST/logs"
-rm -rf "${STORAGE_HOST:?}/app/public/"*
-find "$STORAGE_HOST/app" -mindepth 1 -maxdepth 1 -type d ! -name public -exec rm -rf {} +
-rm -f "$STORAGE_HOST/logs/"ai*.log
+mkdir -p storage/app/public storage/logs
+rm -rf storage/app/public/*
+find storage/app -mindepth 1 -maxdepth 1 -type d ! -name public -exec rm -rf {} +
+rm -f storage/logs/ai*.log
 if [ -L public/storage ]; then
   rm public/storage
 fi
@@ -182,11 +174,9 @@ if [ "$TYDAL_INFRA_MODE" = "shared" ]; then
   fi
 fi
 
-# --force: in production Laravel asks before these, and there's no terminal here
-# (this script already asked). Elsewhere it changes nothing.
-artisan migrate:fresh --force
+artisan migrate:fresh
 artisan storage:link
-artisan db:seed --class=CollectionSchemaSeeder --force
+artisan db:seed --class=CollectionSchemaSeeder
 
 # --- which starter collection(s) to seed ---
 # Built from schema:starter-options (every is_system collection scheme), so
@@ -257,7 +247,7 @@ fi
 # TYDAL_SUPERADMIN_PASSWORD is blank) can be re-surfaced at the very end,
 # after the reindex/embed steps have scrolled past.
 SEED_LOG="$(mktemp -t tydal-seed.XXXXXX)"
-artisan db:seed --class=MinimalSeeder --force | tee "$SEED_LOG"
+artisan db:seed --class=MinimalSeeder | tee "$SEED_LOG"
 
 # No standalone search:setup-indices here: MinimalSeeder/CollectionSchemaSeeder
 # provision each starter collection's own ES index the moment it's created

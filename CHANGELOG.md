@@ -6,27 +6,6 @@ All notable changes to TYDAL are documented here. The format follows
 
 ## [Unreleased]
 
-### Added
-
-- **Production with the deploy scripts** (`configure.sh` / `install.sh
-  --prod`): a server installation in containers behind the host's nginx,
-  alone or several sharing the infrastructure. Every published port on
-  `127.0.0.1`; `APP_ENV=production`, debug off, `TRUSTED_PROXIES=*`;
-  generated MySQL and Redis passwords (own infrastructure; shared
-  installations read the Redis password from its container); Kibana off;
-  Elasticsearch heap 768m; `composer --no-dev` and the config cache; queue
-  and scheduler as uid 1000 (`gosu application`). `--data-dir=DIR` keeps
-  MySQL, Elasticsearch, Redis and each installation's storage in host
-  directories, created with the right owners. configure writes
-  `nginx-site.conf` (SPA from `frontend/build`, `/api`, `/h`, `/v`, `/vault`,
-  `/up` to the app). `start.sh` starts no Vite in production, `reload.sh`
-  recreates the containers and rebuilds the config cache, `first_install.sh`
-  passes `--force` and cleans the storage really in use. The compose file's
-  new variables (`TYDAL_PORT_BIND`, `TYDAL_*_PASSWORD`, `TYDAL_*_DATA`,
-  `TYDAL_STORAGE`, `TYDAL_ES_HEAP`, `TYDAL_KIBANA_PROFILE`,
-  `TYDAL_WORKER_EXEC`) default to today's values, so development is
-  unchanged. DEPLOYMENT.md: "Production with the deploy scripts".
-
 ## [1.4.0] — 2026-10-06
 
 ### Added
