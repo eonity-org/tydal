@@ -6,6 +6,8 @@ All notable changes to TYDAL are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-10-06
+
 ### Added
 
 - **Several installations on one server** (#23): `configure.sh <ai> <host|docker>
@@ -65,10 +67,13 @@ All notable changes to TYDAL are documented here. The format follows
   resources with the trash's rule — editors and viewers see their own,
   administrators and owners see all — sorting (date, name, ID) and
   pagination. The SPA's new **Archived** page (`/archived`, linked beside
-  *Deleted resources*) is modelled on the trash: **Set live** per card and
-  **Set all live**, both through `POST /resources/bulk/state` in batches of
-  up to 200, reporting skipped resources like the basket and leaving them
-  listed. User guide chapters 5 and 7.
+  *Deleted resources*) is modelled on the trash. Each card has **Set live**
+  and **Move to trash** icons; the page has **Set all live** (through
+  `POST /resources/bulk/state` in batches of up to 200) and **Delete all**
+  (moves them to the trash one by one, after a confirmation). Both report
+  skipped resources like the basket and leave them listed, and each control
+  shows only with its permission (`resources.update` / `resources.delete`).
+  User guide chapters 5 and 7.
 - **When a resource was archived** (`resources.archived_at`): stamped when a
   resource moves to `archived` (single update, bulk state, any save — the
   model's `saving` hook, called explicitly by the quiet bulk write), cleared
@@ -84,7 +89,33 @@ All notable changes to TYDAL are documented here. The format follows
   resources. Batches still waiting, running or being analysed are kept.
   `--days=N`, `--dry-run`; scheduled daily at 04:00. docs/CLI.md.
 
+- **Required fields at the wizard's first step** (#9). When the collection's
+  scheme has required metadata fields, step 1 shows a *Required by this
+  collection* panel and Next waits until they're filled; the values go into
+  every created resource and pre-fill Review. If every upload fails, the
+  Upload step shows the server's reason.
+
 ### Changed
+
+- **Editors can use the wizard's Auto option** (#10). Auto opens an AiTy
+  Review batch (a workspace of purpose `aity_review`), which needed the
+  admin-only `workspaces.create`; editors may now open those batches
+  (`resources.create` suffices), while ordinary workspaces stay admin-only.
+  The wizard no longer swallows an Auto failure: it stays open with the
+  reason and reuses the batch already created on retry.
+- **Manage Workspaces leaves AiTy Review batches out.** Every Auto upload
+  creates one, and the dialog listed them all under *Managed by the system*;
+  they have their own page (AiTy Review). Other system workspaces are still
+  listed.
+- **Consistent wording** (#8, #12, #22). The resource view's legacy
+  Active/Visibility controls are gone and cards say Live / Draft / Archived;
+  the delete confirmation no longer says "cannot be undone" (resources go to
+  the trash); one short id (the tail of the UUID v7) on cards, trash and
+  basket; the vault key help names `ingest` / `update` / `withdraw`; the AiTy
+  Review empty state points to the wizard's Auto option; VAULT_SYSTEM.md §3
+  matches who creates vaults; categories are documented as API-only.
+- `install.sh` / `configure.sh` print the full help when the tiers are
+  missing.
 
 - **Only administrators change what a vault shows.** Adding resources to, or
   removing them from, a workspace attached to a vault publishes or unpublishes
@@ -106,6 +137,19 @@ All notable changes to TYDAL are documented here. The format follows
 - **Unbounded page size on the trash and Archived listings**:
   `GET /resources/trashed` and `GET /resources/archived` now clamp `limit` to
   1..200, the bulk endpoints' cap.
+- **Viewers could run AiTy auto-approve** (#19). `POST /aity/auto-approve`
+  and `/aity/auto-approve/stream` ran for any member of the organization;
+  both now require `manageResources` on a workspace of the current
+  organization (403, or 404 for another organization's), the stream before
+  it opens.
+- **The wizard's exit could fail silently or leave drafts** (#20, #21). Keep
+  and Delete all report per-resource failures with Retry or Leave anyway;
+  they wait for the upload in flight ("Finishing uploads…") so a resource
+  created after the click isn't left as a draft for the hourly purge. Back →
+  Next with the same files retries only the failed rows; a resource whose
+  file upload fails is deleted again, so the counts match what exists.
+- **Editors were offered Save as workspace in the basket** (#11), which they
+  can't do; it now shows only with `workspaces.create`.
 
 - **Resources without a description couldn't be edited** (#24). The built-in
   schemes (multimedia, documents, general) required `description`, but only
@@ -135,6 +179,26 @@ All notable changes to TYDAL are documented here. The format follows
   aggregated and filtered on the analysed `text` field (`metadata.author`),
   which failed with `Fielddata is disabled`, so workspace views fell back to
   the database with no facets. Text facets now use their `.keyword` subfield.
+
+### Upgrading
+
+1. **Migrations**: `php artisan migrate` (two: `description` optional in the
+   built-in schemes, and `resources.archived_at`, backfilled).
+2. **Search indices** (#13): run `search:setup-indices --recreate`,
+   `search:reindex` and `search:reconcile --fix` so `tika_metadata` stops
+   being indexed and the rejected resources come back
+   ([CLI.md](docs/CLI.md#upgrading-tika_metadata-no-longer-indexed-13)).
+3. **Rebuild the frontend** (`npm run build`).
+4. **Optional, new env vars** (in every template, with comments):
+   `ELASTICSEARCH_INDEX_PREFIX` (empty: unchanged; moving an existing
+   installation to a prefix is a reindex, see CLI.md),
+   `AITY_BATCH_RETENTION_DAYS` (default 30, `0` disables),
+   `TYDAL_PUBLIC_URL` (set by `configure.sh --url`), and the SPA's
+   `VITE_AUTH_COOKIE` (default `JWT`).
+5. The scheduler now also runs `aity:purge-batches` daily at 04:00; nothing
+   to do if `schedule:run` / `schedule:work` is already running.
+6. `@tydal/client`, `@tydal/org-mcp` and `@tydal/vault-mcp` keep their
+   versions.
 
 ## [1.3.0] — 2026-10-05
 
@@ -551,7 +615,8 @@ layer); as a shipped product it is version 1.0.0.
   [`MIGRATION_V1_V2.md`](docs/planning/MIGRATION_V1_V2.md), CLI guide, and
   OpenAPI 3.0 spec.
 
-[Unreleased]: https://github.com/eonity-org/tydal/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/eonity-org/tydal/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/eonity-org/tydal/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/eonity-org/tydal/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/eonity-org/tydal/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/eonity-org/tydal/compare/v1.0.0...v1.1.0
