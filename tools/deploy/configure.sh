@@ -15,7 +15,7 @@ COMPOSE="$ROOT/docker-compose.yml"
 usage() {
   cat <<'EOF'
 Usage: configure.sh <cloud|ollama-host|ollama-docker> <host|docker>
-                    [--infra=own|shared] [--name=NAME] [-f] [--no-force-env]
+                    [--infra=own|shared] [--name=NAME] [--url=URL] [-f] [--no-force-env]
                     [--slot=N] [--infra-stack=STACK] [--infra-network=NET] [--no-provision]
 
 Writes backend/.env and toggles docker-compose.yml to match two tiers (config
@@ -44,6 +44,17 @@ Infrastructure (several installations on one server — DEPLOYMENT.md):
   --no-provision    shared only: don't create the database/user now (run
                     tools/deploy/provision-shared.sh once the infra is up)
 
+Public URL (own or shared):
+  --url=URL         the address people use for this installation, e.g.
+                    https://staging.example.org (scheme + host[:port], no path).
+                    Sets APP_URL, SANCTUM_STATEFUL_DOMAINS and the SPA's
+                    VITE_API_BASE_URL (URL/api/v1; rebuild the frontend). Kept
+                    in backend/.env as TYDAL_PUBLIC_URL, so later runs keep it;
+                    --url= (empty) goes back to localhost. A web server must
+                    serve the built SPA there and route /api, /v, /vault to
+                    the app — nginx/TLS stay yours (DEPLOYMENT.md). Not for
+                    the Vite dev server, which doesn't proxy /api.
+
   -f, --force       skip the confirmation prompt (required in CI / non-interactive)
   --no-force-env    keep an existing backend/.env instead of rewriting it
   -h, --help        show this help
@@ -53,6 +64,7 @@ tiers, then toggles compose — hence the confirmation prompt.
 
 e.g.  configure.sh cloud docker   ·   configure.sh ollama-host host -f
       configure.sh cloud docker --infra=shared --name=staging
+      configure.sh cloud docker --infra=shared --name=staging --url=https://staging.example.org
 EOF
 }
 
@@ -68,6 +80,8 @@ SLOT=""            # --slot=N (shared only; default: kept, else derived from NAM
 INFRA_STACK=""     # --infra-stack=S (shared only; default tydal)
 INFRA_NETWORK=""   # --infra-network=N (shared + docker; default: detected)
 PROVISION=true     # --no-provision skips provision-shared.sh
+URL_SET=false      # --url given (even empty: --url= clears a kept one)
+URL_ARG=""         # --url=URL
 for arg in "$@"; do
   case "$arg" in
     -h|--help)          usage; exit 0 ;;
@@ -85,6 +99,7 @@ for arg in "$@"; do
     --infra-stack=*)    INFRA_STACK="${arg#--infra-stack=}" ;;
     --infra-network=*)  INFRA_NETWORK="${arg#--infra-network=}" ;;
     --no-provision)     PROVISION=false ;;
+    --url=*)            URL_SET=true; URL_ARG="${arg#--url=}" ;;
     *) echo "configure.sh: unknown argument '$arg'" >&2; echo >&2; usage >&2; exit 1 ;;
   esac
 done
@@ -123,6 +138,13 @@ case "$INFRA_MODE" in
     ;;
   *) die "--infra='$INFRA_MODE': use own or shared." ;;
 esac
+# --url: scheme + host[:port]; a trailing slash is dropped, a path refused (the
+# API lives at URL/api/v1 and the SPA at the root).
+URL_ARG="${URL_ARG%/}"
+if [ -n "$URL_ARG" ]; then
+  printf '%s' "$URL_ARG" | grep -Eq '^https?://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]{1,5})?$' \
+    || die "--url='$URL_ARG': use scheme + host[:port] with no path, e.g. https://staging.example.org"
+fi
 if [ "$INFRA_MODE" = "shared" ] && [ "$FORCE_ENV" = false ]; then
   die "--infra=shared rewrites backend/.env with this installation's identity; drop --no-force-env (secrets are kept, a backup is saved)."
 fi
@@ -150,6 +172,11 @@ if [ "$FORCE" = false ]; then
     echo "  • leave an existing backend/.env untouched (--no-force-env)"
   fi
   echo "  • toggle the matching docker-compose.yml services"
+  if [ "$URL_SET" = true ] && [ -n "$URL_ARG" ]; then
+    echo "  • public URL $URL_ARG (APP_URL, Sanctum domain, the SPA's API base URL)"
+  elif [ "$URL_SET" = true ]; then
+    echo "  • drop the public URL, back to localhost"
+  fi
   if [ "$INFRA_MODE" = "shared" ]; then
     echo "  • SHARED infrastructure from the '$INFRA_STACK' stack, as installation '$NAME':"
     echo "    write the root .env (containers tydal_${NAME}_*, offset ports), point"
@@ -452,18 +479,62 @@ elif [ -f "$ROOT/.env" ] && grep -q '^TYDAL_INFRA_MODE=shared' "$ROOT/.env"; the
   RETIRED_SHARED=true
 fi
 
+# --- public URL (--url, kept as TYDAL_PUBLIC_URL in backend/.env) ---
+# Without --url, a URL from the previous backend/.env is kept (the template
+# rewrite would otherwise reset APP_URL to localhost on every re-run).
+PREV_URL=""
+if [ -n "${BACKUP:-}" ]; then
+  PREV_URL="$(env_get TYDAL_PUBLIC_URL "$BACKUP")"
+elif [ -f "$ROOT/backend/.env" ]; then
+  PREV_URL="$(env_get TYDAL_PUBLIC_URL "$ROOT/backend/.env")"
+fi
+if [ "$URL_SET" = true ]; then
+  PUBLIC_URL="$URL_ARG"; URL_NOTE="from --url"
+else
+  PUBLIC_URL="$PREV_URL"; URL_NOTE="kept from the previous configuration"
+fi
+URL_CLEARED=false
+[ -z "$PUBLIC_URL" ] && [ -n "$PREV_URL" ] && URL_CLEARED=true
+if [ -n "$PUBLIC_URL" ]; then
+  URL_HOSTPORT="${PUBLIC_URL#*://}"
+  upsert_env_var TYDAL_PUBLIC_URL         "$PUBLIC_URL"     "$ROOT/backend/.env"
+  upsert_env_var APP_URL                  "$PUBLIC_URL"     "$ROOT/backend/.env"
+  upsert_env_var SANCTUM_STATEFUL_DOMAINS "$URL_HOSTPORT"   "$ROOT/backend/.env"
+  echo "  public URL $PUBLIC_URL ($URL_NOTE): APP_URL, SANCTUM_STATEFUL_DOMAINS=$URL_HOSTPORT"
+elif [ "$URL_CLEARED" = true ]; then
+  # Back to localhost. A rewritten backend/.env already has it (template or the
+  # shared block); with --no-force-env, reset the values here.
+  LOCAL_PORT="$( [ "$INFRA_MODE" = shared ] && echo "$HTTP_PORT" || echo 8000 )"
+  set_env_var TYDAL_PUBLIC_URL         ""                                          "$ROOT/backend/.env"
+  set_env_var APP_URL                  "http://localhost:$LOCAL_PORT"              "$ROOT/backend/.env"
+  set_env_var SANCTUM_STATEFUL_DOMAINS "localhost:$LOCAL_PORT,127.0.0.1:$LOCAL_PORT" "$ROOT/backend/.env"
+  echo "  public URL dropped: APP_URL back to http://localhost:$LOCAL_PORT"
+fi
+
 # --- frontend/.env (copy-if-missing; backend-agnostic) ---
 if [ -f "$ROOT/frontend/.env" ]; then
-  echo "frontend/.env exists — leaving it untouched$( [ "$INFRA_MODE" = shared ] || [ "${RETIRED_SHARED:-false}" = true ] && echo ' (apart from the API port)')."
+  echo "frontend/.env exists — leaving it untouched$( [ "$INFRA_MODE" = shared ] || [ "${RETIRED_SHARED:-false}" = true ] || [ -n "$PUBLIC_URL" ] || [ "$URL_CLEARED" = true ] && echo ' (apart from the API base URL)')."
 else
   cp "$TEMPLATES/frontend.env" "$ROOT/frontend/.env"
   echo "Created frontend/.env."
 fi
-# The SPA calls the API on the app's host port, which a shared installation offsets.
+# The SPA calls the API on the app's host port, which a shared installation
+# offsets. Its auth cookie gets the installation's name too: cookies are scoped
+# by host, not port, so two installations on one host would share a `JWT`
+# cookie and log each other out.
 if [ "$INFRA_MODE" = "shared" ]; then
   upsert_env_var VITE_API_BASE_URL "http://localhost:$HTTP_PORT/api/v1" "$ROOT/frontend/.env"
+  upsert_env_var VITE_AUTH_COOKIE  "${STACK}_jwt"                       "$ROOT/frontend/.env"
 elif [ "${RETIRED_SHARED:-false}" = true ]; then
   upsert_env_var VITE_API_BASE_URL "http://localhost:8000/api/v1" "$ROOT/frontend/.env"
+  upsert_env_var VITE_AUTH_COOKIE  "JWT"                                 "$ROOT/frontend/.env"
+elif [ "$URL_CLEARED" = true ]; then
+  upsert_env_var VITE_API_BASE_URL "http://localhost:8000/api/v1" "$ROOT/frontend/.env"
+fi
+# A public URL wins over the localhost port: the SPA calls the API where people
+# reach the installation (the build bakes it in).
+if [ -n "$PUBLIC_URL" ]; then
+  upsert_env_var VITE_API_BASE_URL "$PUBLIC_URL/api/v1" "$ROOT/frontend/.env"
 fi
 
 # --- docker-compose.yml service toggles ---
@@ -490,7 +561,11 @@ if [ "${#ENABLED[@]}" -eq 0 ]; then
   echo "docker-compose.yml: backing services only (app/queue/scheduler/ollama disabled)."
 else
   joined="$(printf '%s, ' "${ENABLED[@]}")"; joined="${joined%, }"
-  echo "docker-compose.yml: enabled $joined (+ backing services)."
+  if [ "$INFRA_MODE" = "shared" ]; then
+    echo "docker-compose.yml: enabled $joined."
+  else
+    echo "docker-compose.yml: enabled $joined (+ backing services)."
+  fi
 fi
 if [ "$INFRA_MODE" = "shared" ]; then
   echo "  (shared infrastructure: the backing services$( [ "$OLLAMA_PLACEMENT" = docker ] && echo ' and ollama') come from the '$INFRA_STACK' stack —"
@@ -531,6 +606,12 @@ if [ "$INFRA" = "docker" ]; then
 else
   echo "  tools/deploy/start.sh      # bring up backing services + serve (app :$SHOW_HTTP + queue + scheduler + Vite :$SHOW_VITE on host)"
   echo "  tools/deploy/reload.sh     # if the stack was already up, to apply this .env change"
+fi
+
+if [ -n "$PUBLIC_URL" ]; then
+  echo "  Public URL $PUBLIC_URL: point your web server for that host at app :$SHOW_HTTP"
+  echo "  (or PHP-FPM) and serve the built SPA (npm run build — VITE_API_BASE_URL is"
+  echo "  baked in); DEPLOYMENT.md, \"Production deployment\"."
 fi
 
 # --- ollama placement reminder ---

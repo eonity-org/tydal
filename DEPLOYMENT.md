@@ -53,7 +53,8 @@ the reference for what's in them.
 
 Key groups (see the template for the full list):
 
-- **App** — `APP_KEY` (generated, never commit), `APP_ENV`, `APP_DEBUG`, `APP_URL`.
+- **App** — `APP_KEY` (generated, never commit), `APP_ENV`, `APP_DEBUG`, `APP_URL`
+  (with `TYDAL_PUBLIC_URL`, written by `configure.sh --url=URL`; see [The public URL](#the-public-url---url)).
 - **Database** — `DB_HOST`, `DB_PORT` (3306), `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`.
 - **Redis** — `REDIS_HOST`, `REDIS_PORT` (6379); `QUEUE_CONNECTION=redis`, `CACHE_DRIVER=redis`, `SESSION_DRIVER=redis`.
 - **Elasticsearch** — `ELASTICSEARCH_HOST` (`http://localhost:9200`), optional auth/shards/replicas, and `ELASTICSEARCH_INDEX_PREFIX` (see [below](#one-elasticsearch-several-installations-elasticsearch_index_prefix)).
@@ -132,11 +133,40 @@ All three seeders that create the superadmin (`ProductionSeeder`,
 
 ```env
 VITE_API_BASE_URL=http://localhost:8000/api/v1   # must point at the backend API
+VITE_AUTH_COOKIE=JWT                             # login-token cookie name (per installation in shared mode)
 VITE_SHOW_DAM_ORGANIZATIONS=true
 ```
 
 `VITE_*` values are **baked in at build time** — changing them requires a
 rebuild (`npm run build`), not just a restart.
+
+### The public URL (`--url`)
+
+An installation reached at a real address instead of `localhost` gives it once:
+
+```bash
+./configure.sh cloud docker --url=https://tydal.example.org
+./install.sh cloud docker --infra=shared --name=staging --url=https://staging.example.org
+```
+
+`--url` takes scheme + host[:port], no path, and writes from it:
+
+| File | Variable | Value |
+|---|---|---|
+| `backend/.env` | `TYDAL_PUBLIC_URL`, `APP_URL` | the URL |
+| `backend/.env` | `SANCTUM_STATEFUL_DOMAINS` | its host[:port] |
+| `frontend/.env` | `VITE_API_BASE_URL` | `URL/api/v1` (rebuild the SPA) |
+
+`TYDAL_PUBLIC_URL` is what makes it stick: a later `configure.sh`/`install.sh`
+without `--url` rewrites `backend/.env` from the template but keeps the URL;
+`--url=` (empty) goes back to `localhost`. Without `--url` nothing changes
+(`localhost:8000`, or the offset port of a shared installation).
+
+The web server is still yours: for that host, serve the built SPA
+(`frontend/build/`) and route `/api`, `/v`, `/vault` and `/cdn` to the app —
+[nginx + PHP-FPM](#4-nginx--php-fpm) below, or a reverse proxy to the app
+container's port (then set `TRUSTED_PROXIES`). It is not for the Vite dev
+server, which doesn't proxy `/api`.
 
 ---
 
@@ -402,8 +432,9 @@ What `configure.sh --infra=shared` does:
 - writes `backend/.env` as for any tier, plus the values above, `APP_URL` and
   `SANCTUM_STATEFUL_DOMAINS` on the offset port, and `SESSION_COOKIE=tydal_NAME_session`
   (cookies ignore ports, so two installations on `localhost` would otherwise
-  overwrite each other's session cookie); `frontend/.env`'s
-  `VITE_API_BASE_URL` follows the offset port;
+  overwrite each other's session cookie); in `frontend/.env`,
+  `VITE_API_BASE_URL` follows the offset port and `VITE_AUTH_COOKIE=tydal_NAME_jwt`
+  names the SPA's login-token cookie (default `JWT`) for the same reason;
 - writes the **root `.env`**, Compose's project env file: `COMPOSE_PROJECT_NAME=tydal_NAME`,
   `TYDAL_STACK`, the ports, `TYDAL_INFRA_STACK` (whose containers hold the
   infrastructure, default `tydal` → `tydal_mysql`, `tydal_redis`, …;
@@ -462,6 +493,10 @@ through the prefixed connections; `first_install.sh` deletes only
 standalone installation keeps Laravel's defaults (DB 0/1,
 `tydal_database_` prefix), so the infrastructure checkout's own app doesn't
 collide with the shared installations either.
+
+Each installation can have its own public address: `--url=https://staging.example.org`
+([The public URL](#the-public-url---url)), with its own nginx server block
+proxying to its app port (`8000 + 100·slot`).
 
 Not covered: the infrastructure checkout keeps its fixed host ports (3306,
 9200, …) and the shared installations assume them; the vault client apps
@@ -576,7 +611,7 @@ php artisan storage:link
 # Frontend — produces a static bundle in frontend/build/
 cd ../frontend
 npm ci
-npm run build                         # VITE_API_BASE_URL must be the prod API URL
+npm run build                         # VITE_API_BASE_URL must be the prod API URL (configure.sh --url sets it)
 ```
 
 Set production `.env` values:

@@ -12,7 +12,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage: install.sh <cloud|ollama-host|ollama-docker> <host|docker>
-                  [--infra=own|shared] [--name=NAME] [-f] [--no-force-env] [--fresh]
+                  [--infra=own|shared] [--name=NAME] [--url=URL] [-f] [--no-force-env] [--fresh]
 
 One-time DEV setup: install deps + build frontend + write backend/.env + recreate
 containers. 
@@ -31,6 +31,10 @@ Redis) ALWAYS run in Docker; you only choose where these two tiers run:
                     names and ports. --slot/--infra-stack/--infra-network/
                     --no-provision are passed to configure.sh as well
                     (see 'configure.sh --help').
+  --url=URL         public address of this installation (e.g.
+                    https://staging.example.org): APP_URL and the SPA's API base
+                    URL, built into the frontend; kept on later runs
+                    (configure.sh --help). nginx/TLS stay yours.
   -f, --force       skip the confirmation prompt (required in CI / non-interactive)
   --no-force-env    keep an existing backend/.env instead of rewriting it
   --fresh           DELETE existing data volumes (mysql/es/redis/ollama) for a
@@ -50,6 +54,7 @@ install.sh does NOT seed the DB (run first_install.sh for a minimal starting dat
 
 e.g.  install.sh ollama-host docker   ·   install.sh cloud host -f
       install.sh cloud docker --infra=shared --name=staging
+      install.sh cloud docker --infra=shared --name=staging --url=https://staging.example.org
 
 EOF
 }
@@ -60,7 +65,7 @@ TOPO_ARG=""
 FORCE=false        # -f/--force : skip the confirmation prompt
 FORCE_ENV=true     # rewrite backend/.env by default; --no-force-env opts out
 FRESH=false        # --fresh : delete data volumes (down -v) instead of preserving
-INFRA_ARGS=()      # --infra/--name/--slot/--infra-stack/--infra-network/--no-provision → configure.sh
+INFRA_ARGS=()      # --infra/--name/--slot/--infra-stack/--infra-network/--no-provision/--url → configure.sh
 for arg in "$@"; do
   case "$arg" in
     -h|--help)        usage; exit 0 ;;
@@ -68,7 +73,7 @@ for arg in "$@"; do
     --no-force-env)   FORCE_ENV=false ;;
     --force-env)      FORCE_ENV=true ;;   # explicit (already the default)
     --fresh)          FRESH=true ;;
-    --infra=*|--name=*|--slot=*|--infra-stack=*|--infra-network=*|--no-provision)
+    --infra=*|--name=*|--slot=*|--infra-stack=*|--infra-network=*|--no-provision|--url=*)
                       INFRA_ARGS+=("$arg") ;;
     cloud|aicloud|ollama|ollama-host|ollama-docker) AI_ARG="$arg" ;;
     host|native|docker)                              TOPO_ARG="$arg" ;;

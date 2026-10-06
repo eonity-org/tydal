@@ -13,7 +13,8 @@ All notable changes to TYDAL are documented here. The format follows
   use another checkout's running MySQL, Elasticsearch, Kibana, Tika and Redis
   instead of starting its own. NAME derives what must differ: database and user
   `tydal_NAME` (test database `tydal_NAME_test`), index prefix `NAME_`, Redis
-  prefix `tydal_NAME_` plus its own Redis DB numbers, session cookie,
+  prefix `tydal_NAME_` plus its own Redis DB numbers, session cookie, the
+  SPA's login-token cookie (`VITE_AUTH_COOKIE`, default `JWT`),
   containers `tydal_NAME_*` (Compose project `tydal_NAME`), and app/Vite ports
   offset by 100·slot. The infrastructure services carry a Compose profile that
   is empty (always on) by default and switched on only in shared mode; on the
@@ -28,6 +29,11 @@ All notable changes to TYDAL are documented here. The format follows
   unchanged. Tests take a per-installation database and index prefix from
   `TYDAL_TEST_DB_DATABASE` / `TYDAL_TEST_INDEX_PREFIX` (`tests/bootstrap.php`).
   DEPLOYMENT.md: "Several installations on one server".
+- **`--url=URL` for `configure.sh` / `install.sh`**: the public address of an
+  installation (own or shared) — writes `APP_URL`, `SANCTUM_STATEFUL_DOMAINS`
+  and the SPA's `VITE_API_BASE_URL`, and keeps it as `TYDAL_PUBLIC_URL` in
+  `backend/.env` so a later re-run no longer resets it to `localhost`;
+  `--url=` drops it. DEPLOYMENT.md: "The public URL".
 - **`ELASTICSEARCH_INDEX_PREFIX`** (#14): a per-installation prefix applied to
   every physical index name — collection indices, their `_chunks`
   companions and `vault_<uuid>` — through one helper,
