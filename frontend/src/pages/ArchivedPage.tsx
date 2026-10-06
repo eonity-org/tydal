@@ -28,7 +28,7 @@ import { shortId } from '../utils/shortId'
 import { usePermissions } from '../hooks/usePermissions'
 import { getApiError } from '../utils/apiError'
 
-type SortKey = 'updated_at' | 'name' | 'id'
+type SortKey = 'archived_at' | 'name' | 'id'
 
 /** The server caps one bulk request at this many ids (BulkResourceIdsRequest). */
 const BULK_MAX = 200
@@ -53,7 +53,7 @@ function ArchivedPage() {
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false)
   const [deleteAllLoading, setDeleteAllLoading] = useState(false)
   const [setAllLoading, setSetAllLoading] = useState(false)
-  const [sortBy, setSortBy] = useState<SortKey>('updated_at')
+  const [sortBy, setSortBy] = useState<SortKey>('archived_at')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [report, setReport] = useState<{ message: string; severity: 'success' | 'warning' | 'error' } | null>(null)
 
@@ -84,7 +84,7 @@ function ArchivedPage() {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     } else {
       setSortBy(by)
-      setSortDir(by === 'updated_at' ? 'desc' : 'asc')
+      setSortDir(by === 'archived_at' ? 'desc' : 'asc')
     }
     setPage(1)
   }
@@ -217,7 +217,7 @@ function ArchivedPage() {
   }
 
   const SORTS: { key: SortKey; label: string }[] = [
-    { key: 'updated_at', label: 'Date' },
+    { key: 'archived_at', label: 'Date' },
     { key: 'name',       label: 'Name' },
     { key: 'id',         label: 'ID'   },
   ]
@@ -380,9 +380,9 @@ function ArchivedPage() {
                               </Typography>
                             </Stack>
 
-                            {/* Last change (archiving is one) */}
+                            {/* When it was archived (older rows were backfilled from updated_at) */}
                             <Typography variant="caption" color="text.disabled">
-                              Updated {formatDate(resource.updated_at)}
+                              Archived {formatDate(resource.archived_at ?? resource.updated_at)}
                             </Typography>
                           </Box>
                         </Grid>

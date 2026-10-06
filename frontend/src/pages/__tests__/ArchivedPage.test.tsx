@@ -25,7 +25,8 @@ const archived = {
   name: 'Harbour at dawn',
   type: 'image',
   state: 'archived',
-  updated_at: '2026-10-01T10:00:00Z',
+  updated_at: '2026-10-03T10:00:00Z',
+  archived_at: '2026-10-01T10:00:00Z',
   deleted_at: null,
 }
 
@@ -60,6 +61,14 @@ describe('ArchivedPage', () => {
     renderPage()
     expect(await screen.findByText('Harbour at dawn')).not.toBeNull()
     expect(screen.getByText('1 archived resource')).not.toBeNull()
+  })
+
+  it('shows when each resource was archived and sorts by it by default', async () => {
+    withPermissions(['resources.update'])
+    renderPage()
+    expect(await screen.findByText(/^Archived /)).not.toBeNull()
+    expect(screen.queryByText(/^Updated /)).toBeNull()
+    expect(getArchivedResources).toHaveBeenCalledWith(1, 48, 'archived_at', 'desc')
   })
 
   it('sets a resource live through bulkState', async () => {

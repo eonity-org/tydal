@@ -9,6 +9,8 @@ use App\Models\Resource;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
@@ -131,6 +133,98 @@ class ArchivedResourcesTest extends TestCase
         $own = $this->resource($admin, ResourceState::ARCHIVED);
 
         $this->assertSame([$own->id], $this->listedIds($admin));
+    }
+
+    // ── archived_at ────────────────────────────────────────────────────────
+
+    public function test_archiving_through_an_update_stamps_archived_at_and_setting_live_clears_it(): void
+    {
+        $admin = $this->member('admin');
+        $resource = $this->resource($admin, ResourceState::LIVE);
+        $this->assertNull($resource->archived_at);
+
+        $this->travelTo(now()->startOfSecond());
+        $resource->update(['state' => ResourceState::ARCHIVED]);
+        $this->assertEquals(now(), $resource->fresh()->archived_at);
+
+        // Another write while archived leaves the stamp alone.
+        $this->travel(5)->minutes();
+        $resource->fresh()->update(['name' => 'Renamed while archived']);
+        $this->assertEquals(now()->subMinutes(5), $resource->fresh()->archived_at);
+
+        $resource->fresh()->update(['state' => ResourceState::LIVE]);
+        $this->assertNull($resource->fresh()->archived_at);
+    }
+
+    public function test_creating_an_archived_resource_stamps_archived_at(): void
+    {
+        $admin = $this->member('admin');
+
+        $this->assertNotNull($this->resource($admin, ResourceState::ARCHIVED)->fresh()->archived_at);
+        $this->assertNull($this->resource($admin, ResourceState::DRAFT)->fresh()->archived_at);
+    }
+
+    public function test_bulk_state_stamps_and_clears_archived_at(): void
+    {
+        $admin = $this->member('admin');
+        $token = $admin->createToken('auth-token', ['*'], now()->addHour())->plainTextToken;
+        $resource = $this->resource($admin, ResourceState::LIVE);
+
+        $this->withToken($token)
+            ->postJson('/api/v1/resources/bulk/state', ['resource_ids' => [$resource->id], 'state' => 'archived'])
+            ->assertOk();
+        $this->assertNotNull($resource->fresh()->archived_at);
+
+        $this->withToken($token)
+            ->postJson('/api/v1/resources/bulk/state', ['resource_ids' => [$resource->id], 'state' => 'live'])
+            ->assertOk();
+        $this->assertNull($resource->fresh()->archived_at);
+    }
+
+    public function test_listing_sorts_by_archived_at_by_default_not_updated_at(): void
+    {
+        $admin = $this->member('admin');
+
+        // Archived first but touched most recently: updated_at would put it first.
+        $older = $this->resource($admin, ResourceState::ARCHIVED, ['archived_at' => now()->subDays(3)]);
+        $newer = $this->resource($admin, ResourceState::ARCHIVED, ['archived_at' => now()->subDay()]);
+        $older->forceFill(['updated_at' => now()->addMinute()])->saveQuietly();
+
+        $this->assertSame([$newer->id, $older->id], $this->listedIds($admin));
+
+        $token = $admin->createToken('auth-token', ['*'], now()->addHour())->plainTextToken;
+        $asc = $this->withToken($token)
+            ->getJson('/api/v1/resources/archived?sort_by=archived_at&sort_dir=asc')
+            ->assertOk()
+            ->json('data');
+        $this->assertSame([$older->id, $newer->id], array_column($asc, 'id'));
+        $this->assertNotNull($asc[0]['archived_at']);
+
+        // updated_at is still accepted, for older clients.
+        $byUpdated = $this->withToken($token)
+            ->getJson('/api/v1/resources/archived?sort_by=updated_at')
+            ->assertOk()
+            ->json('data');
+        $this->assertSame([$older->id, $newer->id], array_column($byUpdated, 'id'));
+    }
+
+    public function test_migration_backfills_archived_rows_from_updated_at_and_reruns_safely(): void
+    {
+        $this->assertTrue(Schema::hasColumn('resources', 'archived_at'));
+
+        $admin = $this->member('admin');
+        $archived = $this->resource($admin, ResourceState::ARCHIVED);
+        $live = $this->resource($admin, ResourceState::LIVE);
+
+        // As an archived row from before the column existed looks.
+        DB::table('resources')->where('id', $archived->id)
+            ->update(['archived_at' => null, 'updated_at' => '2026-09-01 12:00:00']);
+
+        $migration = require database_path('migrations/2026_10_06_000000_add_archived_at_to_resources.php');
+        $migration->up(); // column already there: guarded, only the backfill runs
+
+        $this->assertSame('2026-09-01 12:00:00', DB::table('resources')->where('id', $archived->id)->value('archived_at'));
+        $this->assertNull(DB::table('resources')->where('id', $live->id)->value('archived_at'));
     }
 
     public function test_requires_authentication(): void

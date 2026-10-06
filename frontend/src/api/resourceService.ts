@@ -58,6 +58,8 @@ export interface ResourceData {
   created_at: string
   updated_at: string
   deleted_at: string | null
+  /** When the resource was last archived; null unless state is archived. */
+  archived_at?: string | null
 
   // Snapshot file — the default preview image for this resource.
   // Identified by usage containing 'snapshot' on the file record.
@@ -721,7 +723,7 @@ class ResourceService {
   async getArchivedResources(
     page = 1,
     limit = 48,
-    sortBy: 'updated_at' | 'name' | 'id' = 'updated_at',
+    sortBy: 'archived_at' | 'updated_at' | 'name' | 'id' = 'archived_at',
     sortDir: 'asc' | 'desc' = 'desc'
   ): Promise<{ data: ResourceData[]; total: number; per_page: number; current_page: number; last_page: number } | null> {
     try {

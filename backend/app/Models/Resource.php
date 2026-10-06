@@ -46,6 +46,7 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
  * @property Carbon|null $description_set_at
  * @property ResourceType $type
  * @property ResourceState $state
+ * @property Carbon|null $archived_at When `state` last became `archived`; null otherwise
  * @property string $aity_status
  * @property array<array-key, mixed>|null $metadata
  * @property array<array-key, mixed>|null $promoted_file_metadata
@@ -150,6 +151,7 @@ class Resource extends Model implements HasMedia
         'slug',
         'description',
         'state',
+        'archived_at',
         'payload',
         'metadata',
         'promoted_file_metadata',
@@ -166,6 +168,7 @@ class Resource extends Model implements HasMedia
     protected $casts = [
         'type' => ResourceType::class,
         'state' => ResourceState::class,
+        'archived_at' => 'datetime',
         'payload' => 'array',
         'metadata' => 'array',
         'promoted_file_metadata' => 'array',
@@ -313,11 +316,37 @@ class Resource extends Model implements HasMedia
     }
 
     /**
+     * Keep `archived_at` in step with `state`: stamped when the resource moves
+     * to archived (unless the caller set it explicitly), cleared when it
+     * leaves. Runs from the `saving` hook; a quiet save (`saveQuietly`,
+     * `updateQuietly`) skips hooks, so callers that change `state` quietly
+     * — the bulk state endpoint — call it themselves before saving.
+     */
+    public function syncArchivedAt(): void
+    {
+        if (! $this->isDirty('state')) {
+            return;
+        }
+
+        if ($this->state === ResourceState::ARCHIVED) {
+            if (! $this->isDirty('archived_at') || $this->archived_at === null) {
+                $this->archived_at = now();
+            }
+        } else {
+            $this->archived_at = null;
+        }
+    }
+
+    /**
      * Boot the model and register Elasticsearch indexing events.
      */
     protected static function boot()
     {
         parent::boot();
+
+        static::saving(function (self $resource) {
+            $resource->syncArchivedAt();
+        });
 
         static::created(function ($resource) {
             if ($resource->state->isVisible()) {
