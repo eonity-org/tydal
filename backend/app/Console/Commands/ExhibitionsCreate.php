@@ -10,7 +10,7 @@ use RuntimeException;
 /**
  * Create everything one photo exhibition needs in TYDAL — a workspace, a
  * private gallery vault showing it (uploads land there too), and a read + a
- * write key — and print what the curator pastes into Full Frame's
+ * write key — and print what the curator pastes into FullFrame's
  * "Connect an exhibition". Run `exhibitions:setup` for the organization first.
  */
 class ExhibitionsCreate extends Command
@@ -21,12 +21,12 @@ class ExhibitionsCreate extends Command
         {--org= : Organization slug or UUID}
         {--name= : Exhibition name (the vault and workspace are named after it)}
         {--slug= : Vault address slug (default: from the name)}
-        {--curator= : Email of the curator who runs it in Full Frame (TYDAL user created or reused)}
+        {--curator= : Email of the curator who runs it in FullFrame (TYDAL user created or reused)}
         {--curator-name= : Name for a newly created curator (default: from the email)}
         {--curator-password= : Password for a newly created curator (min 8). Omitted: asked (hidden) when interactive, else generated. Prefer the prompt — a value here lands in shell history}
         {--role=editor : Curator role in the organization: viewer (read-only), editor or admin}';
 
-    protected $description = 'Create a photo exhibition (Full Frame): workspace, private gallery vault and its read + write keys';
+    protected $description = 'Create a photo exhibition (FullFrame): workspace, private gallery vault and its read + write keys';
 
     public function handle(ExhibitionProvisioner $provisioner): int
     {
@@ -85,7 +85,7 @@ class ExhibitionsCreate extends Command
         $this->info("✓ Vault: {$vault->name} (gallery, private) — uploads land in it");
         $this->info('✓ Keys minted — shown only now, store them');
         $this->newLine();
-        $this->line('Paste into Full Frame → "Connect an exhibition":');
+        $this->line('Paste into FullFrame → "Connect an exhibition":');
         $this->line("  Shared vault URL : {$base}/v/{$organization->slug}/{$vault->slug}");
         $this->line("  Read key         : {$result['read_key']}");
         $this->line("  Write key        : {$result['write_key']}");
@@ -111,7 +111,7 @@ class ExhibitionsCreate extends Command
         }
 
         $this->newLine();
-        $this->line("Curator — signs into Full Frame's studio with their TYDAL account ({$curator['role']}):");
+        $this->line("Curator — signs into FullFrame's studio with their TYDAL account ({$curator['role']}):");
         $this->line("  Email    : {$curator['user']->email}");
         $this->line(match (true) {
             $curator['password'] !== null => "  Password : {$curator['password']}   (new account, generated — shown only now; they can change it in TYDAL)",

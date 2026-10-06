@@ -2,7 +2,7 @@
 
 **Status:** Implemented (2026-07-24)
 **Author:** design session 2026-07-24
-**Supersedes:** the "per-exhibition org-admin service token" approach to the Full Frame opening (E4.2)
+**Supersedes:** the "per-exhibition org-admin service token" approach to the FullFrame opening (E4.2)
 **Related:** [[VAULT_SYSTEM.md]] (the boundary + read tiers), [[RESOURCE_MODEL.md]] (state)
 
 > **As built** — matches this design; the concrete deltas worth noting:
@@ -17,7 +17,7 @@
 >   writes a `vault_writes` audit row (method + summary + key + ip).
 > - The selection lives in an internal, system-owned `vault-{id}-selection`
 >   workspace whose owner is inherited from an existing org workspace.
-> - Full Frame stores a read + write vault key per exhibition, encrypted
+> - FullFrame stores a read + write vault key per exhibition, encrypted
 >   (AES-256-GCM, `src/lib/crypto.ts`); `writeback.ts` no longer touches
 >   workspaces, org tokens, or the management API.
 
@@ -28,12 +28,12 @@ purpose-gated read tiers (`allowsChunks` / `allowsBinary` / `allowsAsk`), each
 unlocked by a vault key (`tvk_…`) scoped to exactly one vault. Reads are
 beautifully least-privilege.
 
-Writes are not. The one write a consumer needs — Full Frame's "open the
+Writes are not. The one write a consumer needs — FullFrame's "open the
 exhibition", which swaps *which resources a gallery vault projects* — has no
 vault-scoped path. It goes through the org-wide management API
 (`POST /workspaces`, `addResource`, attach/detach vault, publish), authorized by
 a **Sanctum user token scoped to the whole organization**. To flip one gallery's
-selected set, Full Frame must hold an org-admin credential. The blast radius of
+selected set, FullFrame must hold an org-admin credential. The blast radius of
 a leak is every vault, workspace, and resource in that org.
 
 That asymmetry is the actual source of every problem in the opening flow:
@@ -97,7 +97,7 @@ dry-run/preview stays a pure read.
 
 ### Inbound ops — `ingest` / `update` / `withdraw` (every purpose that takes content)
 
-Added 2026-09-25 for Full Frame's curator uploads, and deliberately
+Added 2026-09-25 for FullFrame's curator uploads, and deliberately
 purpose-agnostic: the names say what happens to the vault's content, not which
 kind of vault it is. `VaultIngest` implements everything shared; a purpose's
 writer decides only **which files an `ingest` carries and how they're stored**.
@@ -242,19 +242,19 @@ class per purpose that exposes writes), all in a DB transaction:
   `close` also re-attaches the full submission workspace(s). Same publish/rebuild
   path the current `VaultController::publish` uses.
 
-Full Frame's `writeback.ts` workspace choreography is **deleted** — that
+FullFrame's `writeback.ts` workspace choreography is **deleted** — that
 knowledge moves behind the boundary where it belongs.
 
 ## 7. Reference space: vault link hashes
 
 Payloads speak **link hashes** — the only ids a consumer ever sees (the boundary
-hides resource UUIDs; see [[vault-boundary-id-encoding]]). Full Frame passes back
+hides resource UUIDs; see [[vault-boundary-id-encoding]]). FullFrame passes back
 the very hashes it rendered to the jury. TYDAL maps hash→resource internally and
 refuses any hash not belonging to this vault. No UUID or slug ever crosses the
 boundary, in either direction.
 
-Selection transfer is **push** (Full Frame `POST`s the set with its write key),
-not pull (TYDAL fetching a Full Frame URL): keeps the dependency one-directional
+Selection transfer is **push** (FullFrame `POST`s the set with its write key),
+not pull (TYDAL fetching a FullFrame URL): keeps the dependency one-directional
 and needs no callback contract.
 
 ## 8. SDK (`@tydal/client`)
@@ -283,15 +283,15 @@ second configured consumer.
 > shims over `write()` — kept so existing callers keep working, not extended.
 
 **Three callers, one op.** The write boundary is the same whichever front hits it:
-`@tydal/client`'s `write(op, payload)` (products like Full Frame and ImageLab),
+`@tydal/client`'s `write(op, payload)` (products like FullFrame and ImageLab),
 the **`vault-mcp` `ingest` tool** (a customer's own MCP AI, when
 `TYDAL_VAULT_WRITE_KEY` is set — read-only otherwise), or a raw multipart
 `POST /{h|v}/…/w/{method}`. All carry the write key and pass the same document.
 
-## 9. Full Frame impact
+## 9. FullFrame impact
 
 - Store `readVaultKey` + `writeVaultKey` **per exhibition**, encrypted at rest
-  (AES-GCM with a key from Full Frame env — Next has no Laravel `Crypt`; small
+  (AES-GCM with a key from FullFrame env — Next has no Laravel `Crypt`; small
   helper). Set at exhibition setup by that vault's admin.
 - `vaultFor(exhibition)` uses the stored **read** key (replaces global
   `VAULT_KEY` env). `openExhibition` uses the stored **write** key.
@@ -299,7 +299,7 @@ the **`vault-mcp` `ingest` tool** (a customer's own MCP AI, when
   `consumer.gallery.activate(selected)` then `consumer.gallery.open()`;
   reopening is `consumer.gallery.close()`.
 - Drop `serviceToken()` / `TYDAL_SERVICE_TOKEN` and the `mcp:token` step entirely
-  for Full Frame.
+  for FullFrame.
 
 ## 10. What this removes
 
@@ -338,14 +338,14 @@ Backend (Pest):
 
 SDK (Vitest): write call sends `X-Vault-Key`, parses envelope, surfaces errors.
 
-Full Frame: opening calls the methods; reopening reverses; no workspace calls
+FullFrame: opening calls the methods; reopening reverses; no workspace calls
 remain.
 
 ## 14. Effort
 
 Backend: migration + `VaultKey` ability + `VaultPurpose::writeMethods()` +
 `authorizeWrite` + endpoint + `GalleryVaultWriter` + key-mint UI (abilities
-selector in VaultsTab) + tests. SDK: one write method + tests. Full Frame:
+selector in VaultsTab) + tests. SDK: one write method + tests. FullFrame:
 schema field + crypto helper + setup field + rewire + delete `writeback.ts`
 internals. Meaningful but self-contained; the read boundary is untouched.
 

@@ -433,10 +433,10 @@ Set `TYDAL_VAULT_WRITE_KEY` on the vault-MCP connection and the purpose's write
 ops (`ingest` on an `ai` vault) appear as tools — read-only otherwise.
 There is no CLI for vault keys — they are minted in the admin UI or via that endpoint.
 
-## Photo exhibitions (Full Frame)
+## Photo exhibitions (FullFrame)
 
 Prepare TYDAL to serve photo exhibitions to a gallery client such as
-[Full Frame](https://github.com/eonity-org/fullframe), with nothing to configure
+[FullFrame](https://github.com/eonity-org/fullframe), with nothing to configure
 by hand. Opt-in: the installer stays generic.
 
 `tools/clients/fullframe.sh setup|create …` runs these two commands with the
@@ -479,7 +479,7 @@ Creates the exhibition's workspace and a **private gallery vault** that shows
 it, with that workspace + Photos as its ingest target (curator uploads land
 there), and mints a read key and a write key (`w:activate/open/close` to
 publish, `w:ingest/update/withdraw` for uploads). Prints the shared vault URL
-and both keys — paste them into Full Frame's *Connect an exhibition*. The keys
+and both keys — paste them into FullFrame's *Connect an exhibition*. The keys
 are shown only once. Refuses a slug already used by a vault in the organization.
 
 `--curator` gives someone the studio: it creates the TYDAL user or reuses an
@@ -487,7 +487,7 @@ existing one, and makes them a member of
 the organization with `--role` — `editor` (default) manages exhibitions,
 `viewer` gets a read-only studio, `admin` also administers the organization in
 TYDAL. An existing higher role is never lowered; ownership is never granted.
-They sign into Full Frame's studio with that TYDAL account.
+They sign into FullFrame's studio with that TYDAL account.
 
 A **new** account's password is yours to choose. An interactive run asks for it
 (hidden, typed twice; leave it empty to generate one, printed once).

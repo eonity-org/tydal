@@ -195,11 +195,11 @@ tokens and would sign them out of the SPA — so the product only learns *who*
 someone is. It is rate-limited per email (5 attempts a minute: a product calls
 from one server address for all its users) under a per-IP ceiling.
 
-Full Frame's studio uses it: owner / admin / editor manage their organization's
+FullFrame's studio uses it: owner / admin / editor manage their organization's
 exhibitions, a viewer gets a read-only studio, a platform admin signs in as the
 installation admin. Exhibitions are filed under the vault's organization, which
 the write-key probe (`GET …/w`) reports to write-key holders only. Revoking
-access in TYDAL takes effect at the product's next sign-in (Full Frame keeps
+access in TYDAL takes effect at the product's next sign-in (FullFrame keeps
 curator sessions to 12 hours). `exhibitions:create --curator=email` creates or
 reuses the user and adds them to the organization.
 

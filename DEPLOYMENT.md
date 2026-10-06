@@ -342,7 +342,7 @@ docker exec tydal_ollama ollama pull llama3.2-vision
 
 Day-to-day commands aren't repeated here. **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)**
 has every script and artisan command on one line, in docker and native form,
-with its preconditions: reload, reindex, test, Full Frame provisioning, search
+with its preconditions: reload, reindex, test, FullFrame provisioning, search
 drift repair, maintenance, and debugging. The full artisan contracts are in
 [docs/CLI.md](docs/CLI.md).
 

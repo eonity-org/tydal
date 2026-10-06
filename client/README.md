@@ -4,7 +4,7 @@ Shared TypeScript client for the TYDAL REST API — the intended transport for
 **any client building typed product/application code** against TYDAL: the
 management SPA (`frontend/`) and the vault renderer apps (`vaults/*`), which
 ship together with the backend on one release, and external product
-integrators outside this repo — e.g. **Full Frame**, which depends on a real,
+integrators outside this repo — e.g. **FullFrame**, which depends on a real,
 versioned `@tydal/client` release from the public registry, not a workspace
 link.
 
@@ -13,7 +13,7 @@ are thin MCP adapters that forward raw JSON straight to an LLM — they never
 touch the SDK's typed methods, envelope unwrapping, or auth refresh-retry, so
 importing it buys nothing. Worse, `org-mcp`'s prior dependency was
 `"@tydal/client": "*"` — an npm-workspace link with no version boundary at
-all (unlike Full Frame's real semver pin), tying it to this package's HEAD
+all (unlike FullFrame's real semver pin), tying it to this package's HEAD
 instead of the stable, documented HTTP contract
 (`docs/architecture/VAULT_WRITE_METHODS.md`, `docs/architecture/VAULT_SYSTEM.md`).
 They each carry their own small `fetch` wrapper instead.

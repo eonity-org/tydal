@@ -23,7 +23,7 @@ use Tests\TestCase;
 
 /**
  * `exhibitions:setup` / `exhibitions:create` — preparing TYDAL to serve photo
- * exhibitions to a gallery client (Full Frame) without configuring anything
+ * exhibitions to a gallery client (FullFrame) without configuring anything
  * by hand. Elasticsearch is mocked: these tests must never touch a real index.
  */
 class ExhibitionsCommandsTest extends TestCase

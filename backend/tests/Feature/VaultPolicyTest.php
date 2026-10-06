@@ -459,7 +459,7 @@ class VaultPolicyTest extends TestCase
     // =========================================================================
 
     /**
-     * `/meta`'s tiers block is what @tydal/client, vault-mcp, Full Frame and
+     * `/meta`'s tiers block is what @tydal/client, vault-mcp, FullFrame and
      * ImageLab read. Moving the presets into VaultPolicy must not move it.
      */
     #[DataProvider('presetProvider')]

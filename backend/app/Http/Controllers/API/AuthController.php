@@ -105,7 +105,7 @@ class AuthController extends Controller
 
     /**
      * Confirm who someone is, for a product that uses TYDAL as its identity
-     * provider (e.g. Full Frame's studio sign-in): checks the email and
+     * provider (e.g. FullFrame's studio sign-in): checks the email and
      * password and returns the user and their organizations with roles.
      *
      * Unlike `login`, it creates no token and no session, and so leaves the
