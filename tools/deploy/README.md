@@ -112,6 +112,10 @@ compose). After switching:
 
 ## Scripts
 
+On a server, the files in [`server/`](server/) (one infrastructure compose,
+one compose + `make-env.sh` + nginx site per installation) replace these
+scripts — DEPLOYMENT.md, "On a server, by hand".
+
 Every script accepts `--help` and is path-independent (run from anywhere, or via
 the root wrappers `./install.sh` / `./configure.sh` / `./start.sh`).
 

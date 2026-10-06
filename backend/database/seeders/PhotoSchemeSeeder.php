@@ -7,7 +7,7 @@ use Illuminate\Database\Seeder;
 
 /**
  * The photo exhibition collection scheme — images only, with the details a
- * curator gives each photograph (Full Frame's upload form): title, author,
+ * curator gives each photograph (FullFrame's upload form): title, author,
  * technique, dimensions and description, plus year.
  *
  * Global and idempotent, so any organization can put a "Photos" collection on
@@ -35,7 +35,7 @@ class PhotoSchemeSeeder extends Seeder
             ['name' => self::NAME],
             [
                 'display_name' => 'Photo Exhibition',
-                'description' => 'Images-only scheme for photo exhibitions (Full Frame): author, year, technique and dimensions',
+                'description' => 'Images-only scheme for photo exhibitions (FullFrame): author, year, technique and dimensions',
                 'accepted_mimetypes' => ['image/*'],
                 'is_system' => false,
                 'fields' => [

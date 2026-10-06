@@ -17,7 +17,7 @@ forms, preconditions), see **[QUICK_REFERENCE.md](../QUICK_REFERENCE.md)**.
 | Folder | What belongs here | Scripts |
 |---|---|---|
 | [`deploy/`](deploy/README.md) | **Lifecycle of the TYDAL stack itself**: install, choose tiers (and own or shared infrastructure), start, reset, reload, reindex, build the MCP servers, test. | `install.sh` `configure.sh` `provision-shared.sh` `start.sh` `first_install.sh` `reload.sh` `reindex.sh` `install_mcp.sh` `test.sh` |
-| [`clients/`](#clients--the-border) | **The border**: things that run *outside* TYDAL and consume it through a vault (vault renderer apps, products such as Full Frame), plus provisioning shortcuts for them. | `vault-apps.sh` `fullframe.sh` |
+| [`clients/`](#clients--the-border) | **The border**: things that run *outside* TYDAL and consume it through a vault (vault renderer apps, products such as FullFrame), plus provisioning shortcuts for them. | `vault-apps.sh` `fullframe.sh` |
 | [`dev/`](#dev--data-and-smoke) | **Dev data and ops smoke**: fill a vault with real files, load-test the boundary. | `seed-vault.sh` `loadtest.sh` |
 | `lib/` | Shared shell helpers, *sourced* and never run directly: `tier.lib.sh` (`detect_infra`, `run_npm`), `stack.lib.sh` (`stack_load`, `stack_container`, `infra_container`, … — the installation's container names, ports and infrastructure from the root `.env`). | — |
 
@@ -60,8 +60,8 @@ itself runs.
 From a terminal, `fullframe.sh` runs interactively and asks for what you left
 out. From a pipe or script it never prompts and uses the defaults (language
 `en`, generated password). It passes every option straight to `artisan exhibitions:setup|create`
-(full contract: [docs/CLI.md → Photo exhibitions](../docs/CLI.md#photo-exhibitions-full-frame)).
-Full Frame itself lives in its own repo (`../fullframe`, `docker compose up -d`).
+(full contract: [docs/CLI.md → Photo exhibitions](../docs/CLI.md#photo-exhibitions-fullframe)).
+FullFrame itself lives in its own repo (`../fullframe`, `docker compose up -d`).
 After `create`, the curator signs into its studio (`http://localhost:3020/admin`)
 with their TYDAL account and pastes the URL and keys into *Connect an exhibition*.
 

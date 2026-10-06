@@ -11,7 +11,7 @@ use Tests\TestCase;
 
 /**
  * `POST /api/v1/auth/identify` — TYDAL as identity provider for a product
- * (Full Frame's studio): confirms who someone is and which organizations
+ * (FullFrame's studio): confirms who someone is and which organizations
  * they belong to, without issuing a token or touching their sessions.
  */
 class AuthIdentifyTest extends TestCase

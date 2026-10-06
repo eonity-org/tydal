@@ -1,0 +1,64 @@
+# One TYDAL installation — copy per installation into its own folder, e.g.
+# /srv/tydal-pro/compose.yml, and change the three INSTANCE-specific lines:
+# `name`, the published port and the storage path.
+#   cd /srv/tydal-pro && docker compose up -d
+# Code: ./src (a checkout of github.com/eonity-org/tydal at a release tag),
+# config in ./src/backend/.env (make-env.sh). Backing services come from
+# tydal-infra (infra.compose.yml) through the external `tydal-infra` network.
+#
+# The host's nginx serves the SPA build (./src/frontend/build) and proxies the
+# backend paths to the published port (nginx-site.conf). PHP runs inside the
+# image as uid 1000 (`application`), which must own ./src.
+name: tydal-pro                     # INSTANCE: tydal-<name>
+
+x-php: &php
+  image: webdevops/php-nginx:8.4
+  environment: &php-env
+    PHP_MEMORY_LIMIT: 512M
+    PHP_DISMOD: ioncube   # not bundled in this image; silences a load warning
+  volumes: &php-volumes
+    - ./src/backend:/var/www/html
+    # media, logs, framework cache — on the data disk, not in the checkout
+    - /srv/data/tydal-pro/storage:/var/www/html/storage     # INSTANCE; owned by uid 1000
+  networks: [tydal-infra]
+  restart: unless-stopped
+
+services:
+  app:
+    <<: *php
+    ports:
+      - "127.0.0.1:8100:80"         # INSTANCE: one free port per installation
+    environment:
+      <<: *php-env
+      WEB_DOCUMENT_ROOT: /var/www/html/public
+      PHP_UPLOAD_MAX_FILESIZE: 300M
+      PHP_POST_MAX_SIZE: 310M
+      PHP_MAX_EXECUTION_TIME: 360
+    volumes:
+      - ./src/backend:/var/www/html
+      - /srv/data/tydal-pro/storage:/var/www/html/storage   # INSTANCE
+      # the image's own 10-general.conf caps bodies at 50m
+      - ./src/tools/deploy/nginx/10-general.conf:/opt/docker/etc/nginx/vhost.common.d/10-general.conf:ro
+
+  # queue/scheduler skip the image's entrypoint: it runs the command as root
+  # whatever `user:` says, and root-owned files in storage/ would then be
+  # unwritable for php-fpm (uid 1000). Its PHP_* provisioning goes with it,
+  # hence the -d flags.
+  queue:
+    <<: *php
+    entrypoint: []
+    working_dir: /var/www/html
+    user: "1000:1000"
+    command: php -d memory_limit=512M artisan queue:work --timeout=360 --tries=3
+    stop_grace_period: 370s
+
+  scheduler:
+    <<: *php
+    entrypoint: []
+    working_dir: /var/www/html
+    user: "1000:1000"
+    command: php -d memory_limit=512M artisan schedule:work
+
+networks:
+  tydal-infra:
+    external: true

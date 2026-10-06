@@ -342,7 +342,7 @@ docker exec tydal_ollama ollama pull llama3.2-vision
 
 Day-to-day commands aren't repeated here. **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)**
 has every script and artisan command on one line, in docker and native form,
-with its preconditions: reload, reindex, test, Full Frame provisioning, search
+with its preconditions: reload, reindex, test, FullFrame provisioning, search
 drift repair, maintenance, and debugging. The full artisan contracts are in
 [docs/CLI.md](docs/CLI.md).
 
@@ -526,6 +526,57 @@ installation — point them at the installation you want with
 `TYDAL_BACKEND_URL` / `TYDAL_BASE_URL`.
 
 ---
+
+### On a server, by hand
+
+The flags above are for a workstation. On a server, a few plain files do the
+same job and are easier to read: the ones in
+[`tools/deploy/server/`](tools/deploy/server/), taken from a running server
+(production + staging on one VM, behind the host's nginx and certbot):
+
+| File | One copy per | What it is |
+|---|---|---|
+| [`infra.compose.yml`](tools/deploy/server/infra.compose.yml) | server | MySQL, Elasticsearch, Redis (with a password), Tika. Every port on `127.0.0.1`, data on the data disk, network `tydal-infra`. Secrets in a `.env` next to it (600). |
+| [`instance.compose.yml`](tools/deploy/server/instance.compose.yml) | installation | app, queue, scheduler on the `tydal-infra` network; PHP as uid 1000; storage on the data disk. Change `name`, the port, the storage path. |
+| [`make-env.sh`](tools/deploy/server/make-env.sh) | installation | writes the production `backend/.env` and creates the database + user. Set `NAME`, `URL`, `INFRA`. |
+| [`nginx-site.conf`](tools/deploy/server/nginx-site.conf) | installation | the SPA from `frontend/build`; `/api`, `/h`, `/v`, `/vault`, `/storage`, `/up` to the app port. |
+
+What keeps installations apart on the shared services is all in `make-env.sh`:
+database and user `tydal_NAME`, `REDIS_PREFIX`/`CACHE_PREFIX`,
+`SESSION_COOKIE`, and `ELASTICSEARCH_INDEX_PREFIX=NAME_`.
+
+```bash
+# Once per server (data folders: Elasticsearch's owned by uid 1000)
+mkdir /srv/tydal-infra && cp tools/deploy/server/infra.compose.yml /srv/tydal-infra/compose.yml
+#   + /srv/tydal-infra/.env (600): MYSQL_ROOT_PASSWORD=…  REDIS_PASSWORD=…
+cd /srv/tydal-infra && docker compose up -d
+
+# Once per installation (here: pro, port 8100)
+mkdir /srv/tydal-pro && cd /srv/tydal-pro
+git clone https://github.com/eonity-org/tydal.git src && git -C src checkout v1.4.0
+cp src/tools/deploy/server/instance.compose.yml compose.yml      # edit name, port, storage path
+cp src/tools/deploy/server/make-env.sh . && ./make-env.sh        # edit NAME, URL, INFRA first
+docker compose up -d
+X() { docker compose exec -T -u application -w /var/www/html app "$@"; }
+X composer install --no-dev --optimize-autoloader
+X php artisan key:generate --force && X php artisan storage:link
+X php artisan migrate --force
+X php artisan db:seed --class=CollectionSchemaSeeder --force
+X php artisan db:seed --class=MinimalSeeder --force > superadmin-seed.txt   # password shown once
+X php artisan config:cache
+docker compose restart queue scheduler
+# SPA, built for this installation's address
+cp src/tools/deploy/env.templates/frontend.env src/frontend/.env  # VITE_API_BASE_URL=URL/api/v1
+docker run --rm -u 1000:1000 -e HOME=/tmp -v "$PWD/src":/app -w /app node:22 \
+  sh -c 'npm install && npm run build --prefix client && npm run build --prefix frontend'
+# nginx-site.conf → /etc/nginx/sites-available, enable, nginx -t, reload, certbot --nginx -d HOST
+```
+
+**Upgrading** an installation: `git -C src fetch --tags && git -C src checkout
+vX.Y.Z`, then `composer install --no-dev`, `migrate --force`, `config:cache`,
+restart, rebuild the SPA, and whatever the release's *Upgrading* notes ask.
+Upgrade staging first. In `docker compose exec` calls run from a script, close
+stdin (`</dev/null`), or exec reads the rest of the script.
 
 ## Optional: the MCP servers
 

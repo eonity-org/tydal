@@ -230,7 +230,7 @@ Settled design (full spec in [`VAULT_SYSTEM.md`](VAULT_SYSTEM.md)):
   writer maps, so `@tydal/client` exposes one generic `write(op, payload)` (no
   per-purpose namespaces). Consumers declare intent (`POST /{h|v}/…/w/{method}`)
   and TYDAL does the bookkeeping; this replaced the org-admin service token for
-  Full Frame's opening, and lets an `ai` vault accept an AI's transformed output.
+  FullFrame's opening, and lets an `ai` vault accept an AI's transformed output.
 - **Naming by consumer:** `slug` (machine) + `name` (human) + `hash` (opaque
   machine id). LLM naming of auto-created cluster Vaults in Phase 4 / Epic 4.5;
   the same split applies per-resource via overlay roles (§5.2).
@@ -293,7 +293,7 @@ building typed product/application code against TYDAL** — a real, versioned
 package boundary (semver, deliberate upgrades), not a workspace link. That
 covers both surfaces TYDAL builds and ships together on one release — the SPA
 and the `vaults/*` renderer apps — and external product integrators outside
-this repo, e.g. **Full Frame**, which consumes it from the public registry
+this repo, e.g. **FullFrame**, which consumes it from the public registry
 exactly as any other npm dependency.
 
 > **Rule of thumb for a new client:** if it renders typed UI or business logic
@@ -341,7 +341,7 @@ consumer.
 
 | Product | Repo | Vault purpose | What it adds |
 |---------|------|---------------|--------------|
-| **Full Frame** | `fullframe/` | `gallery` | photo exhibition + jury; opens via `activate`/`open` on a write key |
+| **FullFrame** | `fullframe/` | `gallery` | photo exhibition + jury; opens via `activate`/`open` on a write key |
 | **ImageLab** | `imagelab/` | `ai` | image→descriptor pipeline; writes back via `ingest` (2026-07-25) |
 
 Both go through `@tydal/client` only, hold per-binding read + write vault keys

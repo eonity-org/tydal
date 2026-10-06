@@ -51,7 +51,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md#several-installations-on-one-server).
 | `./clients.sh [up\|stop\|down\|status] [gallery\|obsidian\|aity]` | Vault renderer apps at :3010 / :3011 / :3012 (`?vault=org/slug`) | stack |
 | `tools/clients/fullframe.sh setup --org=SLUG --index=tydal_multimedia [--language=es]` | Once per org: `photo_exhibition` scheme + Photos collection on a shared index, in the language you pick (asked if omitted) | stack, org exists |
 | `tools/clients/fullframe.sh create --org=SLUG --name="…" --curator=EMAIL` | Once per exhibition: workspace, private gallery vault, read + write keys, curator account (asks the new curator's password; empty = generated); **prints them once** | `setup` done |
-| `cd ../fullframe && docker compose up -d --build` | Full Frame at :3020 (studio `/admin`); native dev: `./dev.sh dev` | `fullframe/.env` with `ADMIN_PASSWORD`, `FULLFRAME_ENCRYPTION_KEY` |
+| `cd ../fullframe && docker compose up -d --build` | FullFrame at :3020 (studio `/admin`); native dev: `./dev.sh dev` | `fullframe/.env` with `ADMIN_PASSWORD`, `FULLFRAME_ENCRYPTION_KEY` |
 
 ## Dev data & smoke (same on both tiers)
 

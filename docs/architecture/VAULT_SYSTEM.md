@@ -532,7 +532,7 @@ symmetric counterpart to the read tiers. Full spec: [[VAULT_WRITE_METHODS.md]].
   to the vault; the serve-time org pin (§2.1) makes cross-org projection
   structurally impossible. Every accepted call writes a `vault_writes` row.
 
-This replaces the org-admin service token Full Frame used for the opening: the
+This replaces the org-admin service token FullFrame used for the opening: the
 opening is now `activate` + `open` on the vault's own write key — one vault, no
 org token, no management API.
 
