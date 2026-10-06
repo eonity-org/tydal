@@ -82,11 +82,31 @@ describe('ArchivedPage', () => {
     await waitFor(() => expect(screen.queryByText('Harbour at dawn')).toBeNull())
   })
 
+  it('deletes all archived resources after confirming, reporting skips', async () => {
+    withPermissions(['resources.update', 'resources.delete'])
+    const second = { ...archived, id: '01890000-0000-7000-8000-000000000002', name: 'Pier at noon' }
+    getArchivedResources.mockResolvedValue({ data: [archived, second], total: 2, per_page: 48, current_page: 1, last_page: 1 })
+    deleteResource.mockReset()
+      .mockResolvedValueOnce(true)
+      .mockRejectedValueOnce(new Error('forbidden'))
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete all' }))
+    const dialogButtons = await screen.findAllByRole('button', { name: 'Delete all' })
+    fireEvent.click(dialogButtons[dialogButtons.length - 1])
+
+    await waitFor(() => expect(deleteResource).toHaveBeenCalledTimes(2))
+    expect(deleteResource).toHaveBeenCalledWith(archived.id)
+    expect(deleteResource).toHaveBeenCalledWith(second.id)
+    expect(await screen.findByText(/1 of 2 moved to the trash\. 1 skipped/)).not.toBeNull()
+  })
+
   it('offers no delete without the delete permission', async () => {
     withPermissions(['resources.update'])
     renderPage()
     expect(await screen.findByRole('button', { name: 'Set live' })).not.toBeNull()
     expect(screen.queryByRole('button', { name: 'Move to the trash' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Delete all' })).toBeNull()
   })
 
   it('keeps a skipped resource listed', async () => {

@@ -50,6 +50,8 @@ function ArchivedPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [confirmSetAll, setConfirmSetAll] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<ResourceData | null>(null)
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false)
+  const [deleteAllLoading, setDeleteAllLoading] = useState(false)
   const [setAllLoading, setSetAllLoading] = useState(false)
   const [sortBy, setSortBy] = useState<SortKey>('updated_at')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -127,16 +129,22 @@ function ArchivedPage() {
    * bulk cap. Authorization is per resource, so a partial result is normal:
    * report it the way the basket does and leave the skipped ones listed.
    */
+  /** Every archived resource id this user can see, page by page. */
+  const collectArchivedIds = async (): Promise<string[]> => {
+    const ids: string[] = []
+    for (let p = 1, last = 1; p <= last; p++) {
+      const result = await resourceService.getArchivedResources(p, BULK_MAX, sortBy, sortDir)
+      if (!result) throw new Error('Could not load the archived resources.')
+      ids.push(...result.data.map((r) => r.id))
+      last = result.last_page
+    }
+    return ids
+  }
+
   const handleSetAllLive = async () => {
     setSetAllLoading(true)
     try {
-      const ids: string[] = []
-      for (let p = 1, last = 1; p <= last; p++) {
-        const result = await resourceService.getArchivedResources(p, BULK_MAX, sortBy, sortDir)
-        if (!result) throw new Error('Could not load the archived resources.')
-        ids.push(...result.data.map((r) => r.id))
-        last = result.last_page
-      }
+      const ids = await collectArchivedIds()
 
       let applied = 0
       let skipped = 0
@@ -160,6 +168,38 @@ function ArchivedPage() {
     }
     setSetAllLoading(false)
     setConfirmSetAll(false)
+    if (page === 1) fetchArchived(1, sortBy, sortDir)
+    else setPage(1)
+  }
+
+  /**
+   * Move every archived resource this user can see to the trash. There's no
+   * bulk delete endpoint on purpose (delete is soft and reviewable in the
+   * trash), so this deletes one by one, like the basket's Delete, and reports
+   * how many it couldn't.
+   */
+  const handleDeleteAll = async () => {
+    setDeleteAllLoading(true)
+    try {
+      const ids = await collectArchivedIds()
+      let moved = 0
+      for (const id of ids) {
+        try {
+          await resourceService.deleteResource(id)
+          moved++
+        } catch {
+          // Refused (usually permission): left archived and listed.
+        }
+      }
+      const skipped = ids.length - moved
+      setReport(skipped === 0
+        ? { message: `${moved} ${plural(moved)} moved to the trash.`, severity: 'success' }
+        : { message: `${moved} of ${ids.length} moved to the trash. ${skipped} skipped — you may not have permission.`, severity: 'warning' })
+    } catch (error) {
+      setReport({ message: getApiError(error).message, severity: 'error' })
+    }
+    setDeleteAllLoading(false)
+    setConfirmDeleteAll(false)
     if (page === 1) fetchArchived(1, sortBy, sortDir)
     else setPage(1)
   }
@@ -227,11 +267,16 @@ function ArchivedPage() {
             {total > 0 ? `${total} archived ${plural(total)}` : ''}
           </Typography>
 
-          {/* Right: Set all live — flex:1 mirrors left side */}
+          {/* Right: Set all live + Delete all — flex:1 mirrors left side */}
           <Box sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
             {total > 0 && mayUpdate && (
               <Button variant="outlined" size="small" onClick={() => setConfirmSetAll(true)} sx={{ height: '2rem' }}>
                 Set all live
+              </Button>
+            )}
+            {total > 0 && mayDelete && (
+              <Button variant="outlined" size="small" color="error" onClick={() => setConfirmDeleteAll(true)} sx={{ height: '2rem' }}>
+                Delete all
               </Button>
             )}
           </Box>
@@ -379,6 +424,24 @@ function ArchivedPage() {
           <Button variant="contained" onClick={handleSetAllLive} disabled={setAllLoading}
             startIcon={setAllLoading ? <CircularProgress size={14} color="inherit" /> : undefined}>
             Set all live
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirm delete all */}
+      <Dialog open={confirmDeleteAll} onClose={() => !deleteAllLoading && setConfirmDeleteAll(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Delete all?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            All {total} archived {plural(total)} will be moved to the trash. You can restore them from
+            Deleted resources; they are deleted for good after 30 days there.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDeleteAll(false)} disabled={deleteAllLoading}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={handleDeleteAll} disabled={deleteAllLoading}
+            startIcon={deleteAllLoading ? <CircularProgress size={14} color="inherit" /> : undefined}>
+            Delete all
           </Button>
         </DialogActions>
       </Dialog>
