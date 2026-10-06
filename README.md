@@ -53,7 +53,9 @@ scripts: **[DEPLOYMENT.md](DEPLOYMENT.md)**. It walks development
 (install → configure `.env` → start the stack → seed → optionally plug in the
 two MCP servers, plus the commands you'll run again later and the common
 gotchas) and [production deployment](DEPLOYMENT.md#production-deployment)
-(nginx + PHP-FPM) alike.
+(nginx + PHP-FPM) alike, and [several installations on one
+server](DEPLOYMENT.md#several-installations-on-one-server) sharing one
+MySQL / Elasticsearch / Redis (`./configure.sh <ai> <app> --infra=shared --name=NAME`).
 
 ## Documentation
 

@@ -19,8 +19,22 @@ export interface Workspace {
   purpose?: string | null
   auto_approve_status?: 'pending' | 'running' | 'done' | 'failed' | null
   resources_count?: number
+  /** How many vaults project this workspace (`workspace_vault`); sent by the list endpoint. */
+  vaults_count?: number
   organization_id?: string | number
   user_owner_id?: string | number
+}
+
+/**
+ * Changing the members of a workspace attached to a vault publishes or
+ * unpublishes outside TYDAL, so it takes `workspaces.manage-vault-resources`
+ * (admins and owners) — WorkspacePolicy::manageResources on the server. The
+ * pickers show such workspaces disabled, with this hint, to anyone without it.
+ */
+export const VAULT_CONNECTED_HINT = 'Shared through a vault — ask an administrator'
+
+export function isVaultConnected(workspace: Pick<Workspace, 'vaults_count'>): boolean {
+  return (workspace.vaults_count ?? 0) > 0
 }
 
 export interface AutoApproveLog {

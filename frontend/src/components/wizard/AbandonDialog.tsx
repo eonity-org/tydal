@@ -14,6 +14,12 @@ interface Props {
   resourceCount: number
   isDeleting: boolean
   isPublishing: boolean
+  /**
+   * Keep or Delete all was pressed while an upload was still running: it waits
+   * for that upload to settle first, so the resource is kept or deleted with
+   * the others instead of being left a draft.
+   */
+  isFinishingUploads?: boolean
   /** Set when the last Keep / Delete all left some resources behind. */
   failure?: AbandonFailure | null
   onKeep: () => void
@@ -29,10 +35,12 @@ interface Props {
  * Shown when the user closes the wizard after resources have already been created.
  * Lets them choose to keep the draft resources or delete them all. If either
  * fails for some resources, it says which and why, and offers Retry or Leave
- * anyway instead of closing as if it had worked.
+ * anyway instead of closing as if it had worked. Pressed while an upload is
+ * still running, either one first shows "Finishing uploads…" with every button
+ * disabled until the upload in flight has settled.
  */
 export function AbandonDialog({
-  open, resourceCount, isDeleting, isPublishing, failure, onKeep, onDeleteAll, onRetry, onLeave, onCancel,
+  open, resourceCount, isDeleting, isPublishing, isFinishingUploads = false, failure, onKeep, onDeleteAll, onRetry, onLeave, onCancel,
 }: Props) {
   const plural = resourceCount !== 1
   const busy = isDeleting || isPublishing
@@ -79,7 +87,7 @@ export function AbandonDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onCancel} maxWidth="xs" fullWidth>
+    <Dialog open={open} onClose={busy ? undefined : onCancel} maxWidth="xs" fullWidth>
       <DialogTitle>Exit wizard?</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary">
@@ -87,6 +95,12 @@ export function AbandonDialog({
             ? `${resourceCount} resource${plural ? 's were' : ' was'} already created. Keep ${plural ? 'them' : 'it'} in the collection or delete ${plural ? 'them' : 'it'} all?`
             : 'Are you sure you want to exit the wizard?'}
         </Typography>
+        {isFinishingUploads && (
+          <Alert severity="info" icon={<CircularProgress size={16} />} sx={{ mt: 2 }} role="status">
+            Finishing uploads… The file being uploaded is completed first, then
+            {isPublishing ? ' kept' : ' deleted'} with the others. Files not started yet are not uploaded.
+          </Alert>
+        )}
       </DialogContent>
       <DialogActions sx={{ px: 2.5, pb: 2 }}>
         <Button onClick={onCancel} disabled={busy}>
@@ -99,7 +113,7 @@ export function AbandonDialog({
             variant="outlined"
             startIcon={isPublishing ? <CircularProgress size={14} /> : undefined}
           >
-            {isPublishing ? 'Publishing…' : 'Keep'}
+            {isPublishing ? (isFinishingUploads ? 'Finishing uploads…' : 'Publishing…') : 'Keep'}
           </Button>
         )}
         <Button
@@ -109,7 +123,7 @@ export function AbandonDialog({
           disabled={busy}
           startIcon={isDeleting ? <CircularProgress size={14} color="inherit" /> : undefined}
         >
-          {isDeleting ? 'Deleting…' : resourceCount > 0 ? 'Delete all' : 'Exit'}
+          {isDeleting ? (isFinishingUploads ? 'Finishing uploads…' : 'Deleting…') : resourceCount > 0 ? 'Delete all' : 'Exit'}
         </Button>
       </DialogActions>
     </Dialog>

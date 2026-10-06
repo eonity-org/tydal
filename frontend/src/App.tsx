@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage'
 import DesigningPage from './pages/DesigningPage'
 import AdminPage from './pages/AdminPage'
 import TrashPage from './pages/TrashPage'
+import ArchivedPage from './pages/ArchivedPage'
 import AityReviewPage from './pages/AityReviewPage'
 import BasketPage from './pages/BasketPage'
 import OrganizationPage from './pages/OrganizationPage'
@@ -107,6 +108,14 @@ function AppWithTheme() {
             element={
               <ProtectedRoute>
                 <TrashPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/archived"
+            element={
+              <ProtectedRoute>
+                <ArchivedPage />
               </ProtectedRoute>
             }
           />

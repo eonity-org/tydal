@@ -21,6 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('files:purge-uncommitted')->dailyAt('03:30');
         // Abandoned create-mode drafts (tab close / crash). 1h TTL → run hourly.
         $schedule->command('resources:purge-drafts')->hourly();
+        // AiTy Review batches reviewed/finished past AITY_BATCH_RETENTION_DAYS
+        // (workspace only — the resources stay). 0 makes it a no-op.
+        $schedule->command('aity:purge-batches')->dailyAt('04:00');
     })
     ->withMiddleware(function (Middleware $middleware) {
         // Register custom middleware aliases

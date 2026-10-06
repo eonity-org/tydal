@@ -12,9 +12,13 @@ also has **All Resources**, which holds everything.
 **Who does what**
 
 - Editors add resources to workspaces and take them out (in the resource editor,
-  or with the basket's **Workspace** action).
-- Administrators and owners create, rename and delete workspaces, and connect
-  them to vaults.
+  or with the basket's **Workspace** action) — except in a workspace connected to
+  a vault. Changing what such a workspace holds publishes or unpublishes
+  resources outside TYDAL, so only administrators and owners can do it; editors
+  see it greyed out, with the hint *Shared through a vault — ask an
+  administrator*.
+- Administrators and owners create, rename and delete workspaces, connect them
+  to vaults, and add or remove resources in any workspace.
 
 ### Managing workspaces
 
@@ -36,8 +40,10 @@ connected to.
 
 **Managed by the system.** The workspaces listed under this heading (*Drift —
 selection*, *City Lines — selection*…) are created and kept up to date by other
-processes: AiTy Review batches, or an exhibition's "open" step in FullFrame. You
-can't rename or delete them here, and they aren't offered as tabs.
+processes, such as an exhibition's "open" step in FullFrame. You can't rename or
+delete them here, and they aren't offered as tabs. The batches created by the
+upload wizard's **Auto** option aren't listed here: they live on the **AiTy
+Review** page, where they can be reviewed and deleted ([chapter 3](03-adding-resources.md)).
 
 ## Vaults: sharing outside TYDAL
 

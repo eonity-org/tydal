@@ -76,7 +76,10 @@ export interface User {
 }
 
 class AuthService {
-  private tokenKey = 'JWT'
+  /** Name of the auth-token cookie. Browsers scope cookies by host, not port, so
+   *  two installations served from one host (shared infrastructure, #23) need
+   *  different names — configure.sh sets `VITE_AUTH_COOKIE` per installation. */
+  private tokenKey = import.meta.env.VITE_AUTH_COOKIE || 'JWT'
   private tokenExpiryKey = 'JWT_EXPIRY'
 
   /** Own SDK client for the auth endpoints. Built here — NOT imported from

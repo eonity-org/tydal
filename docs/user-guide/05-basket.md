@@ -40,7 +40,7 @@ The buttons at the top right act on everything in the basket:
 
 | Button | Does |
 |---|---|
-| **Workspace** | Add the resources to a workspace, or take them out of one. |
+| **Workspace** | Add the resources to a workspace, or take them out of one. Workspaces connected to a vault are greyed out unless you're an administrator or owner ([chapter 6](06-workspaces-and-vaults.md)). |
 | **State** | Set them to *Live* or *Archived* (below). |
 | **Tags** | Add or remove tags without touching their other tags ([chapter 4](04-tags.md)). |
 | **Delete** | Move them to the trash, where they can be restored ([chapter 7](07-trash.md)). |
@@ -60,6 +60,17 @@ A resource's **state** decides whether anyone sees it:
 - **Archived**: withdrawn from every listing and from every vault, but kept.
   TYDAL asks you to confirm before archiving, and you can set the resource back to
   Live at any time.
+
+Archived resources no longer appear in the library or in searches. To find them
+again, open **Archived**, next to *Deleted resources* at the far right of the
+second row. It works like the trash ([chapter 7](07-trash.md)): editors see the
+resources they own, administrators and owners see every archived resource in the
+organization, sorted by the date they were archived (newest first), name or ID;
+each card shows when it was archived. Each card has two icons: the first
+sets that resource **live** again, the second moves it to the **trash** (after
+confirming). **Set all live** brings back the whole list, and **Delete all**
+moves the whole list to the trash. If some can't be changed, TYDAL says how
+many it skipped and they stay on the page.
 
 ### When some resources can't be changed
 

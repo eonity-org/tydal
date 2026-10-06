@@ -110,4 +110,20 @@ class Workspace extends Model
     {
         return $this->belongsToMany(Vault::class, 'workspace_vault')->withTimestamps();
     }
+
+    /**
+     * Is this workspace projected into at least one vault (`workspace_vault`)?
+     * Changing its membership then publishes or unpublishes outside TYDAL,
+     * which WorkspacePolicy::manageResources reserves for
+     * `workspaces.manage-vault-resources`. Uses the `vaults_count` attribute
+     * when the query loaded it (withCount), so a listing costs no extra query.
+     */
+    public function isVaultConnected(): bool
+    {
+        if (array_key_exists('vaults_count', $this->attributes)) {
+            return (int) $this->attributes['vaults_count'] > 0;
+        }
+
+        return $this->vaults()->exists();
+    }
 }

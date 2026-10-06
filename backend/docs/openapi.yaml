@@ -327,6 +327,9 @@ paths:
     get:
       tags: [Resources]
       summary: List trashed resources
+      description: >-
+        Paginated. `sort_by` is `deleted_at` (default), `name` or `id`;
+        `limit` (default 48) is clamped to 1..200.
       responses:
         "200": { $ref: "#/components/responses/JsonResponse" }
   /resources/trashed/purge:
@@ -339,6 +342,17 @@ paths:
     patch:
       tags: [Resources]
       summary: Restore all trashed resources
+      responses:
+        "200": { $ref: "#/components/responses/JsonResponse" }
+  /resources/archived:
+    get:
+      tags: [Resources]
+      summary: List archived resources
+      description: >-
+        Paginated, newest-archived first. `sort_by` is `archived_at` (default),
+        `name`, `id` or `updated_at` (kept for older clients); `sort_dir` is
+        `asc`|`desc`; `limit` (default 48) is clamped to 1..200. Each row
+        carries `archived_at`, when the resource was last archived.
       responses:
         "200": { $ref: "#/components/responses/JsonResponse" }
   /resources/{id}:

@@ -110,7 +110,7 @@ pivot, or the org's default workspace for
 |---|---|---|
 | Create or delete a vault; set purpose, state and policy; mint and revoke keys; signed grants; rotate salt | **Platform admin** (`platform/vaults` routes, `superadmin` middleware) | changes what the outside world can reach, and how |
 | Attach / detach an existing vault to a workspace | **Admin (75)+** (`WorkspaceController::attachVault`, `update` on the workspace) | chooses which curated set a vault shows |
-| Populate a vault (add resources to an attached workspace) | **Editor (50)+** | ordinary curation; no new permission surface |
+| Populate a vault (add or remove resources in an attached workspace) | **Admin (75)+** — `workspaces.manage-vault-resources` (`WorkspacePolicy::manageResources`); editors curate only workspaces with no vault | membership of an attached workspace is what the vault shows, so changing it publishes or unpublishes outside TYDAL ([ROLES_AND_PERMISSIONS.md](ROLES_AND_PERMISSIONS.md#vault-connected-workspaces)) |
 | Purpose-defined writes through the boundary (`activate`/`open`/`close`, `ingest`/`update`/`withdraw`) | **Holder of a write-capable vault key** | the key, not an organization role, is the authority ([VAULT_WRITE_METHODS.md](VAULT_WRITE_METHODS.md)) |
 
 Organization admins do **not** create or configure vaults themselves today;

@@ -64,3 +64,47 @@ describe('WorkspacesManagerDialog — vault links', () => {
     expect(vaultService.workspace.attach).toHaveBeenCalledWith('7', 'v2')
   })
 })
+
+describe('WorkspacesManagerDialog — system workspaces', () => {
+  beforeEach(() => {
+    vi.mocked(vaultService.active.list).mockResolvedValue({ success: true, data: { vaults: [] } } as never)
+    vi.mocked(vaultService.workspace.listVaults).mockResolvedValue({ success: true, data: { vaults: [] } } as never)
+  })
+
+  it('leaves AiTy Review batches out but keeps other system workspaces', async () => {
+    render(
+      <WorkspacesManagerDialog
+        open
+        onClose={() => {}}
+        onWorkspacesChanged={() => {}}
+        workspaces={[
+          { id: '1', name: 'Projects' },
+          { id: '2', name: 'Small Wonders — selection', is_system: true },
+          { id: '3', name: 'New Upload — 05/10/2026 21:03:35', is_system: true, purpose: 'aity_review' },
+        ]}
+      />,
+    )
+
+    expect(await screen.findByText('Projects')).not.toBeNull()
+    expect(screen.getByText('Small Wonders — selection')).not.toBeNull()
+    expect(screen.getByText('Managed by the system')).not.toBeNull()
+    expect(screen.queryByText('New Upload — 05/10/2026 21:03:35')).toBeNull()
+  })
+
+  it('shows no system section when the only system workspaces are AiTy Review batches', async () => {
+    render(
+      <WorkspacesManagerDialog
+        open
+        onClose={() => {}}
+        onWorkspacesChanged={() => {}}
+        workspaces={[
+          { id: '1', name: 'Projects' },
+          { id: '3', name: 'New Upload — 05/10/2026 21:03:35', is_system: true, purpose: 'aity_review' },
+        ]}
+      />,
+    )
+
+    expect(await screen.findByText('Projects')).not.toBeNull()
+    expect(screen.queryByText('Managed by the system')).toBeNull()
+  })
+})

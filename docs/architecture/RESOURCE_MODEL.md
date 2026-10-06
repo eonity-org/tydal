@@ -83,6 +83,13 @@ One field answers "is this thing real, and should anyone see it?":
 | `live` | yes | yes | no |
 | `archived` | no | no | no |
 
+`resources.archived_at` (2026-10-06) records when a resource last became
+`archived`, for the Archived page's sort and its "Archived <date>" line. The
+model's `saving` hook (`Resource::syncArchivedAt()`) stamps it on the move to
+`archived` and clears it on the way out; quiet saves that change `state` (the
+bulk state endpoint) call that method themselves. Rows archived before the
+column existed were backfilled with `updated_at`.
+
 It replaces three overlapping fields:
 
 - `active` (bool) — filtered in the vault projection but **not** in link

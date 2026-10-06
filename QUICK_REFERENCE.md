@@ -22,18 +22,27 @@ started by `./start.sh`) · **scheduler** = scheduler daemon running (docker:
 
 Tip for the docker tier: `alias art='docker exec -w /var/www/html tydal_app php artisan'`.
 
+**Container names, ports, test DB.** `tydal_app`, `tydal_queue`,
+`tydal_scheduler`, `tydal_vite`, app `:8000`, Vite `:3005` and the `tydal_test`
+database are the defaults (own infrastructure). A shared-infrastructure
+installation (`configure.sh … --infra=shared --name=NAME`) uses `tydal_NAME_app`
+etc. (`TYDAL_STACK` in the root `.env`), its offset ports (`TYDAL_HTTP_PORT`,
+`TYDAL_VITE_PORT`) and `tydal_NAME_test` — substitute them in the commands below.
+See [DEPLOYMENT.md](DEPLOYMENT.md#several-installations-on-one-server).
+
 ## Stack lifecycle — scripts (same on both tiers)
 
 | Command | Provides | Needs |
 |---|---|---|
-| `./install.sh <cloud\|ollama-host\|ollama-docker> <host\|docker>` | One-time: deps, frontend build, `backend/.env` for your tiers, containers recreated | Docker (+ PHP/Node only on the host tier) |
-| `./configure.sh <ai> <app>` | Switch tiers or AI backend: rewrites `.env` (backup kept), toggles compose services; no rebuild | `install.sh` run once |
+| `./install.sh <cloud\|ollama-host\|ollama-docker> <host\|docker> [--infra=own\|shared] [--name=NAME]` | One-time: deps, frontend build, `backend/.env` for your tiers, containers recreated | Docker (+ PHP/Node only on the host tier) |
+| `./configure.sh <ai> <app> [--infra=own\|shared] [--name=NAME] [--url=URL]` | Switch tiers or AI backend: rewrites `.env` (backup kept), toggles compose services; no rebuild. `--infra=shared --name=NAME`: use another checkout's MySQL/ES/Redis/Tika (own DB, index prefix, Redis prefix, containers, ports). `--url=URL`: public address (APP_URL + SPA API base, kept on re-runs) | `install.sh` run once; shared: the infrastructure stack up |
+| `tools/deploy/provision-shared.sh [--dry-run]` | Shared installation: its database, test database and user in the shared MySQL (idempotent; `configure.sh` runs it) | infrastructure stack up |
 | `./start.sh` | Brings every service up. Host tier: serve + queue + Vite, blocking. Docker tier: Vite only. Re-run to reload containers | Docker running |
-| `tools/deploy/first_install.sh [--collections=multimedia]` | ⚠ Wipes ES + DB, seeds superadmin, `tydal` org, default workspace, system schemes (+ starter collections); prints the superadmin login | stack |
+| `tools/deploy/first_install.sh [--collections=multimedia]` | ⚠ Wipes ES + DB, seeds superadmin, `tydal` org, default workspace, system schemes (+ starter collections); prints the superadmin login. Shared installation: only its own DB, `NAME_*` indices and Redis keys | stack |
 | `tools/deploy/reload.sh` | Worker (and docker app) pick up code/`.env` changes; no data loss | stack |
 | `tools/deploy/reindex.sh` | Recreate ES indexes + reindex + re-embed; DB untouched (after an embedding-model change) | stack, queue |
 | `tools/deploy/install_mcp.sh` | Builds `org-mcp/dist` + `vault-mcp/dist` for an MCP client | npm or Docker |
-| `tools/deploy/test.sh [--backend-only] [-- --filter=Name]` | Pest on `tydal_test` (dev DB untouched) + client/org-mcp/vault-mcp Vitest; exit 1 on any failure | stack |
+| `tools/deploy/test.sh [--backend-only] [-- --filter=Name]` | Pest on `tydal_test` (shared: `tydal_NAME_test`; dev DB untouched) + client/org-mcp/vault-mcp Vitest; exit 1 on any failure | stack |
 
 ## Clients at the border (same on both tiers)
 
@@ -93,6 +102,7 @@ Tip for the docker tier: `alias art='docker exec -w /var/www/html tydal_app php 
 | `docker exec -w /var/www/html tydal_app php artisan resource:prune` | `cd backend && php artisan resource:prune` | ⚠ Hard-delete drafts > 24 h and soft-deletes > 30 d (scheduled daily) | stack |
 | `docker exec -w /var/www/html tydal_app php artisan resources:purge-drafts` | `cd backend && php artisan resources:purge-drafts` | ⚠ Hard-delete abandoned create-mode drafts > 1 h (scheduled hourly) | stack |
 | `docker exec -w /var/www/html tydal_app php artisan files:purge-uncommitted` | `cd backend && php artisan files:purge-uncommitted` | ⚠ Hard-delete files from crashed edit sessions > 24 h (scheduled daily) | stack |
+| `docker exec -w /var/www/html tydal_app php artisan aity:purge-batches [--days=N] [--dry-run]` | `cd backend && php artisan aity:purge-batches` | Delete AiTy Review batches reviewed/finished more than `AITY_BATCH_RETENTION_DAYS` (30) days ago; resources kept (scheduled daily) | stack |
 | `docker exec -w /var/www/html tydal_app php artisan aity:purge-stale` | `cd backend && php artisan aity:purge-stale` | Mark stuck AITY states failed, purge their Redis jobs (manual) | stack |
 
 ## Debugging & inspection

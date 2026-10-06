@@ -18,7 +18,7 @@ import {
 } from '@mui/material'
 import { Delete, LocalOffer, Publish, WorkspacesOutlined } from '@mui/icons-material'
 import type { BulkActionResult } from '@tydal/client'
-import workspaceService, { type Workspace } from '../../api/workspaceService'
+import workspaceService, { type Workspace, VAULT_CONNECTED_HINT, isVaultConnected } from '../../api/workspaceService'
 import resourceService, { type ResourceState, type SemanticTag } from '../../api/resourceService'
 import SemanticTagPicker from '../ui/SemanticTagPicker'
 import SegmentedChoice from '../ui/SegmentedChoice'
@@ -87,6 +87,12 @@ export function BulkActions({ ids, onChanged, onRemoved, size = 'small' }: BulkA
   const mayState = permissionsReady && can('resources.update')
   const mayTag = permissionsReady && can('resources.update')
   const mayDelete = permissionsReady && can('resources.delete')
+  // Only for the empty-list hint: who can fix "no workspaces" themselves.
+  const mayCreateWorkspace = permissionsReady && can('workspaces.create')
+  // Workspaces projected into a vault: changing their members publishes or
+  // unpublishes, which is an admin act (WorkspacePolicy::manageResources).
+  const mayVaultWorkspace = permissionsReady && can('workspaces.manage-vault-resources')
+  const isLocked = (w: Workspace) => isVaultConnected(w) && !mayVaultWorkspace
 
   // The default workspace refuses manual membership server-side (it holds
   // everything by construction), so it is never an option here.
@@ -135,7 +141,9 @@ export function BulkActions({ ids, onChanged, onRemoved, size = 'small' }: BulkA
 
   const applyWorkspace = () => {
     if (!workspaceId) return
-    const name = targetWorkspaces.find((w) => String(w.id) === workspaceId)?.name ?? 'the workspace'
+    const target = targetWorkspaces.find((w) => String(w.id) === workspaceId)
+    if (target && isLocked(target)) return
+    const name = target?.name ?? 'the workspace'
     void run(
       () => workspaceService.bulkResourceMembership(workspaceId, ids, workspaceMode),
       workspaceMode === 'add' ? `added to ${name}` : `removed from ${name}`,
@@ -209,7 +217,7 @@ export function BulkActions({ ids, onChanged, onRemoved, size = 'small' }: BulkA
         )}
 
         {mayState && (
-        <Tooltip title="Publish, withdraw, or send back to draft">
+        <Tooltip title="Publish or archive">
           <span>
             <Button
               variant="contained"
@@ -291,16 +299,40 @@ export function BulkActions({ ids, onChanged, onRemoved, size = 'small' }: BulkA
               size="small"
               label="Workspace"
               value={workspaceId}
-              onChange={(e) => setWorkspaceId(e.target.value)}
+              onChange={(e) => {
+                const chosen = targetWorkspaces.find((w) => String(w.id) === e.target.value)
+                if (!chosen || !isLocked(chosen)) setWorkspaceId(e.target.value)
+              }}
               helperText={
                 targetWorkspaces.length === 0
-                  ? 'No workspaces available. The default workspace holds everything already, so it cannot be chosen.'
+                  ? `No workspaces available. The default workspace holds everything already, so it cannot be chosen. ${
+                      mayCreateWorkspace
+                        ? 'Create one in Manage workspaces (⋮ after the last workspace tab).'
+                        : 'Ask an administrator to create one.'
+                    }`
                   : 'A workspace is what a vault projects — adding here can make these public.'
               }
             >
-              {targetWorkspaces.map((w) => (
-                <MenuItem key={w.id} value={String(w.id)}>{w.name}</MenuItem>
-              ))}
+              {targetWorkspaces.map((w) => {
+                const locked = isLocked(w)
+                // A disabled MenuItem ignores the pointer, which would also
+                // silence its tooltip: let the pointer through and refuse the
+                // choice in onChange instead.
+                return (
+                  <MenuItem
+                    key={w.id}
+                    value={String(w.id)}
+                    disabled={locked}
+                    sx={locked ? { '&.Mui-disabled': { pointerEvents: 'auto' } } : undefined}
+                  >
+                    {locked ? (
+                      <Tooltip title={VAULT_CONNECTED_HINT} placement="right" describeChild>
+                        <Box component="span" sx={{ width: '100%' }}>{w.name}</Box>
+                      </Tooltip>
+                    ) : w.name}
+                  </MenuItem>
+                )
+              })}
             </TextField>
           </Stack>
         </DialogContent>

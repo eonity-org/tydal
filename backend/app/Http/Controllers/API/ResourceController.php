@@ -4,10 +4,12 @@ namespace App\Http\Controllers\API;
 
 use App\Enums\FileRelation;
 use App\Enums\FileRole;
+use App\Enums\ResourceState;
 use App\Enums\SystemFilePurpose;
 use App\Exceptions\InvalidResourceComposition;
 use App\Http\Controllers\API\Concerns\RespondsToBulkActions;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\BulkResourceIdsRequest;
 use App\Http\Requests\BulkResourceStateRequest;
 use App\Http\Requests\BulkResourceTagsRequest;
 use App\Http\Requests\StoreResourceRequest;
@@ -967,7 +969,11 @@ class ResourceController extends Controller
 
             $previous = $resource->state;
             if ($previous !== $state) {
-                $resource->updateQuietly(['state' => $state->value]);
+                // Quiet save skips the model's `saving` hook, so stamp/clear
+                // archived_at here.
+                $resource->state = $state;
+                $resource->syncArchivedAt();
+                $resource->saveQuietly();
 
                 $eventLogger->log(
                     resourceId: $resource->id,
@@ -1295,7 +1301,49 @@ class ResourceController extends Controller
             $query->where('user_owner_id', $user->id);
         }
 
-        $resources = $query->paginate($request->input('limit', 48));
+        $resources = $query->paginate($this->listingPageSize($request));
+
+        return response()->json([
+            'success' => true,
+            'data' => $resources->items(),
+            'total' => $resources->total(),
+            'per_page' => $resources->perPage(),
+            'current_page' => $resources->currentPage(),
+            'last_page' => $resources->lastPage(),
+        ]);
+    }
+
+    /**
+     * List archived resources for the current organisation.
+     *
+     * Archiving takes a resource out of every listing, search and vault, so
+     * this is the one place it can be found again (#25). Same scope and rule
+     * as the trash: non-admins see only their own. Reads MySQL, not ES —
+     * archived resources are removed from the indices on purpose.
+     */
+    public function archived(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $orgId = currentOrganizationId();
+
+        // archived_at is the default; updated_at stays accepted for clients
+        // written before archived_at existed.
+        $sortBy = in_array($request->input('sort_by'), ['archived_at', 'name', 'id', 'updated_at']) ? $request->input('sort_by') : 'archived_at';
+        $sortDir = $request->input('sort_dir', 'desc') === 'asc' ? 'asc' : 'desc';
+
+        $query = Resource::where('state', ResourceState::ARCHIVED)
+            ->where('organization_id', $orgId)
+            ->with(['snapshotFile.media', 'previewSnapshotSystemFile', 'collection'])
+            ->orderBy($sortBy, $sortDir)
+            // Stable order when timestamps tie (bulk archives share one second).
+            ->orderBy('id', $sortDir);
+
+        // Non-admins only see their own archived resources
+        if (! in_array(currentOrganizationRole(), ['admin', 'owner'])) {
+            $query->where('user_owner_id', $user->id);
+        }
+
+        $resources = $query->paginate($this->listingPageSize($request));
 
         return response()->json([
             'success' => true,
@@ -1385,6 +1433,17 @@ class ResourceController extends Controller
         $this->resourceService->permanentlyDelete($resource);
 
         return response()->json(['success' => true, 'message' => 'Resource permanently deleted']);
+    }
+
+    /**
+     * Page size for the trash and Archived listings: `limit` clamped to
+     * 1..BulkResourceIdsRequest::MAX_IDS — the same cap as the bulk
+     * endpoints (a page is what "select all" hands to one), and as the
+     * catalogue/workspace listings' 200.
+     */
+    private function listingPageSize(Request $request): int
+    {
+        return max(1, min((int) $request->input('limit', 48), BulkResourceIdsRequest::MAX_IDS));
     }
 
     /**

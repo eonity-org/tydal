@@ -1,16 +1,50 @@
+# TYDAL dev/deploy stack. Two kinds of service live here:
+#   • infrastructure — mysql, elasticsearch, kibana, tika, redis (+ ollama when
+#     toggled on): heavy, and shareable between installations;
+#   • the application — app, queue, scheduler (toggled by configure.sh for the
+#     docker tier): one set per installation.
+#
+# Names and ports come from variables whose defaults are the historical
+# literals, so with no root `.env` this file renders exactly as it always did
+# (tydal_app, :8000, tydal_default, …). `tools/deploy/configure.sh` writes the
+# root `.env` (Compose's project env file) when it needs other values:
+#   TYDAL_STACK            container-name prefix              (default tydal)
+#   TYDAL_HTTP_PORT        app host port                      (default 8000)
+#   TYDAL_MYSQL_PORT / TYDAL_ES_PORT / TYDAL_KIBANA_PORT / TYDAL_TIKA_PORT /
+#   TYDAL_REDIS_PORT / TYDAL_OLLAMA_PORT   infrastructure host ports (defaults
+#                          3306 / 9200 / 5601 / 9998 / 6379 / 11434)
+#
+# Shared infrastructure (several installations on one server, #23 —
+# DEPLOYMENT.md, "Several installations on one server"):
+# `configure.sh <ai> <tier> --infra=shared --name=NAME` makes this checkout use
+# another checkout's running infrastructure instead of its own:
+#   TYDAL_INFRA_PROFILE=infra  every infrastructure service carries
+#                          `profiles: ["${TYDAL_INFRA_PROFILE:-}"]`. Empty (the
+#                          default) means "no profile", so they always start,
+#                          as before; set, they only start when that profile is
+#                          asked for — i.e. never in a shared installation.
+#   TYDAL_NETWORK / TYDAL_NETWORK_EXTERNAL=true  the project's default network
+#                          becomes the infrastructure stack's network (external),
+#                          so app/queue/scheduler still reach mysql,
+#                          elasticsearch, redis and tika by service name.
+#   TYDAL_INFRA_REQUIRED=false  the app services' depends_on entries on the
+#                          infrastructure stop being required: in a shared
+#                          installation those services belong to another project.
+
 services:
 
   # ── MySQL ─────────────────────────────────────────────────────────────────────
   mysql:
     image: mysql:8.0
-    container_name: tydal_mysql
+    container_name: ${TYDAL_STACK:-tydal}_mysql
+    profiles: ["${TYDAL_INFRA_PROFILE:-}"]   # see "Shared infrastructure" above
     environment:
       MYSQL_ROOT_PASSWORD: secret
       MYSQL_DATABASE: tydal
       MYSQL_USER: tydal
       MYSQL_PASSWORD: secret
     ports:
-      - "3306:3306"
+      - "${TYDAL_MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -23,13 +57,14 @@ services:
   # ── Elasticsearch ────────────────────────────────────────────────────────────
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:9.0.0
-    container_name: tydal_elasticsearch
+    container_name: ${TYDAL_STACK:-tydal}_elasticsearch
+    profiles: ["${TYDAL_INFRA_PROFILE:-}"]   # see "Shared infrastructure" above
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
-      - "9200:9200"
+      - "${TYDAL_ES_PORT:-9200}:9200"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:
@@ -42,11 +77,12 @@ services:
   # ── Kibana ────────────────────────────────────────────────────────────────────
   kibana:
     image: docker.elastic.co/kibana/kibana:9.0.0
-    container_name: tydal_kibana
+    container_name: ${TYDAL_STACK:-tydal}_kibana
+    profiles: ["${TYDAL_INFRA_PROFILE:-}"]   # see "Shared infrastructure" above
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     ports:
-      - "5601:5601"
+      - "${TYDAL_KIBANA_PORT:-5601}:5601"
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -57,9 +93,10 @@ services:
   # PHP connects via HTTP: POST /tika with the file binary → plain text response
   tika:
     image: apache/tika:latest-full
-    container_name: tydal_tika
+    container_name: ${TYDAL_STACK:-tydal}_tika
+    profiles: ["${TYDAL_INFRA_PROFILE:-}"]   # see "Shared infrastructure" above
     ports:
-      - "9998:9998"
+      - "${TYDAL_TIKA_PORT:-9998}:9998"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:9998/tika || exit 1"]
       interval: 15s
@@ -84,6 +121,7 @@ services:
   # To run Ollama in Docker instead (CPU only, no GPU): uncomment the block
   # below AND the `ollama_data:` volume at the bottom of this file, then set
   # OLLAMA_HOST=http://ollama:11434 in backend/.env. Pull models with:
+  # (container names below assume the default TYDAL_STACK=tydal)
   #   docker exec tydal_ollama ollama pull mxbai-embed-large
   #   docker exec tydal_ollama ollama pull llama3.2
   #   docker exec tydal_ollama ollama pull llama3.2-vision
@@ -93,9 +131,10 @@ services:
   # >>> TYDAL-TOGGLE: ollama >>> (managed by tools/deploy/configure.sh)
 #  ollama:
 #    image: ollama/ollama:latest
-#    container_name: tydal_ollama
+#    container_name: ${TYDAL_STACK:-tydal}_ollama
+#    profiles: ["${TYDAL_INFRA_PROFILE:-}"]
 #    ports:
-#      - "11434:11434"
+#      - "${TYDAL_OLLAMA_PORT:-11434}:11434"
 #    volumes:
 #      - ollama_data:/root/.ollama
 #    restart: unless-stopped
@@ -104,9 +143,10 @@ services:
   # ── Redis ─────────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    container_name: tydal_redis
+    container_name: ${TYDAL_STACK:-tydal}_redis
+    profiles: ["${TYDAL_INFRA_PROFILE:-}"]   # see "Shared infrastructure" above
     ports:
-      - "6379:6379"
+      - "${TYDAL_REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -131,8 +171,10 @@ services:
   #
   # The Docker app needs backend/.env pointed at the Docker network:
   #   DB_HOST=mysql   REDIS_HOST=redis   ELASTICSEARCH_HOST=http://elasticsearch:9200
-  # The app is served at http://localhost:8000 (same as artisan serve).
-  # First run: docker exec -it tydal_app composer install && \
+  # The app is served at http://localhost:8000 (same as artisan serve;
+  # TYDAL_HTTP_PORT in the root .env changes it).
+  # First run (tydal_app = ${TYDAL_STACK:-tydal}_app):
+  #            docker exec -it tydal_app composer install && \
   #            docker exec -it tydal_app php artisan key:generate
   #
   # >>> TYDAL-TOGGLE: docker-app >>> (managed by tools/deploy/configure.sh)
@@ -141,9 +183,9 @@ services:
     # so the container PHP must satisfy the host-installed dependencies. Bump
     # this tag if your host PHP is newer than the image.
     image: webdevops/php-nginx:8.4
-    container_name: tydal_app
+    container_name: ${TYDAL_STACK:-tydal}_app
     ports:
-      - "8000:80"
+      - "${TYDAL_HTTP_PORT:-8000}:80"
     environment:
       WEB_DOCUMENT_ROOT: /var/www/html/public
       PHP_UPLOAD_MAX_FILESIZE: 300M
@@ -159,14 +201,17 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+        required: ${TYDAL_INFRA_REQUIRED:-true}   # false in a shared installation
       redis:
         condition: service_healthy
+        required: ${TYDAL_INFRA_REQUIRED:-true}   # false in a shared installation
       elasticsearch:
         condition: service_healthy
+        required: ${TYDAL_INFRA_REQUIRED:-true}   # false in a shared installation
     restart: unless-stopped
   queue:
     image: webdevops/php-nginx:8.4
-    container_name: tydal_queue
+    container_name: ${TYDAL_STACK:-tydal}_queue
     working_dir: /var/www/html
     command: php artisan queue:work --timeout=360
     environment:
@@ -179,6 +224,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+        required: ${TYDAL_INFRA_REQUIRED:-true}   # false in a shared installation
     restart: unless-stopped
   # Scheduler daemon: runs `schedule:run` every minute, which fires the
   # maintenance jobs in bootstrap/app.php (resource:prune, files:purge-uncommitted,
@@ -186,7 +232,7 @@ services:
   # changes apply without a restart.
   scheduler:
     image: webdevops/php-nginx:8.4
-    container_name: tydal_scheduler
+    container_name: ${TYDAL_STACK:-tydal}_scheduler
     working_dir: /var/www/html
     command: php artisan schedule:work
     environment:
@@ -199,10 +245,20 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+        required: ${TYDAL_INFRA_REQUIRED:-true}   # false in a shared installation
       redis:
         condition: service_healthy
+        required: ${TYDAL_INFRA_REQUIRED:-true}   # false in a shared installation
     restart: unless-stopped
   # <<< TYDAL-TOGGLE: docker-app <<<
+
+# The project's network. Default: Compose's own `<project>_default`, as always.
+# A shared installation (configure.sh --infra=shared) points it at the network
+# of the stack that runs the infrastructure and marks it external.
+networks:
+  default:
+    name: ${TYDAL_NETWORK:-${COMPOSE_PROJECT_NAME}_default}
+    external: ${TYDAL_NETWORK_EXTERNAL:-false}
 
 volumes:
   mysql_data:

@@ -5,6 +5,10 @@ string them together. All commands run from `backend/`:
 `php artisan <command>`. On the docker application tier run them inside the
 app container: `docker exec -w /var/www/html tydal_app php artisan <command>`
 (the `-w` matters; without it you get `Could not open input file: artisan`).
+`tydal_app` is the default container name; an installation configured with
+`configure.sh … --infra=shared --name=NAME` uses `tydal_NAME_app` (see
+[DEPLOYMENT.md](../DEPLOYMENT.md#several-installations-on-one-server)), and
+`docker compose exec -w /var/www/html app php artisan <command>` works for both.
 Commands that check integrity exit **non-zero on findings**, so they slot into
 CI as-is. For a one-line-per-command cheat sheet with both forms and
 preconditions, see [QUICK_REFERENCE.md](../QUICK_REFERENCE.md); for the shell
@@ -226,7 +230,8 @@ prefix the pattern is `tydal_*,vault_*`, which also matches **any other
 unprefixed installation on the same cluster**, and the command warns. It never
 matches a prefixed installation (a prefix can't start with `tydal_`/`vault_`).
 Never run it, or `first_install.sh`, against a cluster another unprefixed
-installation uses.
+installation uses. (A shared-infrastructure installation, `configure.sh
+--infra=shared --name=NAME`, always has the prefix `NAME_`.)
 
 Exists because `migrate:fresh` only touches MySQL — Elasticsearch is a
 separate service with no hook into Laravel's migrator, so an index for a
@@ -499,15 +504,44 @@ never changed; `--curator-password` is ignored for it, with a warning.
 | `resource:prune` | daily 03:00 | permanently delete abandoned drafts (`--draft-hours=24`) and expired soft-deletes (`--deleted-days=30`); `--dry-run` supported |
 | `files:purge-uncommitted` | daily 03:30 | hard-delete files left by crashed edit sessions (`--older-than=24` hours) |
 | `resources:purge-drafts` | hourly | hard-delete abandoned create-mode drafts (`--older-than=1` hour) |
+| `aity:purge-batches` | daily 04:00 | delete AiTy Review batches reviewed or finished more than `AITY_BATCH_RETENTION_DAYS` (30) days ago — the batch workspace only, never its resources (`--days=N`, `0` disables; `--dry-run`) |
 | `aity:purge-stale` | manual | mark stale AITY file states failed and purge matching Redis jobs (`--hours=24 --queue=default --dry-run`) |
 
 The scheduler needs `php artisan schedule:work` (dev) or a system cron
 running `php artisan schedule:run` every minute (prod, see
 [DEPLOYMENT.md](../DEPLOYMENT.md#scheduler-cron)). In dev, `start.sh` takes
 care of it and prints a notice saying where the daemon runs. On the docker tier
-that's the `tydal_scheduler` compose service, toggled with app/queue by
+that's the `tydal_scheduler` compose service (`tydal_NAME_scheduler` on a
+shared-infrastructure installation), toggled with app/queue by
 `configure.sh`. On the host tier it's a background `schedule:work` that stops
 with Ctrl-C. Check what's scheduled with `php artisan schedule:list`.
+
+### `aity:purge-batches`
+
+Every Auto upload opens an AiTy Review batch, so the AiTy Review page grows by
+one row per upload. This command deletes the old ones:
+
+```bash
+php artisan aity:purge-batches             # retention from AITY_BATCH_RETENTION_DAYS (default 30)
+php artisan aity:purge-batches --days=7    # override the retention for this run
+php artisan aity:purge-batches --dry-run   # list what would go, delete nothing
+```
+
+A batch is deleted when it was **reviewed** (opened with *Review* on the AiTy
+Review page) or its **auto-approve job ended** (done or failed), and that
+happened more than N days ago — counted from the review date, or from the
+batch's last change when it was never opened. Batches whose job is still
+waiting or running, or whose resources are still being analysed, are kept, and
+so is any batch nobody has reviewed yet in manual mode.
+
+AiTy Review batches are deleted automatically 30 days after they were reviewed
+or finished (an administrator can change the period); only the batch goes, the
+resources stay in the library and in every other workspace.
+
+Deleting a batch goes through the same path as its Delete button
+(`WorkspaceService::deleteWorkspace`): the membership rows are detached and the
+members reindexed. `AITY_BATCH_RETENTION_DAYS=0` (or `--days=0`) turns the
+cleanup off.
 
 ## Debug helpers
 

@@ -29,7 +29,8 @@ import { Close, Edit, Save, Cancel, Star, Search, Hub, HubOutlined, ExpandMore, 
 import resourceService, { type ResourceData, type ResourceState, type ResourceFile, type SemanticTag, type ActivityEvent } from '../../api/resourceService'
 import authService from '../../api/authService'
 import collectionService, { type Collection, getSchemeFields } from '../../api/collectionService'
-import workspaceService, { type Workspace } from '../../api/workspaceService'
+import workspaceService, { type Workspace, VAULT_CONNECTED_HINT, isVaultConnected } from '../../api/workspaceService'
+import { usePermissions } from '../../hooks/usePermissions'
 import semanticTagService from '../../api/semanticTagService'
 import { ENTITY_TYPES, type EntityTypeKey } from '../../constants/entityTypes'
 import MediaViewer from '../ui/MediaViewer'
@@ -383,6 +384,10 @@ function ResourceDetailModal(props: ResourceDetailModalProps) {
   const [availableWorkspaces, setAvailableWorkspaces] = useState<Workspace[]>([])
   const [resourceWorkspaceIds, setResourceWorkspaceIds] = useState<Set<string>>(new Set())
   const [originalWorkspaceIds, setOriginalWorkspaceIds] = useState<Set<string>>(new Set())
+  // Vault-connected workspaces: changing their members publishes/unpublishes,
+  // an admin act (WorkspacePolicy::manageResources) — shown disabled otherwise.
+  const { can: canDo, ready: permissionsReady } = usePermissions()
+  const mayVaultWorkspace = permissionsReady && canDo('workspaces.manage-vault-resources')
   const [selectedTagsData, setSelectedTagsData] = useState<SemanticTag[]>([])
   const [resourceTagIds, setResourceTagIds] = useState<Set<number>>(new Set())
   const [originalTagIds, setOriginalTagIds] = useState<Set<number>>(new Set())
@@ -1472,9 +1477,19 @@ function ResourceDetailModal(props: ResourceDetailModalProps) {
       .filter(f => f.required && f.storage === 'metadata')
       .map(f => f.name)
 
-    // Root-level resource fields required by scheme (e.g. 'description')
+    // Root-level resource fields required by scheme (e.g. 'description').
+    // Enforced when a resource is being created through this form, and when the
+    // stored resource already has a value (so it can't be cleared). Not enforced
+    // on an existing resource that never had one: every other path (the wizard,
+    // FullFrame and AI ingest, the API) creates live resources without a
+    // description, and they must stay editable — archiving or re-tagging must not
+    // demand a description first (#24).
+    const isNewResource = initialMode === 'create' || resource?.state === 'draft'
+    const storedDescription = resource?.description
+    const hadDescription = typeof storedDescription === 'string' && storedDescription.trim() !== ''
     const requiredRootFields = schemaFields
       .filter(f => f.required && f.storage === 'column' && f.name === 'description')
+      .filter(() => isNewResource || hadDescription)
       .map(f => f.name)
 
     const validationErrorsList = validateResourceData(editedResource, requiredSchemaFields, requiredRootFields)
@@ -1874,7 +1889,7 @@ function ResourceDetailModal(props: ResourceDetailModalProps) {
     } finally {
       setIsSaving(false)
     }
-  }, [editedResource, resourceId, newFiles, filesToRemove, configMap, existingFileConfigs, newPreview, snapshotFileId, pendingCanonicalChange, resourceWorkspaceIds, originalWorkspaceIds, resourceTagIds, originalTagIds, pendingSuggestedTags])
+  }, [editedResource, resourceId, newFiles, filesToRemove, configMap, existingFileConfigs, newPreview, snapshotFileId, pendingCanonicalChange, resourceWorkspaceIds, originalWorkspaceIds, resourceTagIds, originalTagIds, pendingSuggestedTags, initialMode, resource, activeCollection])
 
   // ── Unified exit flow (used by both Cancel and X) ──────────────────────────
   // Cancel and X share the same dialog. The only difference is what happens
@@ -3413,6 +3428,27 @@ ${Array.isArray(resource.semanticTags) && resource.semanticTags.length > 0
                             {availableWorkspaces.map((ws) => {
                               const wsId = String(ws.id)
                               const isIn = resourceWorkspaceIds.has(wsId)
+                              if (isVaultConnected(ws) && !mayVaultWorkspace) {
+                                // The span carries the tooltip: a disabled Chip ignores the pointer.
+                                return (
+                                  <Tooltip key={wsId} title={VAULT_CONNECTED_HINT} describeChild>
+                                    <span>
+                                      <Chip
+                                        label={ws.name}
+                                        size="small"
+                                        disabled
+                                        variant={isIn ? 'filled' : 'outlined'}
+                                        sx={{
+                                          fontWeight: isIn ? 600 : 400,
+                                          bgcolor: isIn ? 'secondary.main' : undefined,
+                                          color: isIn ? 'white' : 'text.secondary',
+                                          borderColor: isIn ? 'secondary.main' : 'divider',
+                                        }}
+                                      />
+                                    </span>
+                                  </Tooltip>
+                                )
+                              }
                               return (
                                 <Chip
                                   key={wsId}
