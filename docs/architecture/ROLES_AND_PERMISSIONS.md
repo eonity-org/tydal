@@ -64,7 +64,7 @@ every collection and category.
 |---|---|---|
 | `owner` | 100 | everything, including deleting the organization and appointing another owner |
 | `admin` | 75 | manage people and content; cannot delete the organization or mint an owner |
-| `editor` | 50 | create and edit content, curate workspace membership |
+| `editor` | 50 | create and edit content, curate the membership of workspaces **not attached to a vault**, open AiTy Review batches (the wizard's Auto mode; not ordinary workspaces) |
 | `viewer` | 25 | read, download |
 
 Retired: `org-admin` and `org-member`. Neither could ever reach the database —
@@ -83,6 +83,32 @@ be transferred at all.
 Owners are uncapped (`role_limits.owner => null`) for the same reason — a
 single-owner cap makes an organization unable to survive losing its owner. What
 still cannot happen is reaching **zero** owners.
+
+### Vault-connected workspaces
+
+Membership of a workspace attached to a vault (`workspace_vault`) is what that
+vault shows outside TYDAL, so adding a resource there publishes it and removing
+one unpublishes it. `WorkspacePolicy::manageResources` therefore asks for a
+second ability on top of `workspaces.manage-resources` when the workspace has
+at least one vault: **`workspaces.manage-vault-resources`**, which admins and
+owners hold through `workspaces.*` and editors do not. It covers every
+membership path a user drives: `POST`/`DELETE /workspaces/{id}/resources…`
+(the resource editor's workspace chips, `org-mcp`'s add/remove tools) and the
+basket's `bulk-attach`/`bulk-detach`, which answer the bulk shape with every id
+skipped as `vault_connected` (`403`).
+
+A new ability rather than `workspaces.update`: the decision is about curating
+a projected set, not editing the workspace record, and naming it keeps the
+door open to granting it to a trusted editor role without handing over
+rename/attach-vault. Not affected: vault write ops (gallery `activate`, the
+`ingest` family) and `graph:materialize` write the pivot themselves, under a
+vault key or from the CLI; AiTy Review batches are never attached to a vault.
+`has_public_workspace` vaults project the default workspace, whose membership
+is automatic and refused to everyone, so they need no rule. Any attachment
+counts, whatever the vault's state: re-enabling a disabled vault would publish
+what an editor had put in. The SPA reads `vaults_count` from `GET /workspaces`
+and shows such workspaces disabled ("Shared through a vault — ask an
+administrator") to users without the ability.
 
 ### Authorship
 

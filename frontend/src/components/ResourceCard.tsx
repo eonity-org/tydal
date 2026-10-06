@@ -5,6 +5,7 @@ import LayersIcon from '@mui/icons-material/Layers'
 import TydalIsotype from './ui/TydalIsotype'
 import type { ResourceData } from '../api/resourceService'
 import StatusChip from './ui/StatusChip'
+import { shortId } from '../utils/shortId'
 import { ENTITY_TYPES, type EntityTypeKey } from '../constants/entityTypes'
 import {
   AITY_STATES,
@@ -137,14 +138,7 @@ function ResourceCard(props: ResourceCardProps) {
    * tail of the entropy block (the last segment) so even sibling resources
    * get unique short codes on the card.
    */
-  const getShortId = (): string => {
-    const id = String(resource.id)
-    if (id.includes('-')) {
-      const last = id.split('-').pop() ?? id
-      return last.slice(-8)
-    }
-    return id.slice(-8)
-  }
+  const getShortId = (): string => shortId(resource.id)
 
   /**
    * Compact relative time for the bottom-line "modified ..." stamp.
@@ -473,10 +467,11 @@ function ResourceCard(props: ResourceCardProps) {
                   </Typography>
                 </Stack>
               </Tooltip>
+              {/* Same state labels as the detail view and the basket's State action. */}
               {isActive() ? (
-                <StatusChip variant="active" label="Active" />
+                <StatusChip variant="active" label="Live" />
               ) : (
-                <StatusChip variant="inactive" label="Inactive" />
+                <StatusChip variant="inactive" label={resource.state === 'draft' ? 'Draft' : 'Archived'} />
               )}
             </Stack>
             {(() => {

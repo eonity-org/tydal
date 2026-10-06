@@ -121,6 +121,13 @@ return [
                 // Workspaces: may curate membership of one, but creating and
                 // deleting workspaces is an admin act — a workspace is what a
                 // vault projects, so spawning one is a publishing decision.
+                // Exception: an AiTy Review batch (purpose aity_review) is a
+                // system workspace the upload wizard opens; `resources.create`
+                // is enough for that (WorkspacePolicy::createAityReviewBatch).
+                // For the same reason curating a workspace ATTACHED to a vault
+                // is not granted here: that takes
+                // `workspaces.manage-vault-resources`, which admins and owners
+                // hold through `workspaces.*` (WorkspacePolicy::manageResources).
                 'workspaces.view',
                 'workspaces.manage-resources',
 

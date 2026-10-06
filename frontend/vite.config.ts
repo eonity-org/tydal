@@ -5,14 +5,19 @@ import react from '@vitejs/plugin-react'
 // this process's localhost — e.g. Vite running in a container on a Docker-only
 // host (start.sh sets TYDAL_BACKEND_URL=http://host.docker.internal:8000).
 // Same idiom as vaults/gallery/vite.config.ts.
-const BACKEND = process.env.TYDAL_BACKEND_URL ?? 'http://localhost:8000'
+// TYDAL_HTTP_PORT / TYDAL_VITE_PORT: the installation's ports, exported by
+// tools/deploy/start.sh from the root .env (8000 / 3005 unless configure.sh
+// --infra=shared offset them, #23).
+const HTTP_PORT = process.env.TYDAL_HTTP_PORT ?? '8000'
+const VITE_PORT = Number(process.env.TYDAL_VITE_PORT ?? 3005)
+const BACKEND = process.env.TYDAL_BACKEND_URL ?? `http://localhost:${HTTP_PORT}`
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   server: {
     host: true, // Expose to network
-    port: 3005,
+    port: VITE_PORT,
     open: false, // Disable auto-open to prevent xdg-open errors
     // The frontend is the public entry point (as the CDN was): it proxies the
     // public vault surfaces to the backend so internal storage is never exposed

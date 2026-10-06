@@ -6,6 +6,200 @@ All notable changes to TYDAL are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-10-06
+
+### Added
+
+- **Several installations on one server** (#23): `configure.sh <ai> <host|docker>
+  --infra=shared --name=NAME` (also accepted by `install.sh`) makes a checkout
+  use another checkout's running MySQL, Elasticsearch, Kibana, Tika and Redis
+  instead of starting its own. NAME derives what must differ: database and user
+  `tydal_NAME` (test database `tydal_NAME_test`), index prefix `NAME_`, Redis
+  prefix `tydal_NAME_` plus its own Redis DB numbers, session cookie, the
+  SPA's login-token cookie (`VITE_AUTH_COOKIE`, default `JWT`),
+  containers `tydal_NAME_*` (Compose project `tydal_NAME`), and app/Vite ports
+  offset by 100·slot (`--slot=N`, else kept from the last run, else the lowest
+  free slot; a slot whose ports or Redis DBs another installation uses is
+  refused). The infrastructure services carry a Compose profile that
+  is empty (always on) by default and switched on only in shared mode; on the
+  docker tier the app services join the infrastructure stack's network.
+  New `tools/deploy/provision-shared.sh` creates the database, test database
+  and user (idempotent, `--dry-run`); `start.sh`, `test.sh`,
+  `first_install.sh` (resets only that installation's database, indices and
+  Redis keys), `install.sh` and `reindex.sh` follow the configured names via
+  `tools/lib/stack.lib.sh`. Container names and host ports in
+  `docker-compose.yml` are now variables (`TYDAL_STACK`, `TYDAL_HTTP_PORT`, …)
+  whose defaults are the old literals, so `--infra=own` (the default) is
+  unchanged. Tests take a per-installation database and index prefix from
+  `TYDAL_TEST_DB_DATABASE` / `TYDAL_TEST_INDEX_PREFIX` (`tests/bootstrap.php`).
+  DEPLOYMENT.md: "Several installations on one server".
+- **`--url=URL` for `configure.sh` / `install.sh`**: the public address of an
+  installation (own or shared) — writes `APP_URL`, `SANCTUM_STATEFUL_DOMAINS`
+  and the SPA's `VITE_API_BASE_URL`, and keeps it as `TYDAL_PUBLIC_URL` in
+  `backend/.env` so a later re-run no longer resets it to `localhost`;
+  `--url=` drops it. DEPLOYMENT.md: "The public URL".
+- **`configure.sh --check`**, run by `install.sh` before its prompt: validates
+  the flags, the slot and, in own mode, that no other checkout holds the
+  `tydal_*` container names (it names that checkout's folder) — instead of
+  failing halfway through `docker compose up`. `--name=NAME` alone now
+  implies `--infra=shared`.
+- `install.sh` ends with a summary of what it installed (installation, slot,
+  app and Vite URLs, public URL, database and index prefix, container status)
+  instead of letting it scroll away; composer and npm run quieter.
+- **`ELASTICSEARCH_INDEX_PREFIX`** (#14): a per-installation prefix applied to
+  every physical index name — collection indices, their `_chunks`
+  companions and `vault_<uuid>` — through one helper,
+  `ElasticsearchService::physicalIndexName()`. `search_indexes.index_name`
+  stays the logical, unprefixed name. Destructive commands only reach this
+  installation's prefix: `search:wipe-indices` deletes
+  `{prefix}tydal_*,{prefix}vault_*` (and warns when the prefix is empty),
+  `search:setup-indices --recreate` and `search:reconcile --fix` act on the
+  prefixed names. A prefix with wildcards, or one starting with `tydal_` /
+  `vault_`, is refused. Empty by default, so existing installations are
+  unchanged. In every backend env template, [DEPLOYMENT.md](DEPLOYMENT.md)
+  and [CLI.md](docs/CLI.md#index-prefix-elasticsearch_index_prefix), with the
+  migration recipe for an existing installation. The test suite forces
+  `test_`, so it never touches a dev installation's indices.
+- **Archived page** (#25): archived resources left every listing, search and
+  vault, and no page listed them, so once out of the basket they couldn't be
+  found again in the web app. New `GET /api/v1/resources/archived` (MySQL, not
+  Elasticsearch) lists the current organization's `state = archived`
+  resources with the trash's rule — editors and viewers see their own,
+  administrators and owners see all — sorting (date, name, ID) and
+  pagination. The SPA's new **Archived** page (`/archived`, linked beside
+  *Deleted resources*) is modelled on the trash. Each card has **Set live**
+  and **Move to trash** icons; the page has **Set all live** (through
+  `POST /resources/bulk/state` in batches of up to 200) and **Delete all**
+  (moves them to the trash one by one, after a confirmation). Both report
+  skipped resources like the basket and leave them listed, and each control
+  shows only with its permission (`resources.update` / `resources.delete`).
+  User guide chapters 5 and 7.
+- **When a resource was archived** (`resources.archived_at`): stamped when a
+  resource moves to `archived` (single update, bulk state, any save — the
+  model's `saving` hook, called explicitly by the quiet bulk write), cleared
+  when it leaves. Migration `2026_10_06_000000_add_archived_at_to_resources`
+  backfills existing archived rows from `updated_at`. `GET /resources/archived`
+  sorts by `archived_at` by default (`sort_by` accepts `archived_at`, `name`,
+  `id`, and still `updated_at`), and the Archived page's cards read
+  "Archived <date>".
+- **`aity:purge-batches`**: deletes AiTy Review batches reviewed (opened from
+  the AiTy Review page) or whose auto-approve job finished more than
+  `AITY_BATCH_RETENTION_DAYS` (default 30; `0` disables) days ago — the batch
+  workspace only, through `WorkspaceService::deleteWorkspace`, never its
+  resources. Batches still waiting, running or being analysed are kept.
+  `--days=N`, `--dry-run`; scheduled daily at 04:00. docs/CLI.md.
+
+- **Required fields at the wizard's first step** (#9). When the collection's
+  scheme has required metadata fields, step 1 shows a *Required by this
+  collection* panel and Next waits until they're filled; the values go into
+  every created resource and pre-fill Review. If every upload fails, the
+  Upload step shows the server's reason.
+
+### Changed
+
+- **Editors can use the wizard's Auto option** (#10). Auto opens an AiTy
+  Review batch (a workspace of purpose `aity_review`), which needed the
+  admin-only `workspaces.create`; editors may now open those batches
+  (`resources.create` suffices), while ordinary workspaces stay admin-only.
+  The wizard no longer swallows an Auto failure: it stays open with the
+  reason and reuses the batch already created on retry.
+- **Manage Workspaces leaves AiTy Review batches out.** Every Auto upload
+  creates one, and the dialog listed them all under *Managed by the system*;
+  they have their own page (AiTy Review). Other system workspaces are still
+  listed.
+- **Consistent wording** (#8, #12, #22). The resource view's legacy
+  Active/Visibility controls are gone and cards say Live / Draft / Archived;
+  the delete confirmation no longer says "cannot be undone" (resources go to
+  the trash); one short id (the tail of the UUID v7) on cards, trash and
+  basket; the vault key help names `ingest` / `update` / `withdraw`; the AiTy
+  Review empty state points to the wizard's Auto option; VAULT_SYSTEM.md §3
+  matches who creates vaults; categories are documented as API-only.
+- `install.sh` / `configure.sh` print the full help when the tiers are
+  missing.
+
+- **Only administrators change what a vault shows.** Adding resources to, or
+  removing them from, a workspace attached to a vault publishes or unpublishes
+  them outside TYDAL, so it now takes the new ability
+  `workspaces.manage-vault-resources` (admins and owners, via `workspaces.*`)
+  on top of `workspaces.manage-resources`. Enforced in
+  `WorkspacePolicy::manageResources`, so it covers the single add/remove
+  endpoints (resource editor chips, org-mcp tools) and the basket's
+  bulk-attach/detach, which report every id skipped as `vault_connected`.
+  Editors keep curating plain workspaces and AiTy Review batches; vault write
+  ops are unaffected. `GET /workspaces` now returns `vaults_count`, and the
+  basket's Workspace dialog and the resource editor's workspace chips show
+  vault-connected workspaces disabled ("Shared through a vault — ask an
+  administrator") to users without the ability. The basket's empty Workspace
+  list now says how to get one (ask an administrator, or Manage workspaces).
+
+### Fixed
+
+- **Unbounded page size on the trash and Archived listings**:
+  `GET /resources/trashed` and `GET /resources/archived` now clamp `limit` to
+  1..200, the bulk endpoints' cap.
+- **Viewers could run AiTy auto-approve** (#19). `POST /aity/auto-approve`
+  and `/aity/auto-approve/stream` ran for any member of the organization;
+  both now require `manageResources` on a workspace of the current
+  organization (403, or 404 for another organization's), the stream before
+  it opens.
+- **The wizard's exit could fail silently or leave drafts** (#20, #21). Keep
+  and Delete all report per-resource failures with Retry or Leave anyway;
+  they wait for the upload in flight ("Finishing uploads…") so a resource
+  created after the click isn't left as a draft for the hourly purge. Back →
+  Next with the same files retries only the failed rows; a resource whose
+  file upload fails is deleted again, so the counts match what exists.
+- **Editors were offered Save as workspace in the basket** (#11), which they
+  can't do; it now shows only with `workspaces.create`.
+
+- **Resources without a description couldn't be edited** (#24). The built-in
+  schemes (multimedia, documents, general) required `description`, but only
+  the edit form enforced it, so resources created by the wizard, FullFrame or
+  AI ingest, or the API — all without one — couldn't be saved or archived
+  from the form. `description` is now optional in those schemes (seeder and a
+  migration for existing installations; the 10-character minimum still applies
+  when one is given), and the edit form only enforces a scheme-required
+  description on new resources or when one was already set.
+- **Setting a resource to Draft got it permanently deleted** (#26). The
+  basket's State action offered *Draft*, and `PUT /resources/{id}` and
+  `/resources/bulk/state` accepted it, but the draft reapers
+  (`resources:purge-drafts` hourly, `resource:prune` nightly) hard-delete every
+  draft past its TTL, files included. Draft is now creation-only: the basket
+  offers Live and Archived, and both endpoints refuse `draft` with a 422.
+- **Resources missing from search because of `tika_metadata`** (#13). Tika's
+  raw file metadata was mapped dynamically, so the first file fixed each
+  key's type for the whole index (`mapper [tika_metadata.xmpMM:History:When]
+  cannot be changed from type [text] to [date]`) and varied XMP passed the
+  1000-field limit; the resource document was rejected. It is now
+  `{"type": "object", "enabled": false}`: kept in `_source`, not indexed.
+  Existing indices need `search:setup-indices --recreate`,
+  `search:reindex` and `search:reconcile --fix` (see
+  [CLI.md](docs/CLI.md#upgrading-tika_metadata-no-longer-indexed-13)); until
+  then `search:setup-indices` skips the field instead of failing.
+- **Facets on text fields** (#13). Workspace and collection searches
+  aggregated and filtered on the analysed `text` field (`metadata.author`),
+  which failed with `Fielddata is disabled`, so workspace views fell back to
+  the database with no facets. Text facets now use their `.keyword` subfield.
+
+### Upgrading
+
+1. **Migrations**: `php artisan migrate` (two: `description` optional in the
+   built-in schemes, and `resources.archived_at`, backfilled).
+2. **Search indices** (#13): run `search:setup-indices --recreate`,
+   `search:reindex` and `search:reconcile --fix` so `tika_metadata` stops
+   being indexed and the rejected resources come back
+   ([CLI.md](docs/CLI.md#upgrading-tika_metadata-no-longer-indexed-13)).
+3. **Rebuild the frontend** (`npm run build`).
+4. **Optional, new env vars** (in every template, with comments):
+   `ELASTICSEARCH_INDEX_PREFIX` (empty: unchanged; moving an existing
+   installation to a prefix is a reindex, see CLI.md),
+   `AITY_BATCH_RETENTION_DAYS` (default 30, `0` disables),
+   `TYDAL_PUBLIC_URL` (set by `configure.sh --url`), and the SPA's
+   `VITE_AUTH_COOKIE` (default `JWT`).
+5. The scheduler now also runs `aity:purge-batches` daily at 04:00; nothing
+   to do if `schedule:run` / `schedule:work` is already running.
+6. `@tydal/client`, `@tydal/org-mcp` and `@tydal/vault-mcp` keep their
+   versions.
+
 ## [1.3.0] — 2026-10-05
 
 ### Added
@@ -421,7 +615,8 @@ layer); as a shipped product it is version 1.0.0.
   [`MIGRATION_V1_V2.md`](docs/planning/MIGRATION_V1_V2.md), CLI guide, and
   OpenAPI 3.0 spec.
 
-[Unreleased]: https://github.com/eonity-org/tydal/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/eonity-org/tydal/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/eonity-org/tydal/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/eonity-org/tydal/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/eonity-org/tydal/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/eonity-org/tydal/compare/v1.0.0...v1.1.0

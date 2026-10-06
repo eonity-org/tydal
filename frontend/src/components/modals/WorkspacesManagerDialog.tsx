@@ -310,7 +310,10 @@ export default function WorkspacesManagerDialog({
               their own heading. With only a chip to tell them apart, an admin
               scanning the list meets rows that look editable and are not; the
               heading says why before they try. */}
-          {[...workspaces].sort((a, b) => Number(a.is_system ?? false) - Number(b.is_system ?? false)).map((ws, index, sorted) => (
+          {/* AiTy Review batches are left out: one is created per Auto upload, they
+              have their own page (AiTy Review) where they're reviewed and deleted,
+              and listing them here only made this list grow without end. */}
+          {[...workspaces].filter((ws) => ws.purpose !== 'aity_review').sort((a, b) => Number(a.is_system ?? false) - Number(b.is_system ?? false)).map((ws, index, sorted) => (
             <Box key={`row-${ws.id}`}>
             {ws.is_system && !sorted[index - 1]?.is_system && (
               <Box sx={{ pt: index === 0 ? 0 : 1.5, pb: 1 }}>
@@ -318,10 +321,10 @@ export default function WorkspacesManagerDialog({
                   Managed by the system
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Created and kept up to date by AITY review batches and by vault writers
-                  (for example a gallery’s “open exhibition” step). Their membership belongs to
-                  that process, so they cannot be renamed or deleted here, and they are not
-                  offered as browsing scopes.
+                  Created and kept up to date by vault writers (for example a gallery’s
+                  “open exhibition” step). Their membership belongs to that process, so they
+                  cannot be renamed or deleted here, and they are not offered as browsing
+                  scopes. AiTy Review batches are listed on the AiTy Review page.
                 </Typography>
               </Box>
             )}

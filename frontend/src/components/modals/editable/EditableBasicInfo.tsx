@@ -5,8 +5,6 @@ import {
   Stack,
   Typography,
   TextField,
-  Switch,
-  FormControlLabel,
   MenuItem,
   Select,
   FormControl,
@@ -17,16 +15,17 @@ import {
   Tooltip,
 } from '@mui/material'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
-import { type ResourceData, type ResourceFile } from '../../../api/resourceService'
+import { type ResourceData, type ResourceFile, type ResourceState } from '../../../api/resourceService'
 import { type Collection, getSchemeFields } from '../../../api/collectionService'
 import { InlineSuggestion } from '../../suggestions/InlineSuggestion'
 
 
-const VISIBILITY_OPTIONS = [
-  { value: 'private', label: 'Private' },
-  { value: 'organization', label: 'Organization' },
-  { value: 'workspace', label: 'Workspace' },
-  { value: 'public', label: 'Public' },
+// The lifecycle states a user can pick here. Draft is the upload wizard's
+// working copy, not a choice: saving publishes it (ResourceDetailModal coerces
+// draft → live), so a draft shows no selector. Openness is the vault's state.
+const STATE_OPTIONS: Array<{ value: ResourceState; label: string; note: string }> = [
+  { value: 'live', label: 'Live', note: 'Listed, searchable and shared through any vault that includes it.' },
+  { value: 'archived', label: 'Archived', note: 'Withdrawn from every listing and vault, but kept. You can set it back to Live at any time.' },
 ]
 
 export interface EditableBasicInfoProps {
@@ -34,7 +33,7 @@ export interface EditableBasicInfoProps {
   onChange: (resource: ResourceData) => void
   errors?: Record<string, string>
   collection?: Collection | null
-  /** 'identity' = Name/Description/Active/Visibility; 'classification' = Metadata/Access/ResourceInfo; default = all */
+  /** 'identity' = Name/Description/State; 'classification' = Metadata/ResourceInfo; default = all */
   section?: 'identity' | 'classification'
   /** Multiple name variants from different source files (preferred over suggestedName). */
   suggestedNames?: Array<{ value: string; sourceFile: { id: string; filename: string } }>
@@ -148,17 +147,9 @@ function EditableBasicInfo(props: EditableBasicInfoProps) {
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     onChange({ ...resource, description: e.target.value })
 
-  const handleActiveChange = (e: React.ChangeEvent<HTMLInputElement>) =>
-    onChange({ ...resource, active: e.target.checked })
-
-const handleVisibilityChange = (e: SelectChangeEvent<string>) =>
-    onChange({ ...resource, visibility: e.target.value } as ResourceData)
-
-  const handlePayloadChange = (key: string, value: boolean) =>
-    onChange({
-      ...resource,
-      payload: { ...resource.payload, [key]: value },
-    })
+  const shownState: ResourceState = resource.state === 'archived' ? 'archived' : 'live'
+  const handleStateChange = (e: SelectChangeEvent<ResourceState>) =>
+    onChange({ ...resource, state: e.target.value as ResourceState })
 
   const handleMetadataFieldChange = (fieldName: string, value: string) =>
     onChange({
@@ -171,7 +162,7 @@ const handleVisibilityChange = (e: SelectChangeEvent<string>) =>
 
   return (
     <Stack spacing={3}>
-      {/* ── Identity section: Name, Description, Active, Visibility ── */}
+      {/* ── Identity section: Name, Description, State ── */}
       {showIdentity && (
         <>
           <Box>
@@ -247,47 +238,32 @@ const handleVisibilityChange = (e: SelectChangeEvent<string>) =>
             )}
           </Box>
 
-          <Divider />
+          {resource.id && resource.state !== 'draft' && (
+            <>
+              <Divider />
 
-          <FormControlLabel
-            control={
-              <Switch
-                checked={resource.active ?? true}
-                onChange={handleActiveChange}
-                color="primary"
-              />
-            }
-            label={
-              <Stack>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>Active Status</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {resource.active ? 'Resource is active and visible' : 'Resource is inactive'}
+              <FormControl fullWidth error={!!errors.state}>
+                <InputLabel id="resource-state-label">State</InputLabel>
+                <Select<ResourceState>
+                  labelId="resource-state-label"
+                  value={shownState}
+                  onChange={handleStateChange}
+                  label="State"
+                >
+                  {STATE_OPTIONS.map((o) => (
+                    <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+                  ))}
+                </Select>
+                <Typography variant="caption" color={errors.state ? 'error' : 'text.secondary'} sx={{ mt: 0.5, ml: 2 }}>
+                  {errors.state || STATE_OPTIONS.find((o) => o.value === shownState)?.note}
                 </Typography>
-              </Stack>
-            }
-          />
-
-          <FormControl fullWidth error={!!errors.visibility}>
-            <InputLabel>Visibility</InputLabel>
-            <Select
-              value={(resource as any).visibility || 'private'}
-              onChange={handleVisibilityChange}
-              label="Visibility"
-            >
-              {VISIBILITY_OPTIONS.map((v) => (
-                <MenuItem key={v.value} value={v.value}>{v.label}</MenuItem>
-              ))}
-            </Select>
-            {errors.visibility && (
-              <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 2 }}>
-                {errors.visibility}
-              </Typography>
-            )}
-          </FormControl>
+              </FormControl>
+            </>
+          )}
         </>
       )}
 
-      {/* ── Classification section: Metadata, Access Options, Resource Info ── */}
+      {/* ── Classification section: Metadata, Resource Info ── */}
       {showClassification && (
         <>
           {schemaFieldEntries.length > 0 && (
@@ -325,39 +301,6 @@ const handleVisibilityChange = (e: SelectChangeEvent<string>) =>
               </Box>
             </>
           )}
-
-          <Divider />
-
-          <Box>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-              Visibility & Access
-            </Typography>
-            <Stack spacing={1}>
-              {[
-                { key: 'downloadable', label: 'Downloadable', description: 'Users can download this resource' },
-                { key: 'public',       label: 'Public',       description: 'Visible outside the organization' },
-                { key: 'featured',     label: 'Featured',     description: 'Highlighted in listings' },
-              ].map(({ key, label, description }) => (
-                <FormControlLabel
-                  key={key}
-                  control={
-                    <Switch
-                      checked={resource.payload?.[key] ?? (key === 'downloadable')}
-                      onChange={(e) => handlePayloadChange(key, e.target.checked)}
-                      color="primary"
-                      size="small"
-                    />
-                  }
-                  label={
-                    <Stack>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>{label}</Typography>
-                      <Typography variant="caption" color="text.secondary">{description}</Typography>
-                    </Stack>
-                  }
-                />
-              ))}
-            </Stack>
-          </Box>
 
           {resource.id && (
             <>

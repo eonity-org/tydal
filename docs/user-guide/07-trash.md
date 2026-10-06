@@ -35,6 +35,11 @@ and its files are gone.
 
 ![Permanent deletion](images/07-trash-delete-permanently.png)
 
+Deleted is not the same as **archived**. An archived resource is also hidden
+everywhere, but it is kept indefinitely and listed on the **Archived** page,
+next to *Deleted resources* ([chapter 5](05-basket.md#live-draft-archived)).
+A deleted one sits in the trash and is purged after 30 days (below).
+
 ## Automatic clean-up
 
 TYDAL empties the trash by itself: resources that have been in it for **30 days**

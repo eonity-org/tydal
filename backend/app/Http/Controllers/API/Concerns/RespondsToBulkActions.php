@@ -33,8 +33,9 @@ trait RespondsToBulkActions
      * @param  array<int, string>  $requested  Every id the caller asked for.
      * @param  array<int, string>  $applied  The subset actually written.
      * @param  string  $skipReason  Machine-readable reason for the remainder.
+     * @param  string|null  $message  Human-readable sentence, when the skip needs one.
      */
-    protected function bulkResponse(array $requested, array $applied, string $skipReason, string $indexing = 'immediate'): JsonResponse
+    protected function bulkResponse(array $requested, array $applied, string $skipReason, string $indexing = 'immediate', ?string $message = null): JsonResponse
     {
         $appliedSet = array_flip($applied);
         $skipped = [];
@@ -56,6 +57,7 @@ trait RespondsToBulkActions
             // it can say the list is still catching up rather than silently
             // showing stale rows.
             'indexing' => $indexing,
+            ...($message !== null ? ['message' => $message] : []),
         ], $status);
     }
 }

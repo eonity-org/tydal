@@ -29,21 +29,43 @@ Choose how the files become resources:
 
 Then drop the files onto the box or click it to browse. Files the collection
 doesn't accept are refused here. The list shows what you've chosen; remove any
-with the cross. Click **Next**.
+with the cross.
+
+If the collection has **required fields** (an *Author* on a photo-exhibition
+collection, say), a **Required by this collection** panel appears below the
+files, with one box per required field. What you type there is applied to every
+resource in this upload; you can still change it per resource in **Review**.
+**Next** stays greyed out until every required field has a value, and the panel
+names the ones still missing. Collections without required fields don't show the
+panel; their optional fields are filled in at **Review**.
+
+Click **Next**.
 
 ![Batch mode with three photographs chosen](images/03-wizard-mode-and-files.png)
 
 ### 2 · Upload
 
-The files upload one by one, each with a tick when it's done. Then choose how to
-continue:
+The files upload one by one, each with a tick when it's done. A file that fails
+shows the reason beside it, and its resource is not created. If none of them
+could be uploaded, the wizard says why and offers only **Back**, so you can
+correct it and try again.
+
+**Back** is available once the uploads finish. If you come back with the same
+files, mode and step-1 values, **Next** returns to the upload already made and
+only tries the failed files again. If you change any of them, the earlier upload
+is discarded and the files are uploaded afresh.
+
+Then choose how to continue:
 
 - **Interactive**: stay in the wizard and review what the AI suggests for each
   resource before saving. Recommended when you want to read every title.
 - **Auto**: let AiTy finish in the background and apply its suggestions by
   itself. You choose what it may apply (name and description, tags), can let it
   merge near-identical tags (**Smart tag clustering**), and can give the batch a
-  workspace name. Follow its progress in **AiTy Review** (below).
+  workspace name. Follow its progress in **AiTy Review** (below). Auto works
+  for editors as well as administrators: the batch is a system workspace that
+  anyone who can upload resources may open. If the batch can't be created or
+  started, the wizard stays open and shows the reason instead of closing.
 
 ![Upload done: choose Interactive or Auto](images/03-wizard-upload.png)
 
@@ -69,7 +91,7 @@ Go through the resources one by one with the arrows at the top. For each, you
 can type the name and description yourself or click **Apply suggestion** to use
 AiTy's, and click a suggested tag (**+ street musician**, **+ canal**…) to add it. The
 percentage beside a tag is how confident AiTy is. Below them are the
-collection's own fields.
+collection's own fields, already filled with anything you entered at step 1.
 
 ![Reviewing one resource](images/03-wizard-review.png)
 
@@ -78,8 +100,14 @@ collection's own fields.
 If you close the wizard after files have uploaded, it asks whether to **keep**
 the resources (they're added to the collection as they are, named after their
 files) or **delete them all**. Until the wizard finishes, the new resources are
-drafts that nobody else sees. If the wizard is interrupted (a closed tab, a lost
-connection), TYDAL clears those drafts automatically after a while.
+drafts that nobody else sees. If you choose while a file is still uploading,
+the dialog shows **Finishing uploads…** and waits for that file, so its resource
+is kept or deleted with the others; files that hadn't started uploading are
+left out. If some of them can't be kept or deleted, the
+wizard doesn't close: it lists them with the reason and offers **Retry**, or
+**Leave anyway**, in which case those stay drafts. If the wizard is interrupted
+(a closed tab, a lost connection) or you leave anyway, TYDAL clears those drafts
+automatically after a while, files and all.
 
 ## AiTy Review: following Auto batches
 
@@ -87,8 +115,12 @@ connection), TYDAL clears those drafts automatically after a while.
 name, how many resources and files they hold, how far the analysis has got, and
 whether they're done. **Review** opens the batch's resources so you can check
 what was applied, with **Auto-approve all** to apply any remaining suggestions
-and **View log** to see what was done. The bin removes a batch that hasn't been
-reviewed yet.
+and **View log** to see what was done. The bin removes a batch, whether or not
+it has been reviewed.
+
+Batches are also deleted automatically 30 days after they were reviewed or
+finished (an administrator can change the period). Only the batch goes: the
+resources stay in the library and in every other workspace.
 
 ![A finished Auto batch](images/03-aity-review.png)
 
@@ -108,7 +140,8 @@ uploaded; administrators and owners can edit any resource.
 
 ![Editing a resource](images/03-resource-edit.png)
 
-In edit mode you can change the name and description, the **workspaces** the
+In edit mode you can change the name and description, the **state** (*Live* or
+*Archived*; see [chapter 5](05-basket.md#live-draft-archived)), the **workspaces** the
 resource belongs to (click a workspace to add or remove it), its **tags**
 ([chapter 4](04-tags.md)) and the collection's fields. The **Aity** menu at the
 top asks the AI for fresh suggestions. Save with:

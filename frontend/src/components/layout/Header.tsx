@@ -81,6 +81,7 @@ function Header(props: HeaderProps) {
   const { pathname } = useLocation()
   const isAdmin = pathname.startsWith('/admin')
   const isTrash = pathname === '/trash'
+  const isArchived = pathname === '/archived'
   const isBasket = pathname === '/basket'
   const isOrgSettings = pathname === '/organization'
   const basket = useBasket()
@@ -367,7 +368,7 @@ function Header(props: HeaderProps) {
           {/* The two administration surfaces are different scopes: the platform
               one runs the installation, the organization one runs this tenant.
               A platform admin sees both; an org owner/admin sees only theirs. */}
-          {isAdmin || isTrash || isOrgSettings ? (
+          {isAdmin || isTrash || isArchived || isOrgSettings ? (
             <Tooltip title="Back to dashboard">
               <Button
                 variant="outlined"
@@ -913,6 +914,34 @@ function Header(props: HeaderProps) {
               </Tooltip>
             )}
           </Stack>
+          <Box
+            onClick={() => navigate('/archived')}
+            sx={{
+              px: 2, height: 44, display: 'flex', alignItems: 'center',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              fontSize: '1rem',
+              fontWeight: isArchived ? 600 : 400,
+              color: isArchived ? 'primary.main' : 'text.disabled',
+              flexShrink: 0,
+              position: 'relative',
+              '&::after': {
+                content: '""',
+                position: 'absolute',
+                bottom: 0,
+                left: '12%',
+                width: '76%',
+                height: '2px',
+                borderRadius: '1px 1px 0 0',
+                bgcolor: 'primary.main',
+                opacity: isArchived ? 1 : 0,
+                transition: 'opacity 0.2s ease',
+              },
+              '&:hover': { color: 'text.primary' },
+            }}
+          >
+            Archived
+          </Box>
           <Box
             onClick={() => navigate('/trash')}
             sx={{

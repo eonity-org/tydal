@@ -16,7 +16,8 @@ Load-smoke the vault boundary for one published (or key-bearing) vault.
   <org/vault>   e.g. tydal/expo-test  (seed one with seed-vault.sh)
   -n  total requests per endpoint      (default 200)
   -c  concurrency                      (default 20)
-  -u  web root                         (default http://localhost:8000)
+  -u  web root                         (default http://localhost:8000, or the
+                                       installation's TYDAL_HTTP_PORT)
   -k  vault key (tvk_…) for private vaults
   -h  this help
 
@@ -24,7 +25,10 @@ Reports per endpoint: requests, errors (non-2xx), req/s, and p50/p95/p99/max ms.
 EOF
 }
 
-VAULT=""; N=200; C=20; BASE="http://localhost:8000"; KEY=""
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/../lib/stack.lib.sh"
+stack_load "$(cd "$SCRIPT_DIR/../.." && pwd)"
+VAULT=""; N=200; C=20; BASE="http://localhost:$TYDAL_HTTP_PORT"; KEY=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help) usage; exit 0 ;;

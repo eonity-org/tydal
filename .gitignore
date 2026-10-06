@@ -39,6 +39,7 @@ build/
 .vite/
 *.tsbuildinfo
 coverage/
+.claude
 
 # ------------------------
 # Logs

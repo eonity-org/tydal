@@ -14,7 +14,9 @@ class BulkResourceStateRequest extends BulkResourceIdsRequest
     public function rules(): array
     {
         return array_merge(parent::rules(), [
-            'state' => ['required', Rule::enum(ResourceState::class)],
+            // Draft is creation-only: the draft reapers hard-delete every draft
+            // past its TTL, so an existing resource must never go back to it (#26).
+            'state' => ['required', Rule::enum(ResourceState::class)->except([ResourceState::DRAFT])],
         ]);
     }
 

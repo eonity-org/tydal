@@ -30,20 +30,28 @@ the SDK: customers run them on their own upgrade schedule.
 ## Running things
 
 The stack runs in Docker (`docker-compose.yml`; tiers switched with
-`./configure.sh <ai> <app>`). On the docker tier every artisan command runs
-inside the app container, **with the working directory set**:
+`./configure.sh <ai> <app> [--infra=own|shared] [--name=NAME]`). On the docker
+tier every artisan command runs inside the app container, **with the working
+directory set**:
 
 ```bash
 docker exec -w /var/www/html tydal_app php artisan <command>
 ```
 
-Without `-w` you get `Could not open input file: artisan`. Every command is listed
+Without `-w` you get `Could not open input file: artisan`. `tydal_app` is the
+default name: a checkout configured with `--infra=shared --name=NAME` (several
+installations sharing one MySQL/ES/Redis, see
+[DEPLOYMENT.md](DEPLOYMENT.md#several-installations-on-one-server)) uses
+`tydal_NAME_app` — `TYDAL_STACK` in the root `.env` — and its own ports and test
+database. `docker compose exec -w /var/www/html app php artisan …` works for
+either. The `tools/` scripts follow the configured names
+(`tools/lib/stack.lib.sh`). Every command is listed
 in [QUICK_REFERENCE.md](QUICK_REFERENCE.md); artisan is documented in
 [docs/CLI.md](docs/CLI.md).
 
 | Task | Command |
 |---|---|
-| All tests (Pest on a separate `tydal_test` DB, then JS suites) | `tools/deploy/test.sh` |
+| All tests (Pest on a separate `tydal_test` DB — `tydal_NAME_test` on a shared installation — then JS suites) | `tools/deploy/test.sh` |
 | Backend only, one test | `tools/deploy/test.sh --backend-only -- --filter=Name` |
 | PHP style / static analysis | `composer pint`, `composer phpstan` (in the container) |
 | JS | `npm run test`, `npm run build` in the package |

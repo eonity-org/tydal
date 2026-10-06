@@ -37,6 +37,71 @@ class ElasticsearchService
     }
 
     // =========================================================================
+    // PHYSICAL INDEX NAMES (per-installation prefix)
+    // =========================================================================
+
+    /**
+     * This installation's index prefix (`elasticsearch.index_prefix`), empty
+     * by default. Validated so it can never widen a pattern:
+     *  - a `*` or `,` in it would turn the wipe pattern into "every index on
+     *    the cluster" (only lowercase letters, digits, `_`, `-`, `.`);
+     *  - a prefix starting with `tydal_` / `vault_` would put this
+     *    installation's indices inside an UNPREFIXED installation's
+     *    `tydal_*,vault_*` wipe pattern — refused, so a legacy installation on
+     *    the same cluster can never wipe a prefixed one.
+     */
+    public function indexPrefix(): string
+    {
+        $prefix = (string) config('elasticsearch.index_prefix', '');
+
+        if ($prefix === '') {
+            return '';
+        }
+
+        if (! preg_match('/^[a-z0-9][a-z0-9_.-]*$/', $prefix)) {
+            throw new \InvalidArgumentException(
+                "Invalid ELASTICSEARCH_INDEX_PREFIX '{$prefix}': use lowercase letters, digits, '_', '-' or '.', starting with a letter or digit."
+            );
+        }
+
+        if (str_starts_with($prefix, 'tydal_') || str_starts_with($prefix, 'vault_')) {
+            throw new \InvalidArgumentException(
+                "Invalid ELASTICSEARCH_INDEX_PREFIX '{$prefix}': it must not start with 'tydal_' or 'vault_', or an unprefixed installation's search:wipe-indices would match its indices."
+            );
+        }
+
+        return $prefix;
+    }
+
+    /**
+     * The one place a logical index name becomes a physical one. Logical
+     * names are what the database holds (`search_indexes.index_name`,
+     * `vault_<uuid>`); physical names are what Elasticsearch sees.
+     *
+     * Convention for this service's string-taking methods: the search methods
+     * fed from `search_indexes.index_name` (searchResources, searchByWorkspace,
+     * hybridSearch, knnSearchResources) take LOGICAL names and resolve here;
+     * buildChunksIndexName / buildVaultIndexName return PHYSICAL names, and the
+     * low-level helpers (chunk methods, listIndexedResources, refreshIndex,
+     * deleteIndex, purgeDocument, deleteIndicesMatching) take PHYSICAL names.
+     */
+    public function physicalIndexName(string $logicalName): string
+    {
+        return $this->indexPrefix().$logicalName;
+    }
+
+    /**
+     * Everything `search:wipe-indices` may delete: this installation's
+     * collection (`tydal_*`) and vault (`vault_*`) indices, under its prefix.
+     * With an empty prefix this also matches any other unprefixed
+     * installation on the same cluster — the command warns about it.
+     */
+    public function wipePattern(): string
+    {
+        return $this->physicalIndexName('tydal_*').','.$this->physicalIndexName('vault_*');
+    }
+
+    // =========================================================================
     // DOCUMENT INDEXING
     // =========================================================================
 
@@ -61,6 +126,7 @@ class ElasticsearchService
             return;
         }
 
+        $indexName = $this->physicalIndexName($indexName);
         $doc = $this->buildDocument($resource);
 
         try {
@@ -100,11 +166,13 @@ class ElasticsearchService
             return;
         }
 
-        $indexName = $this->resolveIndexName($resource);
+        $logicalName = $this->resolveIndexName($resource);
 
-        if (! $indexName) {
+        if (! $logicalName) {
             return;
         }
+
+        $indexName = $this->physicalIndexName($logicalName);
 
         try {
             $this->client->delete([
@@ -136,7 +204,7 @@ class ElasticsearchService
         }
 
         // Delete the synthetic metadata chunk from the companion chunks index
-        $chunksIndex = $this->buildChunksIndexName($indexName);
+        $chunksIndex = $this->buildChunksIndexName($logicalName);
         try {
             $this->client->delete([
                 'index' => $chunksIndex,
@@ -283,7 +351,7 @@ class ElasticsearchService
                     // Values are already IDs — translated by the controller before this call
                     $filter[] = ['terms' => ['semantic_tag_ids' => array_values($values)]];
                 } else {
-                    $filter[] = ['terms' => ["metadata.{$key}" => array_values($values)]];
+                    $filter[] = ['terms' => [$this->facetFilterPath($key, $facetFields) => array_values($values)]];
                 }
             }
         }
@@ -299,7 +367,7 @@ class ElasticsearchService
         $aggs = [];
         foreach ($facetFields as $field) {
             $fieldName = $field['name'];
-            $esField = $fieldName === 'type' ? 'type' : "metadata.{$fieldName}";
+            $esField = $this->facetFieldPath($field);
             $aggs[$fieldName] = ['terms' => ['field' => $esField, 'size' => 50]];
         }
         // Always aggregate workspaces and semantic tags (relational facets, not part of scheme fields)
@@ -319,7 +387,7 @@ class ElasticsearchService
             : [[$esSortField => $sortDir]];
 
         $params = [
-            'index' => $indexName,
+            'index' => $this->physicalIndexName($indexName),
             'body' => [
                 'query' => $esQuery,
                 'from' => ($page - 1) * $perPage,
@@ -449,7 +517,7 @@ class ElasticsearchService
                 } elseif ($key === 'semantic_tags') {
                     $filter[] = ['terms' => ['semantic_tag_ids' => array_values($values)]];
                 } else {
-                    $filter[] = ['terms' => ["metadata.{$key}" => array_values($values)]];
+                    $filter[] = ['terms' => [$this->facetFilterPath($key, $facetFields) => array_values($values)]];
                 }
             }
         }
@@ -457,7 +525,7 @@ class ElasticsearchService
         $aggs = [];
         foreach ($facetFields as $field) {
             $fieldName = $field['name'];
-            $esField = $fieldName === 'type' ? 'type' : "metadata.{$fieldName}";
+            $esField = $this->facetFieldPath($field);
             $aggs[$fieldName] = ['terms' => ['field' => $esField, 'size' => 50]];
         }
         // Only semantic tags facet — workspace facet is omitted (already in workspace context)
@@ -472,7 +540,7 @@ class ElasticsearchService
             : [[$esSortField => $sortDir]];
 
         $params = [
-            'index' => implode(',', $indexNames),
+            'index' => implode(',', array_map($this->physicalIndexName(...), $indexNames)),
             'body' => [
                 'query' => ['bool' => ['must' => $must, 'filter' => $filter]],
                 'from' => ($page - 1) * $perPage,
@@ -513,7 +581,7 @@ class ElasticsearchService
      */
     public function setupIndex(SearchIndex $searchIndex, bool $recreate = false): void
     {
-        $indexName = $searchIndex->index_name;
+        $indexName = $this->physicalIndexName($searchIndex->index_name);
 
         $vocabulary = $this->vocabularyFor($searchIndex);
 
@@ -536,6 +604,15 @@ class ElasticsearchService
         }
 
         if ($exists) {
+            // An index created before tika_metadata was disabled still maps it
+            // as a dynamic object, and ES refuses to flip `enabled` in place.
+            // Leave it out of the additive update so the rest still applies;
+            // only --recreate (+ search:reindex) moves the index to the fix.
+            if (! $this->tikaMetadataDisabled($indexName)) {
+                unset($mappings['properties']['tika_metadata']);
+                Log::warning("ES index {$indexName} still maps tika_metadata dynamically — run search:setup-indices --recreate and search:reindex to apply the fix for field-name collisions.");
+            }
+
             // Update mappings only (ES does not allow changing existing field types)
             $this->client->indices()->putMapping([
                 'index' => $indexName,
@@ -547,6 +624,25 @@ class ElasticsearchService
                 'body' => ['settings' => $settings, 'mappings' => $mappings],
             ]);
         }
+    }
+
+    /**
+     * Whether an existing resource index already has `tika_metadata` mapped
+     * as a disabled (non-indexed) object.
+     */
+    public function tikaMetadataDisabled(string $physicalIndexName): bool
+    {
+        try {
+            $mapping = $this->client->indices()->getMapping(['index' => $physicalIndexName])->asArray();
+        } catch (\Throwable) {
+            return false;
+        }
+
+        $tika = $mapping[$physicalIndexName]['mappings']['properties']['tika_metadata'] ?? null;
+
+        // Absent (no tika key ever indexed) is fine to add; only a mapped,
+        // enabled object conflicts.
+        return $tika === null || ($tika['enabled'] ?? true) === false;
     }
 
     /**
@@ -620,7 +716,12 @@ class ElasticsearchService
             'semantic_tag_ids' => ['type' => 'integer'],
             // Phase 1 — Tika extraction
             'extracted_text' => ['type' => 'text', 'analyzer' => 'standard'],
-            'tika_metadata' => ['type' => 'object', 'dynamic' => true],
+            // Tika's raw metadata, kept in _source for display/debugging but
+            // NOT indexed. Mapped dynamically, the first file fixed each key's
+            // type for the whole index (`xmpMM:History:When` text vs date) and
+            // varied XMP pushed it past the 1000-field limit — either way the
+            // resource document was rejected (#13). Nothing queries it.
+            'tika_metadata' => ['type' => 'object', 'enabled' => false],
             // Resource-level mean embedding (§8) — the canonical semantic vector
             'embedding' => [
                 'type' => 'dense_vector',
@@ -652,12 +753,14 @@ class ElasticsearchService
     // =========================================================================
 
     /**
-     * Derive the companion chunks index name from the base resource index name.
-     * e.g. "tydal_multimedia" → "tydal_multimedia_chunks"
+     * Derive the PHYSICAL companion chunks index name from the LOGICAL base
+     * resource index name (`search_indexes.index_name`), prefix included.
+     * e.g. "tydal_multimedia" → "tydal_multimedia_chunks" (or, with
+     * ELASTICSEARCH_INDEX_PREFIX=prod_, "prod_tydal_multimedia_chunks").
      */
     public function buildChunksIndexName(string $baseIndexName): string
     {
-        return $baseIndexName.'_chunks';
+        return $this->physicalIndexName($baseIndexName.'_chunks');
     }
 
     /**
@@ -913,7 +1016,7 @@ class ElasticsearchService
 
         try {
             $response = $this->client->search([
-                'index' => implode(',', $indexNames),
+                'index' => implode(',', array_map($this->physicalIndexName(...), $indexNames)),
                 'ignore_unavailable' => true,
                 'body' => [
                     'knn' => [
@@ -1198,7 +1301,7 @@ class ElasticsearchService
         $aggs = [];
         foreach ($facetFields as $field) {
             $fieldName = $field['name'];
-            $esField = $fieldName === 'type' ? 'type' : "metadata.{$fieldName}";
+            $esField = $this->facetFieldPath($field);
             $aggs[$fieldName] = ['terms' => ['field' => $esField, 'size' => 50]];
         }
         $aggs['workspaces'] = ['terms' => ['field' => 'workspace_ids',    'size' => 50]];
@@ -1224,13 +1327,13 @@ class ElasticsearchService
                 } elseif ($key === 'semantic_tags') {
                     $postFilter[] = ['terms' => ['semantic_tag_ids' => array_values($values)]];
                 } else {
-                    $postFilter[] = ['terms' => ["metadata.{$key}" => array_values($values)]];
+                    $postFilter[] = ['terms' => [$this->facetFilterPath($key, $facetFields) => array_values($values)]];
                 }
             }
 
             try {
                 $filterAggResp = $this->client->search([
-                    'index' => $indexName,
+                    'index' => $this->physicalIndexName($indexName),
                     'body' => [
                         'query' => ['bool' => ['filter' => $postFilter]],
                         'size' => count($allIds),
@@ -1294,6 +1397,7 @@ class ElasticsearchService
 
                     continue;
                 }
+                $indexName = $this->physicalIndexName($indexName);
 
                 try {
                     $this->client->index([
@@ -1581,7 +1685,7 @@ class ElasticsearchService
 
     public function buildVaultIndexName(Vault $vault): string
     {
-        return 'vault_'.strtolower($vault->id);
+        return $this->physicalIndexName('vault_'.strtolower($vault->id));
     }
 
     /**
@@ -1821,7 +1925,7 @@ class ElasticsearchService
 
         try {
             $this->client->deleteByQuery([
-                'index' => 'vault_*',
+                'index' => $this->physicalIndexName('vault_*'),
                 'ignore_unavailable' => true,
                 'conflicts' => 'proceed',
                 'body' => ['query' => ['bool' => ['must' => $must, 'must_not' => $mustNot]]],
@@ -1839,7 +1943,7 @@ class ElasticsearchService
     {
         try {
             $this->client->deleteByQuery([
-                'index' => 'vault_*',
+                'index' => $this->physicalIndexName('vault_*'),
                 'ignore_unavailable' => true,
                 // Match the internal document identity, not its public link hash.
                 'body' => ['query' => ['ids' => ['values' => [$resourceId]]]],
@@ -2067,6 +2171,7 @@ class ElasticsearchService
         if (! $indexName) {
             return;
         }
+        $indexName = $this->physicalIndexName($indexName);
 
         try {
             $this->client->index([
@@ -2080,6 +2185,50 @@ class ElasticsearchService
         }
     }
 
+    /**
+     * The aggregatable ES path of a scheme facet field in a resource index.
+     *
+     * A `text` field cannot be aggregated or sorted on (`Fielddata is
+     * disabled`), so a text facet is addressed through the `.keyword`
+     * subfield the mapping gives it ({@see IndexVocabulary::propertyFor} adds
+     * one to every text facet). Keyword/numeric facets use the bare path.
+     *
+     * @param  array<string, mixed>  $field  A collection_schemes.fields entry.
+     */
+    public function facetFieldPath(array $field): string
+    {
+        $name = $field['name'];
+
+        if ($name === 'type') {
+            return 'type';
+        }
+
+        $property = IndexVocabulary::propertyFor($field);
+
+        return ($property['type'] ?? 'text') === 'text' && isset($property['fields']['keyword'])
+            ? "metadata.{$name}.keyword"
+            : "metadata.{$name}";
+    }
+
+    /**
+     * The path an exact facet-value filter on `$key` must use: the facet's
+     * aggregatable path when `$key` is one of the facet fields, the bare
+     * metadata path otherwise.
+     *
+     * @param  array<int, array<string, mixed>>  $facetFields
+     */
+    private function facetFilterPath(string $key, array $facetFields): string
+    {
+        foreach ($facetFields as $field) {
+            if (($field['name'] ?? null) === $key) {
+                return $this->facetFieldPath($field);
+            }
+        }
+
+        return "metadata.{$key}";
+    }
+
+    /** The LOGICAL index name (unprefixed) — pass it through physicalIndexName(). */
     private function resolveIndexName(Resource $resource): ?string
     {
         return $resource->collection?->searchIndex?->index_name;

@@ -30,7 +30,8 @@ class SearchSetupIndices extends Command
             return self::SUCCESS;
         }
 
-        $this->info("Setting up {$indexes->count()} index(es)…");
+        $prefix = $es->indexPrefix();
+        $this->info("Setting up {$indexes->count()} index(es)…".($prefix !== '' ? " (prefix: {$prefix})" : ''));
 
         $ok = $fail = 0;
 
@@ -39,7 +40,9 @@ class SearchSetupIndices extends Command
         foreach ($indexes as $index) {
             try {
                 $es->setupIndex($index, $recreate);
-                $this->line("  <fg=green>✓</> {$index->index_name}");
+                // Physical name: --recreate drops only this installation's
+                // (prefixed) index, never another installation's on the cluster.
+                $this->line("  <fg=green>✓</> {$es->physicalIndexName($index->index_name)}");
 
                 $es->setupChunksIndex($index, $recreate);
                 $chunksName = $es->buildChunksIndexName($index->index_name);

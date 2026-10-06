@@ -437,7 +437,7 @@ export default function AityReviewPage() {
             <AutoAwesomeIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
             <Typography variant="body1" color="text.secondary">No batch uploads yet.</Typography>
             <Typography variant="caption" color="text.disabled" display="block" sx={{ mt: 0.5 }}>
-              Use the wizard's "AiTy Review" option to create your first batch.
+              Choose Auto in the New Resources wizard to create your first batch.
             </Typography>
             <Button variant="outlined" sx={{ mt: 3 }} onClick={() => navigate('/')}>
               Go to catalogue

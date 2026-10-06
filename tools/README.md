@@ -4,7 +4,10 @@ Shell scripts that run, seed, test and connect a **development** TYDAL. Every
 script is path-independent (run it from anywhere), accepts `--help`, and is
 **tier-aware**: it reads `DB_HOST` from `backend/.env` and runs artisan inside
 the `app` container (docker tier) or on the host (host tier). So you never have to type
-`docker exec -w /var/www/html tydal_app …` yourself.
+`docker exec -w /var/www/html tydal_app …` yourself. They also follow the
+installation's names and ports from the root `.env` (`tydal_app`, `:8000` by
+default; `tydal_NAME_app` and offset ports on a shared-infrastructure
+installation — see [DEPLOYMENT.md](../DEPLOYMENT.md#several-installations-on-one-server)).
 
 For a one-line-per-command cheat sheet (scripts and artisan, docker and native
 forms, preconditions), see **[QUICK_REFERENCE.md](../QUICK_REFERENCE.md)**.
@@ -13,10 +16,10 @@ forms, preconditions), see **[QUICK_REFERENCE.md](../QUICK_REFERENCE.md)**.
 
 | Folder | What belongs here | Scripts |
 |---|---|---|
-| [`deploy/`](deploy/README.md) | **Lifecycle of the TYDAL stack itself**: install, choose tiers, start, reset, reload, reindex, build the MCP servers, test. | `install.sh` `configure.sh` `start.sh` `first_install.sh` `reload.sh` `reindex.sh` `install_mcp.sh` `test.sh` |
+| [`deploy/`](deploy/README.md) | **Lifecycle of the TYDAL stack itself**: install, choose tiers (and own or shared infrastructure), start, reset, reload, reindex, build the MCP servers, test. | `install.sh` `configure.sh` `provision-shared.sh` `start.sh` `first_install.sh` `reload.sh` `reindex.sh` `install_mcp.sh` `test.sh` |
 | [`clients/`](#clients--the-border) | **The border**: things that run *outside* TYDAL and consume it through a vault (vault renderer apps, products such as Full Frame), plus provisioning shortcuts for them. | `vault-apps.sh` `fullframe.sh` |
 | [`dev/`](#dev--data-and-smoke) | **Dev data and ops smoke**: fill a vault with real files, load-test the boundary. | `seed-vault.sh` `loadtest.sh` |
-| `lib/` | Shared shell helpers, *sourced* and never run directly: `tier.lib.sh` (`detect_infra`, `run_npm`). | — |
+| `lib/` | Shared shell helpers, *sourced* and never run directly: `tier.lib.sh` (`detect_infra`, `run_npm`), `stack.lib.sh` (`stack_load`, `stack_container`, `infra_container`, … — the installation's container names, ports and infrastructure from the root `.env`). | — |
 
 Root wrappers (`tydal/*.sh`) keep the short forms working:
 `./install.sh` `./configure.sh` `./start.sh` → `deploy/`, `./clients.sh` →
@@ -33,7 +36,7 @@ tier-awareness).
 ## Everyday order
 
 ```bash
-./install.sh <cloud|ollama-host|ollama-docker> <host|docker>   # once
+./install.sh <cloud|ollama-host|ollama-docker> <host|docker> [--infra=own|shared] [--name=NAME]   # once
 ./start.sh                                   # terminal 1 — brings the stack up (blocks on host tier)
 tools/deploy/first_install.sh                # terminal 2 — DESTRUCTIVE reset + minimal seed
 tools/deploy/install_mcp.sh                  # only if you use an MCP client

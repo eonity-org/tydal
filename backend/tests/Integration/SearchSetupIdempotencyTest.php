@@ -63,7 +63,7 @@ class SearchSetupIdempotencyTest extends TestCase
             $this->assertTrue(true, 'setupIndex ran twice without error');
         } finally {
             // Clean up the throwaway indices
-            foreach (['tydal_test_idempotency', 'tydal_test_idempotency_chunks'] as $index) {
+            foreach ([$es->physicalIndexName('tydal_test_idempotency'), $es->buildChunksIndexName('tydal_test_idempotency')] as $index) {
                 try {
                     $es->deleteIndex($index);
                 } catch (\Throwable) {

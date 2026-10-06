@@ -329,6 +329,31 @@ class BulkResourceActionsTest extends TestCase
         $this->assertEquals(ResourceState::DRAFT, $theirs->fresh()->state);
     }
 
+    /**
+     * Regression for #26: draft is creation-only. The draft reapers hard-delete
+     * every draft past its TTL, so sending a live resource back to draft — from
+     * the basket or a single update — would get it destroyed.
+     */
+    public function test_an_existing_resource_cannot_be_set_back_to_draft(): void
+    {
+        $resource = $this->makeResources(1, ['state' => ResourceState::LIVE->value])->first();
+
+        $this->withToken($this->token)
+            ->postJson('/api/v1/resources/bulk/state', [
+                'resource_ids' => [$resource->id],
+                'state' => 'draft',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('state');
+
+        $this->withToken($this->token)
+            ->putJson("/api/v1/resources/{$resource->id}", ['state' => 'draft'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('state');
+
+        $this->assertEquals(ResourceState::LIVE, $resource->fresh()->state);
+    }
+
     public function test_bulk_state_rejects_an_unknown_state(): void
     {
         $this->withToken($this->token)

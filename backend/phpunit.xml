@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
-         bootstrap="vendor/autoload.php"
+         bootstrap="tests/bootstrap.php"
          colors="true"
 >
     <testsuites>
@@ -21,8 +21,15 @@
         <env name="CACHE_DRIVER" value="array"/>
         <env name="DB_CONNECTION" value="mysql"/>
         <!-- Dedicated test database: RefreshDatabase runs migrate:fresh, which
-             would otherwise wipe the dev database configured in .env. -->
+             would otherwise wipe the dev database configured in .env.
+             An installation on shared infrastructure (#23) gets its own via
+             TYDAL_TEST_DB_DATABASE (tests/bootstrap.php, set by test.sh). -->
         <env name="DB_DATABASE" value="tydal_test"/>
+        <!-- Tests that reach a live Elasticsearch create/delete indices: the
+             prefix keeps them away from a dev installation's real (unprefixed
+             or differently prefixed) indices on the same cluster.
+             TYDAL_TEST_INDEX_PREFIX overrides it per installation (#23). -->
+        <env name="ELASTICSEARCH_INDEX_PREFIX" value="test_" force="true"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

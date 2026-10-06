@@ -26,7 +26,9 @@ you can run the workspaces directly). Default action: up. Default apps: all.
 Apps serve at http://localhost:3010 (gallery), :3011 (obsidian), :3012 (aity);
 open ?vault=<org>/<slug> (or ?hash=…, &key=tvk_…). Environment overrides:
 TYDAL_NODE_IMAGE (default node:22), TYDAL_BACKEND_URL (default
-http://host.docker.internal:8000).
+http://host.docker.internal:8000 — the port follows the installation's
+TYDAL_HTTP_PORT). The app containers and ports are not per installation: run
+them for one installation at a time.
 
   -h, --help   show this help and exit
 EOF
@@ -47,7 +49,9 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 NODE_IMAGE="${TYDAL_NODE_IMAGE:-node:22}"
-BACKEND_URL="${TYDAL_BACKEND_URL:-http://host.docker.internal:8000}"
+. "$SCRIPT_DIR/../lib/stack.lib.sh"
+stack_load "$ROOT"
+BACKEND_URL="${TYDAL_BACKEND_URL:-http://host.docker.internal:$TYDAL_HTTP_PORT}"
 
 port_of() {
   case "$1" in

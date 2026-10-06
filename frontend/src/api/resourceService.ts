@@ -58,6 +58,8 @@ export interface ResourceData {
   created_at: string
   updated_at: string
   deleted_at: string | null
+  /** When the resource was last archived; null unless state is archived. */
+  archived_at?: string | null
 
   // Snapshot file — the default preview image for this resource.
   // Identified by usage containing 'snapshot' on the file record.
@@ -710,6 +712,28 @@ class ResourceService {
       )
     } catch (error) {
       console.error('Get trashed resources error:', error)
+      return null
+    }
+  }
+
+  /**
+   * Get archived resources (state = archived, not deleted) for the current
+   * organisation — the Archived page. Non-admins get only their own.
+   */
+  async getArchivedResources(
+    page = 1,
+    limit = 48,
+    sortBy: 'archived_at' | 'updated_at' | 'name' | 'id' = 'archived_at',
+    sortDir: 'asc' | 'desc' = 'desc'
+  ): Promise<{ data: ResourceData[]; total: number; per_page: number; current_page: number; last_page: number } | null> {
+    try {
+      // Bare paginated payload (like the trash) → raw passthrough.
+      return await tydal.http.get<{ data: ResourceData[]; total: number; per_page: number; current_page: number; last_page: number }>(
+        `/resources/archived`,
+        { query: { page, limit, sort_by: sortBy, sort_dir: sortDir }, raw: true },
+      )
+    } catch (error) {
+      console.error('Get archived resources error:', error)
       return null
     }
   }

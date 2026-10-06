@@ -36,9 +36,12 @@ class VaultIndexCleanupTest extends TestCase
         $this->otherResourceId = (string) Str::uuid();
         $suffix = str_replace('-', '', (string) Str::uuid());
         $this->indexes = [
-            'base' => 'test_collection_cleanup_'.$suffix,
-            'first' => 'vault_test_cleanup_'.$suffix.'_first',
-            'second' => 'vault_test_cleanup_'.$suffix.'_second',
+            // Physical names under the installation prefix — the vault sweep
+            // pattern is `{prefix}vault_*`, so unprefixed fixtures would be
+            // invisible to it (and the sweep must never reach other indices).
+            'base' => $this->es->physicalIndexName('test_collection_cleanup_'.$suffix),
+            'first' => $this->es->physicalIndexName('vault_test_cleanup_'.$suffix.'_first'),
+            'second' => $this->es->physicalIndexName('vault_test_cleanup_'.$suffix.'_second'),
         ];
 
         foreach ($this->indexes as $role => $index) {

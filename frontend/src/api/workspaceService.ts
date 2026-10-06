@@ -19,8 +19,22 @@ export interface Workspace {
   purpose?: string | null
   auto_approve_status?: 'pending' | 'running' | 'done' | 'failed' | null
   resources_count?: number
+  /** How many vaults project this workspace (`workspace_vault`); sent by the list endpoint. */
+  vaults_count?: number
   organization_id?: string | number
   user_owner_id?: string | number
+}
+
+/**
+ * Changing the members of a workspace attached to a vault publishes or
+ * unpublishes outside TYDAL, so it takes `workspaces.manage-vault-resources`
+ * (admins and owners) — WorkspacePolicy::manageResources on the server. The
+ * pickers show such workspaces disabled, with this hint, to anyone without it.
+ */
+export const VAULT_CONNECTED_HINT = 'Shared through a vault — ask an administrator'
+
+export function isVaultConnected(workspace: Pick<Workspace, 'vaults_count'>): boolean {
+  return (workspace.vaults_count ?? 0) > 0
 }
 
 export interface AutoApproveLog {
@@ -175,6 +189,17 @@ class WorkspaceService {
       console.error('Create workspace error:', error)
       return null
     }
+  }
+
+  /**
+   * Open an AiTy Review batch — the system-managed workspace the upload
+   * wizard's Auto mode creates (editors may). Unlike createWorkspace this
+   * throws the SDK's TydalApiError, so the caller can show why it failed.
+   */
+  async createAityReviewBatch(name: string): Promise<Workspace> {
+    const body = await tydal.workspaces.create<{ workspace?: Workspace }>({ name, purpose: 'aity_review' })
+    if (!body?.workspace) throw new Error('The server did not return the new batch.')
+    return body.workspace
   }
 
   async updateWorkspace(id: string, data: { name?: string; description?: string }): Promise<Workspace | null> {

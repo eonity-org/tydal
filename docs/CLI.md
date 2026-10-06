@@ -5,6 +5,10 @@ string them together. All commands run from `backend/`:
 `php artisan <command>`. On the docker application tier run them inside the
 app container: `docker exec -w /var/www/html tydal_app php artisan <command>`
 (the `-w` matters; without it you get `Could not open input file: artisan`).
+`tydal_app` is the default container name; an installation configured with
+`configure.sh … --infra=shared --name=NAME` uses `tydal_NAME_app` (see
+[DEPLOYMENT.md](../DEPLOYMENT.md#several-installations-on-one-server)), and
+`docker compose exec -w /var/www/html app php artisan <command>` works for both.
 Commands that check integrity exit **non-zero on findings**, so they slot into
 CI as-is. For a one-line-per-command cheat sheet with both forms and
 preconditions, see [QUICK_REFERENCE.md](../QUICK_REFERENCE.md); for the shell
@@ -33,7 +37,82 @@ exits non-zero) rather than picking one; resolve it with `search:indexes
 
 ⚠️ ES cannot change an existing field's **type** — after changing a field's
 `es_type`, use `--recreate`, then `search:reindex`. Adding new fields never
-needs it.
+needs it. `--recreate` drops the companion `_chunks` index too, so chunk
+vectors have to be rebuilt afterwards (`search:reconcile --fix` or
+`search:embed`, with a queue worker running).
+
+Every name it creates or drops is the **physical** name, under this
+installation's [`ELASTICSEARCH_INDEX_PREFIX`](#index-prefix-elasticsearch_index_prefix)
+(`search_indexes.index_name` stays the logical, unprefixed name). `--recreate`
+therefore only ever drops this installation's indices.
+
+#### Upgrading: `tika_metadata` no longer indexed (#13)
+
+Resource indices used to map Tika's raw file metadata (`tika_metadata`)
+dynamically. The first file fixed each key's type for the whole index
+(`mapper [tika_metadata.xmpMM:History:When] cannot be changed from type [text]
+to [date]`) and varied XMP pushed the index past the 1000-field limit, so
+resource documents were rejected and went missing from search. The mapping is
+now `{"type": "object", "enabled": false}`: kept in `_source`, never indexed
+(nothing searched on it). A mapping can't be changed in place, so an existing
+index keeps the old one until it is rebuilt. Plain `search:setup-indices`
+leaves `tika_metadata` out of its update on such an index (and logs a warning)
+instead of failing. To apply the fix:
+
+```
+php artisan search:setup-indices --recreate   # this installation's (prefixed) indices only
+php artisan search:reindex
+php artisan search:reconcile --fix            # re-embeds the dropped _chunks (queue worker) — re-run to confirm
+```
+
+If you're also adopting an index prefix, do that instead: it builds fresh
+indices with the new mapping, so the `--recreate` isn't needed (see below).
+
+### Index prefix (`ELASTICSEARCH_INDEX_PREFIX`)
+
+Every physical index name goes through one prefix: collection indices
+(`{prefix}<index_name>`), their chunks (`{prefix}<index_name>_chunks`) and
+vault indices (`{prefix}vault_<uuid>`). Two installations pointed at the same
+cluster (production and staging, several tenants on one Elastic Cloud
+deployment) must use different prefixes. Otherwise they share indices, and
+one installation's `search:wipe-indices`, `--recreate` or `reconcile --fix`
+deletes the other's data.
+
+- Empty (the default) keeps the legacy unprefixed names.
+- Lowercase letters, digits, `_`, `-`, `.`, starting with a letter or digit.
+  A prefix starting with `tydal_` or `vault_` is refused, because an
+  unprefixed installation's wipe pattern (`tydal_*,vault_*`) would match it.
+- Don't pick prefixes where one starts with another installation's
+  `{prefix}tydal_` (e.g. `prod_` and `prod_tydal_x_`).
+- Tests (`phpunit.xml`) force `test_`.
+
+**Moving an existing installation to a prefix.** The new indices start empty
+and are rebuilt from MySQL. Search is incomplete until the reindex finishes.
+
+```
+# 1. backend/.env
+ELASTICSEARCH_INDEX_PREFIX=prod_
+php artisan config:cache          # production (cached config)
+php artisan queue:restart         # workers pick up the new prefix
+
+# 2. build and fill the prefixed indices
+php artisan search:setup-indices
+php artisan search:reindex
+php artisan search:reindex --vault=all
+php artisan search:reconcile --fix   # chunk vectors + metadata chunks (queue worker); re-run until clean
+
+# 3. remove the old unprefixed indices BY HAND, by exact name
+curl 'localhost:9200/_cat/indices/tydal_*,vault_*?v'
+curl -X DELETE 'localhost:9200/tydal_multimedia,tydal_multimedia_chunks,vault_0198…'
+```
+
+Step 2 re-embeds every chunk, which calls the embedding provider. To skip
+that, copy the old chunk indices with Elasticsearch's `_reindex` API
+(`{"source": {"index": "tydal_multimedia_chunks"}, "dest": {"index":
+"prod_tydal_multimedia_chunks"}}`) after `search:setup-indices` and before
+deleting them. Step 3 is manual on purpose: don't use `search:wipe-indices`
+for it (it now targets `prod_tydal_*,prod_vault_*`), and on a shared cluster,
+check each name belongs to this installation before deleting it.
 
 You rarely need to run this by hand for a *new* collection: `CollectionService::createCollection`
 (used by both the admin UI and the seeders) already provisions the collection's
@@ -122,6 +201,11 @@ php artisan search:reconcile --fix            # reindex missing/stale, purge orp
 php artisan search:reconcile --collection=1   # scope to one collection
 ```
 
+It lists and purges only this installation's physical (prefixed) indices. With
+an empty prefix on a cluster shared with another unprefixed installation, the
+other installation's documents look orphaned and `--fix` would delete them.
+Set a prefix first.
+
 ### `search:embed`
 
 Dispatch `EmbedFileChunks` jobs for files that have extracted text — backfill
@@ -139,7 +223,16 @@ Each completed job also refreshes the resource-level mean embedding
 
 ### `search:wipe-indices`
 
-**DEV ONLY.** Deletes every `tydal_*`/`vault_*` Elasticsearch index outright.
+**DEV ONLY.** Deletes every `{prefix}tydal_*`/`{prefix}vault_*` Elasticsearch
+index outright, where `{prefix}` is [`ELASTICSEARCH_INDEX_PREFIX`](#index-prefix-elasticsearch_index_prefix).
+With a prefix, only this installation's indices match. With the default empty
+prefix the pattern is `tydal_*,vault_*`, which also matches **any other
+unprefixed installation on the same cluster**, and the command warns. It never
+matches a prefixed installation (a prefix can't start with `tydal_`/`vault_`).
+Never run it, or `first_install.sh`, against a cluster another unprefixed
+installation uses. (A shared-infrastructure installation, `configure.sh
+--infra=shared --name=NAME`, always has the prefix `NAME_`.)
+
 Exists because `migrate:fresh` only touches MySQL — Elasticsearch is a
 separate service with no hook into Laravel's migrator, so an index for a
 scheme/vault that isn't recreated by whatever runs *after* a `migrate:fresh`
@@ -411,15 +504,44 @@ never changed; `--curator-password` is ignored for it, with a warning.
 | `resource:prune` | daily 03:00 | permanently delete abandoned drafts (`--draft-hours=24`) and expired soft-deletes (`--deleted-days=30`); `--dry-run` supported |
 | `files:purge-uncommitted` | daily 03:30 | hard-delete files left by crashed edit sessions (`--older-than=24` hours) |
 | `resources:purge-drafts` | hourly | hard-delete abandoned create-mode drafts (`--older-than=1` hour) |
+| `aity:purge-batches` | daily 04:00 | delete AiTy Review batches reviewed or finished more than `AITY_BATCH_RETENTION_DAYS` (30) days ago — the batch workspace only, never its resources (`--days=N`, `0` disables; `--dry-run`) |
 | `aity:purge-stale` | manual | mark stale AITY file states failed and purge matching Redis jobs (`--hours=24 --queue=default --dry-run`) |
 
 The scheduler needs `php artisan schedule:work` (dev) or a system cron
 running `php artisan schedule:run` every minute (prod, see
 [DEPLOYMENT.md](../DEPLOYMENT.md#scheduler-cron)). In dev, `start.sh` takes
 care of it and prints a notice saying where the daemon runs. On the docker tier
-that's the `tydal_scheduler` compose service, toggled with app/queue by
+that's the `tydal_scheduler` compose service (`tydal_NAME_scheduler` on a
+shared-infrastructure installation), toggled with app/queue by
 `configure.sh`. On the host tier it's a background `schedule:work` that stops
 with Ctrl-C. Check what's scheduled with `php artisan schedule:list`.
+
+### `aity:purge-batches`
+
+Every Auto upload opens an AiTy Review batch, so the AiTy Review page grows by
+one row per upload. This command deletes the old ones:
+
+```bash
+php artisan aity:purge-batches             # retention from AITY_BATCH_RETENTION_DAYS (default 30)
+php artisan aity:purge-batches --days=7    # override the retention for this run
+php artisan aity:purge-batches --dry-run   # list what would go, delete nothing
+```
+
+A batch is deleted when it was **reviewed** (opened with *Review* on the AiTy
+Review page) or its **auto-approve job ended** (done or failed), and that
+happened more than N days ago — counted from the review date, or from the
+batch's last change when it was never opened. Batches whose job is still
+waiting or running, or whose resources are still being analysed, are kept, and
+so is any batch nobody has reviewed yet in manual mode.
+
+AiTy Review batches are deleted automatically 30 days after they were reviewed
+or finished (an administrator can change the period); only the batch goes, the
+resources stay in the library and in every other workspace.
+
+Deleting a batch goes through the same path as its Delete button
+(`WorkspaceService::deleteWorkspace`): the membership rows are detached and the
+members reindexed. `AITY_BATCH_RETENTION_DAYS=0` (or `--days=0`) turns the
+cleanup off.
 
 ## Debug helpers
 

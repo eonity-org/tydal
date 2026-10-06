@@ -10,8 +10,16 @@
 # Repeatable.
 #
 # WARNING: this DROPS and recreates the database (migrate:fresh) AND wipes
-# every tydal_*/vault_* Elasticsearch index. Dev only. It asks for confirmation
+# every {prefix}tydal_*/{prefix}vault_* Elasticsearch index (prefix =
+# ELASTICSEARCH_INDEX_PREFIX; empty also hits any other unprefixed
+# installation on the same cluster). Dev only. It asks for confirmation
 # first unless you pass -f/--force.
+#
+# Shared infrastructure (configure.sh --infra=shared --name=NAME, #23): the
+# reset is scoped to THIS installation — its own database tydal_NAME (the
+# tydal_NAME user can't reach any other), its own index prefix NAME_ (the
+# scoped wipe from #14), and its own Redis keys (prefix tydal_NAME_ in its own
+# DB numbers). Other installations' data and the shared services are untouched.
 #
 # Assumes the stack is already up — run tools/deploy/start.sh first (it owns
 # service startup). first_install only connects; it does NOT start Docker or services.
@@ -28,11 +36,17 @@ usage() {
   cat <<'EOF'
 Usage: first_install.sh [-f|--force] [--collections=LIST] [-h|--help]
 
-DESTRUCTIVE dev reset: wipes every tydal_*/vault_* Elasticsearch index, then
+DESTRUCTIVE dev reset: wipes every {prefix}tydal_*/{prefix}vault_* Elasticsearch
+index (ELASTICSEARCH_INDEX_PREFIX), then
 migrate:fresh (DROPS the database) + seeds minimal data. Tier-aware (runs
 artisan in the app container for the docker tier, on the host otherwise).
 Requires the stack to be up — run start.sh first; first_install does not start
 services.
+
+On a shared-infrastructure installation (configure.sh --infra=shared
+--name=NAME) only this installation is reset: database tydal_NAME, indices
+NAME_*, and its Redis keys (tydal_NAME_* in its Redis DBs) — never another
+installation's data.
 
 Once the schema seeder has run, interactively asks which starter collection(s)
 to also create — optional, TYDAL works with none. The menu is built from
@@ -59,9 +73,18 @@ for arg in "$@"; do
   esac
 done
 
+. "$SCRIPT_DIR/../lib/stack.lib.sh"
+stack_load "$ROOT"
+
 # --- confirmation (skipped with -f/--force): this DROPS the database ---
 if [ "$FORCE" = false ]; then
-  echo "⚠️  first_install.sh will wipe every tydal_*/vault_* Elasticsearch index, DROP"
+  if [ "$TYDAL_INFRA_MODE" = "shared" ]; then
+    echo "Shared-infrastructure installation '$TYDAL_INSTALLATION': only its own database"
+    echo "($(stack_env_get DB_DATABASE "$BACKEND_DIR/.env")), indices ($(stack_env_get ELASTICSEARCH_INDEX_PREFIX "$BACKEND_DIR/.env")*) and Redis keys"
+    echo "($(stack_env_get REDIS_PREFIX "$BACKEND_DIR/.env")*) are reset; other installations are untouched."
+  fi
+  echo "⚠️  first_install.sh will wipe every {prefix}tydal_*/{prefix}vault_* Elasticsearch index"
+  echo "    (prefix = ELASTICSEARCH_INDEX_PREFIX; empty = every unprefixed TYDAL index on the cluster), DROP"
   echo "    and recreate the database (migrate:fresh), and reseed minimal data —"
   echo "    all current resources/users/search data are lost."
   if [ -t 0 ]; then
@@ -99,9 +122,9 @@ artisan() {
 
 # Precondition: the stack must be up (start.sh owns startup). Fail fast with a
 # hint rather than a raw connection stack trace.
+# (infra_mysql_ping: this stack's MySQL, or the shared infrastructure's.)
 stack_up() {
-  docker compose -f "$COMPOSE" exec -T mysql \
-    mysqladmin ping -h localhost -u root -psecret --silent >/dev/null 2>&1 || return 1
+  infra_mysql_ping || return 1
   if [ "$INFRA" = "docker" ]; then
     docker compose -f "$COMPOSE" exec -T -w /var/www/html app php -v >/dev/null 2>&1 || return 1
   fi
@@ -129,6 +152,28 @@ fi
 # orphaned, pointing at MySQL rows that no longer exist. Wipe ES first so the
 # reset is actually complete.
 artisan search:wipe-indices --force
+
+# Shared infrastructure: drop this installation's Redis keys (queued jobs,
+# cache, sessions, locks) so no stale job outlives the reset. Scoped twice:
+# only its own DB numbers, and only keys under its own prefix — even if two
+# installations were given the same slot, the other one's keys survive.
+# (An own-infrastructure install keeps today's behaviour: Redis untouched.)
+if [ "$TYDAL_INFRA_MODE" = "shared" ]; then
+  REDIS_KEY_PREFIX="$(stack_env_get REDIS_PREFIX "$BACKEND_DIR/.env")"
+  case "$REDIS_KEY_PREFIX" in
+    tydal_?*_) ;;
+    *) echo "first_install.sh: REDIS_PREFIX='$REDIS_KEY_PREFIX' in backend/.env isn't a shared-installation prefix (tydal_NAME_) — not touching Redis." >&2
+       REDIS_KEY_PREFIX="" ;;
+  esac
+  if [ -n "$REDIS_KEY_PREFIX" ]; then
+    for _db in "$(stack_env_get REDIS_DB "$BACKEND_DIR/.env")" "$(stack_env_get REDIS_CACHE_DB "$BACKEND_DIR/.env")"; do
+      case "$_db" in ''|*[!0-9]*) continue ;; esac
+      _n="$(infra_redis_del_prefix "$_db" "$REDIS_KEY_PREFIX")" || _n="?"
+      echo "Redis DB $_db: cleared $_n key(s) under ${REDIS_KEY_PREFIX}*"
+    done
+  fi
+fi
+
 artisan migrate:fresh
 artisan storage:link
 artisan db:seed --class=CollectionSchemaSeeder
