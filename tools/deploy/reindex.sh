@@ -51,9 +51,11 @@ artisan() {
 }
 
 # Precondition: the stack must be up (start.sh owns startup).
+# (infra_mysql_ping: this stack's MySQL, or the shared infrastructure's — #23.)
+. "$SCRIPT_DIR/../lib/stack.lib.sh"
+stack_load "$ROOT"
 stack_up() {
-  docker compose -f "$COMPOSE" exec -T mysql \
-    mysqladmin ping -h localhost -u root -psecret --silent >/dev/null 2>&1 || return 1
+  infra_mysql_ping || return 1
   if [ "$INFRA" = "docker" ]; then
     docker compose -f "$COMPOSE" exec -T -w /var/www/html app php -v >/dev/null 2>&1 || return 1
   fi

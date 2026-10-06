@@ -6,7 +6,11 @@
 # scheduled maintenance jobs (bootstrap/app.php). Ctrl-C stops the host
 # processes (Docker keeps running). Re-running the script reloads already-running
 # Docker app/queue containers so they pick up code and .env changes. Does not
-# manage Ollama or seed the DB. See README.md.
+# manage Ollama or seed the DB. Names and ports follow the installation (root
+# .env, tools/lib/stack.lib.sh): tydal_app/:8000/tydal_vite/:3005 by default; a
+# shared-infrastructure installation (configure.sh --infra=shared --name=NAME)
+# starts only its own app services and needs the infrastructure stack up.
+# See README.md.
 set -euo pipefail
 
 usage() {
@@ -15,10 +19,15 @@ Usage: start.sh [-h|--help]
 
 Serve a dev instance (topology-aware, no config args). Brings the stack up; on
 host runs artisan serve + queue + scheduler (schedule:work) + Vite, on docker
-runs only Vite (the tydal_scheduler container runs the scheduler). Ctrl-C stops
+runs only Vite (the <stack>_scheduler container runs the scheduler). Ctrl-C stops
 host processes but leaves Docker running. Re-running this script reloads an
 already-running Docker app + queue so code and .env changes take effect. Run
 first_install.sh first to seed. See tools/deploy/README.md.
+
+Names and ports come from the root .env written by configure.sh: by default
+tydal_app / tydal_scheduler / tydal_vite, app :8000, Vite :3005. A shared-
+infrastructure installation (--infra=shared --name=NAME) uses tydal_NAME_*
+and offset ports, and expects the infrastructure stack to be running already.
 
   -h, --help   show this help and exit
 EOF
@@ -31,6 +40,10 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 COMPOSE="$ROOT/docker-compose.yml"
+. "$SCRIPT_DIR/../lib/stack.lib.sh"
+stack_load "$ROOT"
+VITE_CONTAINER="$(stack_container vite)"
+SCHEDULER_CONTAINER="$(stack_container scheduler)"
 
 # --- ensure Docker is running (best effort, portable) ---
 if ! docker info >/dev/null 2>&1; then
@@ -55,7 +68,22 @@ if printf '%s\n' "$RUNNING_SERVICES" | grep -qx 'app' || \
   DOCKER_APP_WAS_RUNNING=true
 fi
 
-docker compose -f "$COMPOSE" up -d --remove-orphans
+if [ "$TYDAL_INFRA_MODE" = "shared" ]; then
+  # Shared infrastructure: MySQL/ES/Redis/Tika belong to another stack, which
+  # this script doesn't start (that stack's own start.sh / compose does).
+  if ! infra_running; then
+    echo "Shared infrastructure: $(infra_container mysql) isn't running." >&2
+    echo "Start the infrastructure stack first (in its checkout: tools/deploy/start.sh" >&2
+    echo "or docker compose up -d), then re-run this script." >&2
+    exit 1
+  fi
+  echo "Shared infrastructure from the '$TYDAL_INFRA_STACK' stack; installation '$TYDAL_INSTALLATION' ($TYDAL_STACK)."
+fi
+# A shared installation on the host tier has no Compose services of its own.
+if [ "$TYDAL_INFRA_MODE" != "shared" ] || \
+   [ -n "$(docker compose -f "$COMPOSE" config --services 2>/dev/null)" ]; then
+  docker compose -f "$COMPOSE" up -d --remove-orphans
+fi
 
 # In the `docker` topology the app + queue run in containers, so running artisan
 # serve / queue:work on the host would clash on port 8000 and fail to resolve
@@ -82,7 +110,7 @@ cleanup() {
     done
   fi
   # Vite fallback container (Docker-only hosts) — remove if it survived Ctrl-C.
-  docker rm -f tydal_vite >/dev/null 2>&1 || true
+  docker rm -f "$VITE_CONTAINER" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
 
@@ -91,11 +119,11 @@ if [ "$INFRA" = "docker" ]; then
     echo "Reloading app + queue containers so code and .env changes take effect…"
     docker compose -f "$COMPOSE" restart app queue
   fi
-  echo "Application tier: docker — backend (app + queue + scheduler) runs in containers at http://localhost:8000."
+  echo "Application tier: docker — backend (app + queue + scheduler) runs in containers at http://localhost:$TYDAL_HTTP_PORT."
   echo "Starting only the Vite dev server on the host (Ctrl-C stops it; containers keep running)."
 else
   cd "$ROOT/backend"
-  php -d upload_max_filesize=300M -d post_max_size=310M artisan serve &
+  php -d upload_max_filesize=300M -d post_max_size=310M artisan serve --port="$TYDAL_HTTP_PORT" &
   pids+=($!)
   php artisan queue:work --timeout=300 &
   pids+=($!)
@@ -111,10 +139,10 @@ echo "⏱  Scheduler: resource:prune (daily 03:00), files:purge-uncommitted (dai
 echo "   and resources:purge-drafts (hourly) run ONLY while the scheduler daemon"
 echo "   (php artisan schedule:work) is running."
 if [ "$INFRA" = "docker" ]; then
-  if [ "$(docker inspect -f '{{.State.Running}}' tydal_scheduler 2>/dev/null)" = "true" ]; then
-    echo "   ✓ Running in the tydal_scheduler container (restarts with Docker)."
+  if [ "$(docker inspect -f '{{.State.Running}}' "$SCHEDULER_CONTAINER" 2>/dev/null)" = "true" ]; then
+    echo "   ✓ Running in the $SCHEDULER_CONTAINER container (restarts with Docker)."
   else
-    echo "   ⚠ The tydal_scheduler container is NOT running, so maintenance is not happening." >&2
+    echo "   ⚠ The $SCHEDULER_CONTAINER container is NOT running, so maintenance is not happening." >&2
     echo "     Re-run tools/deploy/configure.sh <ai> docker to enable it in docker-compose.yml," >&2
     echo "     or start it by hand: docker compose -f \"$COMPOSE\" up -d scheduler" >&2
   fi
@@ -130,17 +158,20 @@ echo
 # Plain port mapping (works on every Docker install — no host-networking
 # feature needed); the dev proxy's backend target moves to host.docker.internal
 # because the container's own localhost:8000 is not the backend
-# (frontend/vite.config.ts reads TYDAL_BACKEND_URL).
+# (frontend/vite.config.ts reads TYDAL_BACKEND_URL). Vite's own port and the
+# default proxy target follow TYDAL_VITE_PORT / TYDAL_HTTP_PORT.
+export TYDAL_VITE_PORT TYDAL_HTTP_PORT
 if command -v npm >/dev/null 2>&1; then
   cd "$ROOT/frontend"
   npm run dev
 else
   echo "npm not found on host — running Vite in a ${TYDAL_NODE_IMAGE:-node:22} container (Ctrl-C stops it)."
   # Clear any leftover container from a previous run that didn't clean up (e.g. a
-  # hard kill) — otherwise `docker run --name tydal_vite` fails with a name conflict.
-  docker rm -f tydal_vite >/dev/null 2>&1 || true
-  docker run --rm --name tydal_vite -p 3005:3005 \
-    -e TYDAL_BACKEND_URL="${TYDAL_BACKEND_URL:-http://host.docker.internal:8000}" \
+  # hard kill) — otherwise `docker run --name <stack>_vite` fails with a name conflict.
+  docker rm -f "$VITE_CONTAINER" >/dev/null 2>&1 || true
+  docker run --rm --name "$VITE_CONTAINER" -p "$TYDAL_VITE_PORT:$TYDAL_VITE_PORT" \
+    -e TYDAL_VITE_PORT="$TYDAL_VITE_PORT" \
+    -e TYDAL_BACKEND_URL="${TYDAL_BACKEND_URL:-http://host.docker.internal:$TYDAL_HTTP_PORT}" \
     -v "$ROOT":/app -v tydal_npm_cache:/root/.npm -w /app/frontend \
     "${TYDAL_NODE_IMAGE:-node:22}" npm run dev
 fi

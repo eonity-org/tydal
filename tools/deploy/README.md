@@ -29,9 +29,15 @@ at the right hosts for your choices.
 Two arguments pick tiers 1 and 2; tier 3 is fixed:
 
 ```
-configure.sh  <cloud | ollama-host | ollama-docker>   <host | docker>
-              └────────── AI tier ──────────┘         └─ application ─┘
+configure.sh  <cloud | ollama-host | ollama-docker>   <host | docker>   [--infra=own|shared] [--name=NAME]
+              └────────── AI tier ──────────┘         └─ application ─┘ └──── backing services ────┘
 ```
+
+The optional third choice is whose backing services these are: `--infra=own`
+(default — this checkout runs them, as always) or `--infra=shared --name=NAME`
+(use the ones another checkout on the same machine runs; NAME keeps the
+database, indices, Redis keys, containers and ports apart). See
+[DEPLOYMENT.md — Several installations on one server](../../DEPLOYMENT.md#several-installations-on-one-server).
 
 For production or any layout the scripts don't cover, edit `docker-compose.yml`
 and `backend/.env` directly — they remain the source of truth. The scripts only
@@ -46,7 +52,8 @@ tools/deploy/start.sh                       # terminal 1: bring up services + se
 tools/deploy/first_install.sh               # terminal 2: seed DB + build search index
 ```
 
-Frontend → <http://localhost:3005> · API → <http://localhost:8000>. The seeded
+Frontend → <http://localhost:3005> · API → <http://localhost:8000> (a shared
+installation: the offset ports `configure.sh` printed). The seeded
 superadmin login is printed at the end of `first_install.sh`.
 
 > **`start.sh` is the single entry point that brings the stack up** (it starts the
@@ -110,14 +117,15 @@ the root wrappers `./install.sh` / `./configure.sh` / `./start.sh`).
 
 | Script | Purpose |
 |---|---|
-| `install.sh <ai> <app> [-f] [--no-force-env]` | One-time setup: install deps, build frontend, write `backend/.env` to match your tiers, recreate containers. Both tier args **required**. Asks to continue (rewrites `.env`, restarts services) — `-f` skips the prompt. |
-| `configure.sh <ai> <app> [-f] [--no-force-env]` | Switch tiers without rebuilding: rewrites `backend/.env` (default; backup + secrets kept) and toggles compose services. Config only. Both tier args **required**; asks to continue unless `-f`. |
-| `first_install.sh [-f] [--collections=LIST]` | **DESTRUCTIVE, dev only.** Wipes every `{prefix}tydal_*`/`{prefix}vault_*` Elasticsearch index — prefix = `ELASTICSEARCH_INDEX_PREFIX`; with it empty, that includes any other unprefixed installation on the same cluster (`search:wipe-indices` — `migrate:fresh` never touches ES, so this is what makes the reset actually complete), then `migrate:fresh` (drops the DB) and unconditionally seeds the minimal usable baseline (superadmin, organization, default workspace, system collection schemes) — TYDAL works with zero collections at that point. Then, optionally, asks which starter collection(s) to also create (menu built from `schema:starter-options`, default "0) None" — see [`docs/CLI.md`](../../docs/CLI.md)); each one provisions its own ES index the moment it's created. `--collections=multimedia,documents` skips the prompt and creates those. Requires the stack up (run `start.sh` first); does not start services. Asks to continue — `-f` skips (defaults to no starter collection, same minimal baseline). |
-| `start.sh` | *Serve.* Brings the stack up; on `host` runs `artisan serve` + queue + scheduler (`schedule:work`) + Vite, on `docker` runs only Vite (app/queue/scheduler are containers). Prints a notice that the scheduler daemon must be running for the scheduled maintenance, and warns if the `tydal_scheduler` container isn't. Ctrl-C stops host processes; re-running it reloads already-running Docker app/queue containers so code and `.env` changes take effect. |
+| `install.sh <ai> <app> [--infra=own\|shared] [--name=NAME] [-f] [--no-force-env] [--fresh]` | One-time setup: install deps, build frontend, write `backend/.env` to match your tiers, recreate containers. Both tier args **required**; the infrastructure flags are passed to `configure.sh`. Asks to continue (rewrites `.env`, restarts services) — `-f` skips the prompt. |
+| `configure.sh <ai> <app> [--infra=own\|shared] [--name=NAME] [-f] [--no-force-env]` | Switch tiers without rebuilding: rewrites `backend/.env` (default; backup + secrets kept) and toggles compose services. Config only. Both tier args **required**; asks to continue unless `-f`. `--infra=shared --name=NAME` (#23) also writes the root `.env` (Compose project `tydal_NAME`, containers `tydal_NAME_*`, offset ports, the infrastructure stack's network), points `backend/.env` at database/user `tydal_NAME`, index prefix `NAME_` and its own Redis prefix/DBs, and runs `provision-shared.sh`. Extra shared flags: `--slot=N` (1–7: ports `8000/3005 + 100·N`, Redis DBs `2N/2N+1`), `--infra-stack=S` (default `tydal`), `--infra-network=NET`, `--no-provision`. `--infra=own` on a formerly shared checkout retires the root `.env`. |
+| `provision-shared.sh [--dry-run]` | Shared installations only: create `tydal_NAME`, `tydal_NAME_test` and user `tydal_NAME` (privileges on those two only) in the infrastructure's MySQL (`<infra-stack>_mysql`, root password from that container's `MYSQL_ROOT_PASSWORD`). Idempotent — also re-syncs the password with `backend/.env`. `--dry-run` prints the SQL. Run by `configure.sh`; run it by hand if the infrastructure wasn't up then. |
+| `first_install.sh [-f] [--collections=LIST]` | **DESTRUCTIVE, dev only.** Wipes every `{prefix}tydal_*`/`{prefix}vault_*` Elasticsearch index — prefix = `ELASTICSEARCH_INDEX_PREFIX`; with it empty, that includes any other unprefixed installation on the same cluster (`search:wipe-indices` — `migrate:fresh` never touches ES, so this is what makes the reset actually complete), then `migrate:fresh` (drops the DB) and unconditionally seeds the minimal usable baseline (superadmin, organization, default workspace, system collection schemes) — TYDAL works with zero collections at that point. Then, optionally, asks which starter collection(s) to also create (menu built from `schema:starter-options`, default "0) None" — see [`docs/CLI.md`](../../docs/CLI.md)); each one provisions its own ES index the moment it's created. `--collections=multimedia,documents` skips the prompt and creates those. Requires the stack up (run `start.sh` first); does not start services. Asks to continue — `-f` skips (defaults to no starter collection, same minimal baseline). On a shared installation it resets only that installation: database `tydal_NAME`, indices `NAME_*`, and the `tydal_NAME_*` keys in its Redis DBs. |
+| `start.sh` | *Serve.* Brings the stack up; on `host` runs `artisan serve` + queue + scheduler (`schedule:work`) + Vite, on `docker` runs only Vite (app/queue/scheduler are containers). Prints a notice that the scheduler daemon must be running for the scheduled maintenance, and warns if the `tydal_scheduler` container (`tydal_NAME_scheduler` on a shared installation) isn't. Ctrl-C stops host processes; re-running it reloads already-running Docker app/queue containers so code and `.env` changes take effect. Names and ports come from the root `.env` (default `tydal_*`, `:8000`, Vite `tydal_vite` `:3005`); a shared installation starts only its app services and refuses to run until the infrastructure stack is up. |
 | `reload.sh` | Apply code/`.env` changes by restarting the worker (`docker compose restart` / `queue:restart`). Non-destructive. |
 | `reindex.sh` | Rebuild the Elasticsearch index + embeddings only; leaves the DB intact. Requires the stack up (run `start.sh` first). Use after an embedding-model change. |
 | `install_mcp.sh` | Build `@tydal/org-mcp` and `@tydal/vault-mcp` (`dist/index.js`) for use with an MCP client (Claude Desktop, Claude Code, Cursor, …) — see `mcp.example.json` / `mcp.docker.example.json` and `docs/CONNECTING_MCP_CLIENTS.md`. Not run by `install.sh` (most devs don't need either MCP server); run this once you do, and again after pulling changes to `org-mcp/` or `vault-mcp/`. |
-| `test.sh [--backend-only] [-- PEST_ARGS…]` | Run the backend Pest suite against the separate **`tydal_test`** database (created on first run; your dev `tydal` database is **not** touched), then the `@tydal/client`, `@tydal/org-mcp` and `@tydal/vault-mcp` Vitest suites. Every suite runs; the script exits 1 if any failed. `-- --filter=Name` narrows Pest. Requires the stack up. |
+| `test.sh [--backend-only] [-- PEST_ARGS…]` | Run the backend Pest suite against the separate **`tydal_test`** database (created on first run; your dev `tydal` database is **not** touched; a shared installation uses `tydal_NAME_test` and index prefix `NAME_test_`, passed to `tests/bootstrap.php` as `TYDAL_TEST_DB_DATABASE` / `TYDAL_TEST_INDEX_PREFIX`), then the `@tydal/client`, `@tydal/org-mcp` and `@tydal/vault-mcp` Vitest suites. Every suite runs; the script exits 1 if any failed. `-- --filter=Name` narrows Pest. Requires the stack up. |
 
 `-f/--force` skips the confirmation in `install.sh`/`first_install.sh`; non-interactive
 shells (CI) must pass it.
@@ -131,7 +139,9 @@ shells (CI) must pass it.
   ollama pull llama3.2 && ollama pull llama3.2-vision   # chat + vision
   ```
 - **`ollama-docker`** — `configure.sh` enables the `ollama` service. Once it is
-  running, pull the embedding, text, and vision models:
+  running, pull the embedding, text, and vision models (`tydal_ollama` by
+  default; a shared installation uses the infrastructure stack's, e.g.
+  `tydal_ollama` of the main checkout):
   ```bash
   docker exec tydal_ollama ollama pull mxbai-embed-large
   docker exec tydal_ollama ollama pull llama3.2

@@ -8,6 +8,26 @@ All notable changes to TYDAL are documented here. The format follows
 
 ### Added
 
+- **Several installations on one server** (#23): `configure.sh <ai> <host|docker>
+  --infra=shared --name=NAME` (also accepted by `install.sh`) makes a checkout
+  use another checkout's running MySQL, Elasticsearch, Kibana, Tika and Redis
+  instead of starting its own. NAME derives what must differ: database and user
+  `tydal_NAME` (test database `tydal_NAME_test`), index prefix `NAME_`, Redis
+  prefix `tydal_NAME_` plus its own Redis DB numbers, session cookie,
+  containers `tydal_NAME_*` (Compose project `tydal_NAME`), and app/Vite ports
+  offset by 100·slot. The infrastructure services carry a Compose profile that
+  is empty (always on) by default and switched on only in shared mode; on the
+  docker tier the app services join the infrastructure stack's network.
+  New `tools/deploy/provision-shared.sh` creates the database, test database
+  and user (idempotent, `--dry-run`); `start.sh`, `test.sh`,
+  `first_install.sh` (resets only that installation's database, indices and
+  Redis keys), `install.sh` and `reindex.sh` follow the configured names via
+  `tools/lib/stack.lib.sh`. Container names and host ports in
+  `docker-compose.yml` are now variables (`TYDAL_STACK`, `TYDAL_HTTP_PORT`, …)
+  whose defaults are the old literals, so `--infra=own` (the default) is
+  unchanged. Tests take a per-installation database and index prefix from
+  `TYDAL_TEST_DB_DATABASE` / `TYDAL_TEST_INDEX_PREFIX` (`tests/bootstrap.php`).
+  DEPLOYMENT.md: "Several installations on one server".
 - **`ELASTICSEARCH_INDEX_PREFIX`** (#14): a per-installation prefix applied to
   every physical index name — collection indices, their `_chunks`
   companions and `vault_<uuid>` — through one helper,

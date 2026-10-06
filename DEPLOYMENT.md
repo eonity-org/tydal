@@ -8,6 +8,9 @@ end, in two modes:
   in the two MCP servers, plus the commands you'll run again later and the
   common gotchas.
 - **[Production](#production-deployment)** — nginx + PHP-FPM on a server/VM.
+- **[Several installations on one server](#several-installations-on-one-server)**
+  — production + staging, or dev + a clean test install, sharing one MySQL /
+  Elasticsearch / Redis (`configure.sh … --infra=shared --name=NAME`).
 
 TYDAL is a monorepo with two independent subprojects, plus two MCP servers:
 
@@ -95,7 +98,8 @@ one they read and write the same indices, and one installation's
 `search:wipe-indices` (run by `first_install.sh`),
 `search:setup-indices --recreate` or `search:reconcile --fix` deletes the
 other's data. With a prefix, those commands only reach this installation's
-indices.
+indices. A [shared-infrastructure installation](#several-installations-on-one-server)
+gets `NAME_` from `configure.sh --infra=shared --name=NAME`.
 
 Allowed: lowercase letters, digits, `_`, `-`, `.`, starting with a letter or
 digit, and not starting with `tydal_` or `vault_`. To move an existing
@@ -164,6 +168,11 @@ matching `backend/.env`:
 Example — cloud AI, app on the host: `./install.sh cloud host`. Both args are
 **required**; run `./install.sh --help` for the rest.
 
+A third, optional choice is the **infrastructure**: `--infra=own` (the default:
+this checkout runs its own MySQL/Elasticsearch/Kibana/Tika/Redis) or
+`--infra=shared --name=NAME` (use the ones another checkout on the same machine
+already runs). See [Several installations on one server](#several-installations-on-one-server).
+
 This installs deps, builds the frontend, and **writes `backend/.env`** from a
 template matching your tiers (a timestamped backup is kept; existing secrets
 carry over on a re-run). Pass `-f` to skip the confirmation prompt (required
@@ -223,6 +232,10 @@ with **zero collections**.
 
 It then interactively asks which starter collection(s) to also create
 (default: none); each one it creates provisions its own ES index immediately.
+
+On a [shared-infrastructure installation](#several-installations-on-one-server)
+the reset only reaches that installation: its own database, its own index
+prefix and its own Redis keys.
 Skip the prompt with:
 
 ```bash
@@ -238,8 +251,8 @@ left the password blank.
 
 | Service | URL |
 |---------|-----|
-| Frontend | http://localhost:3005 |
-| Backend API | http://localhost:8000/api/v1 |
+| Frontend | http://localhost:3005 (a shared installation: its `TYDAL_VITE_PORT`) |
+| Backend API | http://localhost:8000/api/v1 (a shared installation: its `TYDAL_HTTP_PORT`) |
 | Elasticsearch | http://localhost:9200 |
 | Kibana (index inspection) | http://localhost:5601 |
 | Tika | http://localhost:9998 |
@@ -284,7 +297,9 @@ ollama pull mxbai-embed-large              # embeddings — 1024-dim, matches EM
 ollama pull llama3.2 llama3.2-vision       # chat + vision
 ```
 
-**`ollama-docker`** (`configure.sh` already enabled the `ollama` service):
+**`ollama-docker`** (`configure.sh` already enabled the `ollama` service;
+`tydal_ollama` is the default name — a shared installation uses the
+infrastructure stack's Ollama, `<infra-stack>_ollama`):
 ```bash
 docker exec tydal_ollama ollama pull mxbai-embed-large
 docker exec tydal_ollama ollama pull llama3.2
@@ -350,6 +365,109 @@ when the host has no npm (override the image with `TYDAL_NODE_IMAGE`). Note
 this branch writes Linux-native `node_modules` into the checkout; if you
 later install Node on the host, `rm -rf node_modules` and reinstall. See
 [`tools/deploy/README.md`](tools/deploy/README.md) for the full detail.
+
+---
+
+## Several installations on one server
+
+Production + staging, or your dev copy + a clean test install, can share the
+heavy infrastructure (MySQL, Elasticsearch, Kibana, Tika, Redis) instead of
+each running a full stack. One checkout runs the infrastructure as usual
+(**own** infrastructure, the default); every other checkout is configured as a
+**shared** installation with a short name (#23):
+
+```bash
+./configure.sh <ai-tier> <app-tier> --infra=shared --name=NAME [-f]
+#   or, for a fresh checkout:  ./install.sh <ai-tier> <app-tier> --infra=shared --name=NAME
+```
+
+`NAME`: lowercase letters, digits and `_`, starting with a letter or digit, at
+most 16 characters (not `test`, nothing ending in `_test`, no `tydal`/`vault`
+segment). It derives everything that has to differ:
+
+| | Shared? | Kept apart by |
+|---|---|---|
+| MySQL | ✓ | its own database and user `tydal_NAME` (generated password) and test database `tydal_NAME_test`; the user has privileges on those two only |
+| Elasticsearch | ✓ | `ELASTICSEARCH_INDEX_PREFIX=NAME_` ([above](#one-elasticsearch-several-installations-elasticsearch_index_prefix)); tests use `NAME_test_` |
+| Redis | ✓ | `REDIS_PREFIX=tydal_NAME_` on every key, plus its own DB numbers (`REDIS_DB`/`REDIS_CACHE_DB` = 2·slot / 2·slot+1) |
+| Kibana, Tika | ✓ | nothing to keep apart (stateless / read-only) |
+| app, queue, scheduler, Vite | ✗ | containers `tydal_NAME_app`, `_queue`, `_scheduler`, `_vite`; ports app `8000+100·slot`, Vite `3005+100·slot` |
+| storage (uploads, logs) | ✗ | per checkout, as always |
+
+The **slot** (1–7) is derived from the name; pick one with `--slot=N` when two
+names land on the same one (the ports would clash). `configure.sh` prints it.
+
+What `configure.sh --infra=shared` does:
+
+- writes `backend/.env` as for any tier, plus the values above, `APP_URL` and
+  `SANCTUM_STATEFUL_DOMAINS` on the offset port, and `SESSION_COOKIE=tydal_NAME_session`
+  (cookies ignore ports, so two installations on `localhost` would otherwise
+  overwrite each other's session cookie); `frontend/.env`'s
+  `VITE_API_BASE_URL` follows the offset port;
+- writes the **root `.env`**, Compose's project env file: `COMPOSE_PROJECT_NAME=tydal_NAME`,
+  `TYDAL_STACK`, the ports, `TYDAL_INFRA_STACK` (whose containers hold the
+  infrastructure, default `tydal` → `tydal_mysql`, `tydal_redis`, …;
+  `--infra-stack=` to change), and the switches that keep this checkout's own
+  infrastructure services off (`TYDAL_INFRA_PROFILE=infra`: in
+  `docker-compose.yml` they carry a profile that is empty — always on — by
+  default);
+- on the **docker** app tier, makes the infrastructure stack's network this
+  project's (external) default network, so the app containers reach `mysql`,
+  `elasticsearch`, `redis` and `tika` by service name as usual. The network is
+  detected from `<infra-stack>_mysql`; `--infra-network=` overrides it;
+- on the **host** app tier, `artisan serve` and Vite run on the offset ports and
+  reach the infrastructure on its published `localhost` ports, as always;
+- creates the database, test database and user in the shared MySQL with
+  [`tools/deploy/provision-shared.sh`](tools/deploy/README.md) (idempotent;
+  it authenticates as root with the infrastructure container's own
+  `MYSQL_ROOT_PASSWORD`, which the infrastructure checkout's
+  `docker-compose.yml` sets). If the infrastructure isn't running yet, it says
+  so; run that script once it is (`--dry-run` prints the SQL).
+
+Re-running `configure.sh` keeps the slot and the database password. Going
+back to `--infra=own` retires the root `.env` (a backup is kept). Stop a
+checkout's stack (`docker compose down`) **before** switching it between own
+and shared: Compose doesn't stop services that a new configuration switches off.
+
+**Worked example.** The main checkout `~/tydal` runs the infrastructure; a
+second checkout `~/tydal-staging` joins it as `staging`:
+
+```bash
+# 1. The infrastructure — the main checkout, own mode (nothing new to configure)
+cd ~/tydal
+./start.sh                                  # tydal_mysql, tydal_elasticsearch, …, tydal_app :8000
+
+# 2. The second installation (another terminal)
+cd ~/tydal-staging
+./install.sh cloud docker --infra=shared --name=staging    # or configure.sh on an installed checkout
+./start.sh                                  # only tydal_staging_app/_queue/_scheduler + Vite, on offset ports
+tools/deploy/first_install.sh               # resets tydal_staging, staging_* indices, tydal_staging_* Redis keys only
+tools/deploy/test.sh                        # tydal_staging_test + staging_test_ indices
+```
+
+Starting and stopping: the infrastructure checkout's `./start.sh` /
+`docker compose up -d` / `docker compose down` start and stop the shared
+services — stopping them takes every shared installation down with them. A
+shared installation's `./start.sh` refuses to start until the infrastructure
+is up, and its `docker compose down` only removes its own app containers. On
+the docker tier, artisan runs in its own container:
+`docker exec -w /var/www/html tydal_staging_app php artisan …`.
+
+**Redis caveat.** Redis has no per-database users here: every installation
+can technically read and flush every Redis DB. The prefix and DB numbers
+keep well-behaved code apart (queues, cache, sessions and locks all go
+through the prefixed connections; `first_install.sh` deletes only
+`tydal_NAME_*` keys in its own DBs), but never run `FLUSHALL`, or
+`FLUSHDB`/`cache:clear` against a shared DB number, on a shared Redis. A
+standalone installation keeps Laravel's defaults (DB 0/1,
+`tydal_database_` prefix), so the infrastructure checkout's own app doesn't
+collide with the shared installations either.
+
+Not covered: the infrastructure checkout keeps its fixed host ports (3306,
+9200, …) and the shared installations assume them; the vault client apps
+(`./clients.sh`, ports 3010–3012) and the MCP servers are per machine, not per
+installation — point them at the installation you want with
+`TYDAL_BACKEND_URL` / `TYDAL_BASE_URL`.
 
 ---
 
@@ -595,7 +713,8 @@ entry for the web user does it (`sudo crontab -u www-data -e`):
 ```
 
 Check it with `php artisan schedule:list`. In dev, `start.sh` covers this. The
-docker tier has a `tydal_scheduler` container, and the host tier runs
+docker tier has a `tydal_scheduler` container (`tydal_NAME_scheduler` on a
+[shared installation](#several-installations-on-one-server)), and the host tier runs
 `schedule:work` in the background.
 
 ### 6. Backing services

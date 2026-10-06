@@ -7,7 +7,10 @@ operations (`graph`, `preview`, `ask`, renditions), and the publish system
 steps create.
 
 > **Where things run right now (dev, Docker-only host):** backend `:8000`
-> (`tydal_app` container), SPA `:3005` (via `tools/deploy/start.sh`), and the
+> (`tydal_app` container), SPA `:3005` (via `tools/deploy/start.sh`) — on a
+> shared-infrastructure installation (`configure.sh … --infra=shared
+> --name=NAME`) read `tydal_NAME_app`, `tydal_NAME_queue` and the ports in its
+> root `.env` (`TYDAL_HTTP_PORT`, `TYDAL_VITE_PORT`) instead — and the
 > three vault apps in containers `tydal_gallery` / `tydal_obsidian` /
 > `tydal_aity`. `php artisan …` in this guide means:
 >

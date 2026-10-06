@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# TYDAL — set the AI tier + application tier in backend/.env + docker-compose.yml.
+# TYDAL — set the AI tier + application tier in backend/.env + docker-compose.yml,
+# and whether this installation runs its own infrastructure or shares another
+# checkout's (--infra=own|shared, #23; shared also writes the root .env).
 # Config only: no deps/build, nothing started. See tools/deploy/README.md for the
-# three-tier model. Re-run any time to switch tiers without rebuilding.
+# three-tier model and DEPLOYMENT.md "Several installations on one server".
+# Re-run any time to switch tiers without rebuilding.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -11,7 +14,9 @@ COMPOSE="$ROOT/docker-compose.yml"
 
 usage() {
   cat <<'EOF'
-Usage: configure.sh <cloud|ollama-host|ollama-docker> <host|docker> [-f] [--no-force-env]
+Usage: configure.sh <cloud|ollama-host|ollama-docker> <host|docker>
+                    [--infra=own|shared] [--name=NAME] [-f] [--no-force-env]
+                    [--slot=N] [--infra-stack=STACK] [--infra-network=NET] [--no-provision]
 
 Writes backend/.env and toggles docker-compose.yml to match two tiers (config
 only — no build). Backing services (ES/Tika/MySQL/Redis) are always Docker.
@@ -19,6 +24,25 @@ Both tier args are REQUIRED.
 
   AI  tier   cloud | ollama-host (host, GPU) | ollama-docker (CPU only)
   APP tier   host (PHP/nginx + queue on the host) | docker (in containers)
+
+Infrastructure (several installations on one server — DEPLOYMENT.md):
+  --infra=own       (default) this checkout runs its own MySQL/ES/Kibana/Tika/
+                    Redis under the usual names (tydal_mysql, …, app :8000).
+  --infra=shared    use the infrastructure another checkout runs; requires
+  --name=NAME       NAME: lowercase letters/digits/_ , starts with a letter or
+                    digit, at most 16 chars. Derives database + user tydal_NAME
+                    (test DB tydal_NAME_test), index prefix NAME_, Redis prefix
+                    tydal_NAME_ + its own Redis DBs, containers tydal_NAME_*,
+                    and offset ports. Writes the root .env (Compose's).
+  --slot=N          shared only: 1–7, picks the port offset (app 8000+100·N,
+                    Vite 3005+100·N) and Redis DBs (2N, 2N+1). Default: kept
+                    from a previous run, else derived from NAME.
+  --infra-stack=S   shared only: container-name prefix of the stack running the
+                    infrastructure (default tydal → tydal_mysql, tydal_redis, …)
+  --infra-network=N shared + docker tier: that stack's Docker network (default:
+                    detected from S_mysql, else tydal_default)
+  --no-provision    shared only: don't create the database/user now (run
+                    tools/deploy/provision-shared.sh once the infra is up)
 
   -f, --force       skip the confirmation prompt (required in CI / non-interactive)
   --no-force-env    keep an existing backend/.env instead of rewriting it
@@ -28,6 +52,7 @@ Rewrites backend/.env by default (backup saved, secrets kept) so it matches your
 tiers, then toggles compose — hence the confirmation prompt.
 
 e.g.  configure.sh cloud docker   ·   configure.sh ollama-host host -f
+      configure.sh cloud docker --infra=shared --name=staging
 EOF
 }
 
@@ -37,6 +62,12 @@ OLLAMA_PLACEMENT=""
 INFRA=""
 FORCE=false        # -f/--force : skip the confirmation prompt
 FORCE_ENV=true     # rewrite backend/.env by default; --no-force-env opts out
+INFRA_MODE="own"   # --infra=own|shared (#23)
+NAME=""            # --name=NAME (shared only)
+SLOT=""            # --slot=N (shared only; default: kept, else derived from NAME)
+INFRA_STACK=""     # --infra-stack=S (shared only; default tydal)
+INFRA_NETWORK=""   # --infra-network=N (shared + docker; default: detected)
+PROVISION=true     # --no-provision skips provision-shared.sh
 for arg in "$@"; do
   case "$arg" in
     -h|--help)          usage; exit 0 ;;
@@ -48,6 +79,12 @@ for arg in "$@"; do
     cloud|aicloud)      AI="cloud";  OLLAMA_PLACEMENT="none" ;;
     host|native)        INFRA="host" ;;   # 'native' kept as a deprecated alias
     docker)             INFRA="docker" ;;
+    --infra=*)          INFRA_MODE="${arg#--infra=}" ;;
+    --name=*)           NAME="${arg#--name=}" ;;
+    --slot=*)           SLOT="${arg#--slot=}" ;;
+    --infra-stack=*)    INFRA_STACK="${arg#--infra-stack=}" ;;
+    --infra-network=*)  INFRA_NETWORK="${arg#--infra-network=}" ;;
+    --no-provision)     PROVISION=false ;;
     *) echo "configure.sh: unknown argument '$arg'" >&2; echo >&2; usage >&2; exit 1 ;;
   esac
 done
@@ -57,6 +94,37 @@ if [ -z "$AI" ] || [ -z "$INFRA" ]; then
   echo >&2 
   #usage >&2 
   exit 1
+fi
+
+# --- infrastructure mode (#23) ---
+die() { echo "configure.sh: $*" >&2; exit 1; }
+case "$INFRA_MODE" in
+  own)
+    [ -z "$NAME" ] || die "--name is only for --infra=shared (an own-infrastructure installation keeps the default names)."
+    [ -z "$SLOT$INFRA_STACK$INFRA_NETWORK" ] || die "--slot/--infra-stack/--infra-network are only for --infra=shared."
+    ;;
+  shared)
+    [ -n "$NAME" ] || die "--infra=shared needs --name=NAME (e.g. --name=staging)."
+    # NAME becomes a MySQL database/user (tydal_NAME, tydal_NAME_test), an
+    # Elasticsearch prefix (NAME_), a Redis prefix and container names.
+    printf '%s' "$NAME" | grep -Eq '^[a-z0-9][a-z0-9_]{0,15}$' \
+      || die "--name='$NAME': use lowercase letters, digits and _, starting with a letter or digit, at most 16 characters."
+    case "$NAME" in
+      test|*_test) die "--name='$NAME' would collide with a test database (tydal_test / tydal_<name>_test)." ;;
+      tydal|vault|tydal_*|vault_*|*_tydal|*_vault|*_tydal_*|*_vault_*)
+        die "--name='$NAME': 'tydal'/'vault' segments would blur the index prefix (NAME_) with TYDAL's own index names." ;;
+    esac
+    if [ -n "$SLOT" ]; then
+      case "$SLOT" in [1-7]) ;; *) die "--slot='$SLOT': use 1–7." ;; esac
+    fi
+    INFRA_STACK="${INFRA_STACK:-tydal}"
+    printf '%s' "$INFRA_STACK" | grep -Eq '^[a-zA-Z0-9][a-zA-Z0-9_.-]*$' || die "--infra-stack='$INFRA_STACK' isn't a container-name prefix."
+    [ "$INFRA_STACK" != "tydal_$NAME" ] || die "--infra-stack can't be this installation itself (tydal_$NAME)."
+    ;;
+  *) die "--infra='$INFRA_MODE': use own or shared." ;;
+esac
+if [ "$INFRA_MODE" = "shared" ] && [ "$FORCE_ENV" = false ]; then
+  die "--infra=shared rewrites backend/.env with this installation's identity; drop --no-force-env (secrets are kept, a backup is saved)."
 fi
 
 # Human-readable label for messages, e.g. "ollama-host (GPU)".
@@ -82,6 +150,14 @@ if [ "$FORCE" = false ]; then
     echo "  • leave an existing backend/.env untouched (--no-force-env)"
   fi
   echo "  • toggle the matching docker-compose.yml services"
+  if [ "$INFRA_MODE" = "shared" ]; then
+    echo "  • SHARED infrastructure from the '$INFRA_STACK' stack, as installation '$NAME':"
+    echo "    write the root .env (containers tydal_${NAME}_*, offset ports), point"
+    echo "    backend/.env at database/user tydal_$NAME, index prefix ${NAME}_ and its own"
+    echo "    Redis DBs/prefix$( [ "$PROVISION" = true ] && echo ", and create that database + user in ${INFRA_STACK}_mysql")"
+  elif [ -f "$ROOT/.env" ] && grep -q '^TYDAL_INFRA_MODE=shared' "$ROOT/.env"; then
+    echo "  • back to OWN infrastructure: retire the root .env of the shared setup (backup saved)"
+  fi
   echo
   if [ -t 0 ]; then
     _ans=""; read -r -p "Continue? [y/N] " _ans || true
@@ -192,6 +268,24 @@ toggle_compose_region() {
   mv "$tmp" "$file"
 }
 
+# upsert_env_var KEY VALUE FILE : like set_env_var, but a key the template only
+# carries commented out ("#KEY=…") is uncommented first, and a missing key is
+# appended. For the shared-infrastructure keys, which templates leave commented.
+upsert_env_var() {
+  local key="$1" val="$2" file="$3" tmp
+  if ! grep -q "^${key}=" "$file"; then
+    if grep -q "^#${key}=" "$file"; then
+      tmp="$(mktemp)"
+      awk -v key="$key" '!done && index($0, "#" key "=") == 1 { $0 = substr($0, 2); done = 1 } { print }' "$file" >"$tmp"
+      mv "$tmp" "$file"
+    else
+      printf '%s=%s\n' "$key" "$val" >>"$file"
+      return
+    fi
+  fi
+  set_env_var "$key" "$val" "$file"
+}
+
 # env_get KEY FILE : print KEY's value (inline comment + surrounding quotes
 # stripped). Empty if KEY is absent or commented out.
 env_get() {
@@ -250,12 +344,126 @@ else
   wire_env_hosts "$ROOT/backend/.env" "$INFRA" "$OLLAMA_PLACEMENT"
 fi
 
+# --- shared infrastructure: this installation's identity (#23) ---
+# Everything that must differ between installations sharing one MySQL / ES /
+# Redis is derived from NAME and a small slot number (1–7):
+#   MySQL   database + user tydal_NAME (test database tydal_NAME_test)
+#   ES      ELASTICSEARCH_INDEX_PREFIX=NAME_
+#   Redis   REDIS_PREFIX=tydal_NAME_ on every key (queues, cache, sessions,
+#           locks) AND its own DB numbers REDIS_DB=2·slot, REDIS_CACHE_DB=2·slot+1
+#           (an own-infrastructure install keeps 0/1)
+#   ports   app 8000+100·slot, Vite 3005+100·slot
+#   names   containers tydal_NAME_*, Compose project tydal_NAME
+if [ "$INFRA_MODE" = "shared" ]; then
+  ENV_OUT="$ROOT/backend/.env"
+  SLOT_NOTE="from --slot"
+  if [ -z "$SLOT" ] && [ -f "$ROOT/.env" ] && [ "$(env_get TYDAL_INSTALLATION "$ROOT/.env")" = "$NAME" ]; then
+    SLOT="$(env_get TYDAL_SLOT "$ROOT/.env")"
+    case "$SLOT" in [1-7]) SLOT_NOTE="kept from the previous configuration" ;; *) SLOT="" ;; esac
+  fi
+  if [ -z "$SLOT" ]; then
+    SLOT=$(( $(printf '%s' "$NAME" | cksum | cut -d' ' -f1) % 7 + 1 ))
+    SLOT_NOTE="derived from the name — pass --slot=N if it clashes with another installation"
+  fi
+  HTTP_PORT=$((8000 + 100 * SLOT))
+  VITE_PORT=$((3005 + 100 * SLOT))
+  STACK="tydal_$NAME"
+
+  # Keep the database password across re-runs (the user already exists in the
+  # shared MySQL with it); generate one the first time.
+  DB_PASS=""
+  if [ -n "${BACKUP:-}" ] && [ "$(env_get DB_USERNAME "$BACKUP")" = "$STACK" ]; then
+    DB_PASS="$(env_get DB_PASSWORD "$BACKUP")"
+    printf '%s' "$DB_PASS" | grep -Eq '^[A-Za-z0-9]{12,}$' || DB_PASS=""
+  fi
+  [ -n "$DB_PASS" ] || DB_PASS="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+
+  upsert_env_var DB_DATABASE                "$STACK"                 "$ENV_OUT"
+  upsert_env_var DB_USERNAME                "$STACK"                 "$ENV_OUT"
+  upsert_env_var DB_PASSWORD                "$DB_PASS"               "$ENV_OUT"
+  upsert_env_var ELASTICSEARCH_INDEX_PREFIX "${NAME}_"               "$ENV_OUT"
+  upsert_env_var REDIS_PREFIX               "${STACK}_"              "$ENV_OUT"
+  upsert_env_var REDIS_DB                   "$((2 * SLOT))"          "$ENV_OUT"
+  upsert_env_var REDIS_CACHE_DB             "$((2 * SLOT + 1))"      "$ENV_OUT"
+  upsert_env_var SESSION_COOKIE             "${STACK}_session"       "$ENV_OUT"
+  upsert_env_var APP_URL                    "http://localhost:$HTTP_PORT" "$ENV_OUT"
+  upsert_env_var SANCTUM_STATEFUL_DOMAINS   "localhost:$HTTP_PORT,127.0.0.1:$HTTP_PORT" "$ENV_OUT"
+  echo "  shared installation '$NAME' (slot $SLOT, $SLOT_NOTE): database/user $STACK,"
+  echo "  index prefix ${NAME}_, Redis prefix ${STACK}_ in DBs $((2 * SLOT))/$((2 * SLOT + 1)), app :$HTTP_PORT, Vite :$VITE_PORT"
+
+  # The infrastructure stack's Docker network (docker tier only: host-tier
+  # processes reach the infrastructure on its published localhost ports).
+  if [ "$INFRA" = "docker" ] && [ -z "$INFRA_NETWORK" ]; then
+    INFRA_NETWORK="$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' "${INFRA_STACK}_mysql" 2>/dev/null | awk '{print $1}' || true)"
+    if [ -n "$INFRA_NETWORK" ]; then
+      echo "  infrastructure network: $INFRA_NETWORK (detected from ${INFRA_STACK}_mysql)"
+    else
+      INFRA_NETWORK="tydal_default"
+      echo "  infrastructure network: $INFRA_NETWORK (default — ${INFRA_STACK}_mysql isn't running;"
+      echo "    pass --infra-network=NET if that stack's Compose project isn't 'tydal')"
+    fi
+  fi
+
+  # Root .env — Compose's project env file. docker-compose.yml interpolates it;
+  # tools/lib/stack.lib.sh reads it for the scripts.
+  if [ -f "$ROOT/.env" ]; then
+    ROOT_BACKUP="$ROOT/.env.bak.$(date +%Y%m%d-%H%M%S)"
+    cp "$ROOT/.env" "$ROOT_BACKUP"
+    echo "Backed up existing root .env → $(basename "$ROOT_BACKUP")"
+  fi
+  {
+    echo "# Written by tools/deploy/configure.sh — shared-infrastructure installation (#23)."
+    echo "# Compose reads it for docker-compose.yml; the tools/ scripts read it through"
+    echo "# tools/lib/stack.lib.sh. Re-run configure.sh to change it."
+    echo "#"
+    echo "# Own Compose project, so this checkout's containers never mix with another's."
+    echo "COMPOSE_PROJECT_NAME=$STACK"
+    echo "# own | shared — shared: the infrastructure runs in another stack."
+    echo "TYDAL_INFRA_MODE=shared"
+    echo "# The --name: derives the database/user, index prefix and Redis prefix."
+    echo "TYDAL_INSTALLATION=$NAME"
+    echo "# 1–7: port offset (100·slot) and Redis DBs (2·slot, 2·slot+1)."
+    echo "TYDAL_SLOT=$SLOT"
+    echo "# Container-name prefix of this installation (\${TYDAL_STACK}_app, _queue, _scheduler, _vite)."
+    echo "TYDAL_STACK=$STACK"
+    echo "# Host ports: app (artisan serve or the app container) and the Vite dev server."
+    echo "TYDAL_HTTP_PORT=$HTTP_PORT"
+    echo "TYDAL_VITE_PORT=$VITE_PORT"
+    echo "# Container-name prefix of the stack running MySQL/ES/Kibana/Tika/Redis."
+    echo "TYDAL_INFRA_STACK=$INFRA_STACK"
+    echo "# Infrastructure services only start under this profile — never, here."
+    echo "TYDAL_INFRA_PROFILE=infra"
+    echo "# depends_on on the infrastructure isn't required (it lives in the other project)."
+    echo "TYDAL_INFRA_REQUIRED=false"
+    if [ "$INFRA" = "docker" ]; then
+      echo "# Join the infrastructure stack's network, so mysql, elasticsearch, redis and"
+      echo "# tika resolve by service name from the app containers."
+      echo "TYDAL_NETWORK=$INFRA_NETWORK"
+      echo "TYDAL_NETWORK_EXTERNAL=true"
+    fi
+  } >"$ROOT/.env"
+  echo "Wrote the root .env (Compose project $STACK, containers ${STACK}_*)."
+elif [ -f "$ROOT/.env" ] && grep -q '^TYDAL_INFRA_MODE=shared' "$ROOT/.env"; then
+  # Back to own infrastructure: the shared setup's root .env would keep the
+  # infrastructure services switched off and the names/ports offset.
+  ROOT_BACKUP="$ROOT/.env.bak.$(date +%Y%m%d-%H%M%S)"
+  mv "$ROOT/.env" "$ROOT_BACKUP"
+  echo "Retired the shared-infrastructure root .env → $(basename "$ROOT_BACKUP") (own infrastructure, default names)."
+  RETIRED_SHARED=true
+fi
+
 # --- frontend/.env (copy-if-missing; backend-agnostic) ---
 if [ -f "$ROOT/frontend/.env" ]; then
-  echo "frontend/.env exists — leaving it untouched."
+  echo "frontend/.env exists — leaving it untouched$( [ "$INFRA_MODE" = shared ] || [ "${RETIRED_SHARED:-false}" = true ] && echo ' (apart from the API port)')."
 else
   cp "$TEMPLATES/frontend.env" "$ROOT/frontend/.env"
   echo "Created frontend/.env."
+fi
+# The SPA calls the API on the app's host port, which a shared installation offsets.
+if [ "$INFRA_MODE" = "shared" ]; then
+  upsert_env_var VITE_API_BASE_URL "http://localhost:$HTTP_PORT/api/v1" "$ROOT/frontend/.env"
+elif [ "${RETIRED_SHARED:-false}" = true ]; then
+  upsert_env_var VITE_API_BASE_URL "http://localhost:8000/api/v1" "$ROOT/frontend/.env"
 fi
 
 # --- docker-compose.yml service toggles ---
@@ -284,19 +492,44 @@ else
   joined="$(printf '%s, ' "${ENABLED[@]}")"; joined="${joined%, }"
   echo "docker-compose.yml: enabled $joined (+ backing services)."
 fi
+if [ "$INFRA_MODE" = "shared" ]; then
+  echo "  (shared infrastructure: the backing services$( [ "$OLLAMA_PLACEMENT" = docker ] && echo ' and ollama') come from the '$INFRA_STACK' stack —"
+  echo "   this checkout's own copies stay off via TYDAL_INFRA_PROFILE in the root .env)"
+fi
+
+# --- provision the shared MySQL (database, test database, user) ---
+if [ "$INFRA_MODE" = "shared" ]; then
+  echo
+  if [ "$PROVISION" = false ]; then
+    echo "Skipped provisioning (--no-provision). Once ${INFRA_STACK}_mysql is up:"
+    echo "  tools/deploy/provision-shared.sh"
+  elif [ "$(docker inspect -f '{{.State.Running}}' "${INFRA_STACK}_mysql" 2>/dev/null)" = "true" ]; then
+    "$SCRIPT_DIR/provision-shared.sh" \
+      || echo "⚠️  Provisioning failed — fix the cause above, then re-run tools/deploy/provision-shared.sh" >&2
+  else
+    echo "⚠️  ${INFRA_STACK}_mysql isn't running, so the database and user weren't created yet."
+    echo "   Start the infrastructure stack (in its checkout: tools/deploy/start.sh), then:"
+    echo "     tools/deploy/provision-shared.sh"
+  fi
+fi
 
 # --- next-step hint (per application tier) ---
 echo
 echo "Next — start.sh owns startup, so run it FIRST (then the rest in another terminal):"
+if [ "$INFRA_MODE" = "shared" ]; then
+  APP_C="tydal_${NAME}_app"; SHOW_HTTP="$HTTP_PORT"; SHOW_VITE="$VITE_PORT"
+else
+  APP_C="tydal_app"; SHOW_HTTP=8000; SHOW_VITE=3005
+fi
 if [ "$INFRA" = "docker" ]; then
-  echo "  tools/deploy/start.sh      # bring up the stack + serve (app :8000 in a container + Vite)"
+  echo "  tools/deploy/start.sh      # bring up the stack + serve (app :$SHOW_HTTP in a container + Vite :$SHOW_VITE)"
   echo "  tools/deploy/reload.sh     # if the stack was already up, to apply this .env change"
   if [ "$CONFIGURED_NEW_ENV" = true ]; then
     echo "  # first run without install.sh? install deps in the container once it's up:"
-    echo "  #   docker exec -it tydal_app composer install && docker exec -it tydal_app php artisan key:generate"
+    echo "  #   docker exec -it $APP_C composer install && docker exec -it $APP_C php artisan key:generate"
   fi
 else
-  echo "  tools/deploy/start.sh      # bring up backing services + serve (app + queue + scheduler + Vite on host)"
+  echo "  tools/deploy/start.sh      # bring up backing services + serve (app :$SHOW_HTTP + queue + scheduler + Vite :$SHOW_VITE on host)"
   echo "  tools/deploy/reload.sh     # if the stack was already up, to apply this .env change"
 fi
 
@@ -304,10 +537,11 @@ fi
 if [ "$OLLAMA_PLACEMENT" = "host" ]; then
   echo "  Ollama runs on the host (GPU) — make sure it's up: brew services start ollama"
 elif [ "$OLLAMA_PLACEMENT" = "docker" ]; then
+  OLLAMA_C="$( [ "$INFRA_MODE" = shared ] && echo "${INFRA_STACK}_ollama" || echo tydal_ollama )"
   echo "  Ollama runs in Docker (CPU) — pull models once it's up:"
-  echo "    docker exec tydal_ollama ollama pull mxbai-embed-large && \\"
-  echo "    docker exec tydal_ollama ollama pull llama3.2 && \\"
-  echo "    docker exec tydal_ollama ollama pull llama3.2-vision"
+  echo "    docker exec $OLLAMA_C ollama pull mxbai-embed-large && \\"
+  echo "    docker exec $OLLAMA_C ollama pull llama3.2 && \\"
+  echo "    docker exec $OLLAMA_C ollama pull llama3.2-vision"
 fi
 
 # --- embedding-changed warning (stale vectors) ---

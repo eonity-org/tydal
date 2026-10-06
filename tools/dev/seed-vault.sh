@@ -24,7 +24,8 @@ Seed a test vault from a folder of PDFs and images (top level of <folder>;
 vault-slug defaults to the folder name. Re-running with the same slug fails on
 the vault create (slugs are unique) — pick a new slug or delete the vault first.
 
-Environment: TYDAL_API_BASE_URL (default http://localhost:8000/api/v1),
+Environment: TYDAL_API_BASE_URL (default http://localhost:8000/api/v1 — the
+port is the installation's TYDAL_HTTP_PORT from the root .env, if configured),
 TYDAL_SUPERADMIN_EMAIL, TYDAL_SUPERADMIN_PASSWORD (default: read from
 backend/.env), TYDAL_COLLECTION_ID (default: first collection).
 
@@ -48,7 +49,9 @@ ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BACKEND_DIR="$ROOT/backend"
 COMPOSE="$ROOT/docker-compose.yml"
 
-BASE_URL="${TYDAL_API_BASE_URL:-http://localhost:8000/api/v1}"
+. "$SCRIPT_DIR/../lib/stack.lib.sh"
+stack_load "$ROOT"
+BASE_URL="${TYDAL_API_BASE_URL:-http://localhost:$TYDAL_HTTP_PORT/api/v1}"
 EMAIL="${TYDAL_SUPERADMIN_EMAIL:-superadmin@tydal.test}"
 PASSWORD="${TYDAL_SUPERADMIN_PASSWORD:-$(grep '^TYDAL_SUPERADMIN_PASSWORD=' "$BACKEND_DIR/.env" 2>/dev/null | cut -d= -f2 || true)}"
 [ -n "$PASSWORD" ] || { echo "Set TYDAL_SUPERADMIN_PASSWORD (backend/.env not readable)." >&2; exit 1; }

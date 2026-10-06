@@ -2,13 +2,17 @@
 # TYDAL — one-time dev setup: install deps, build the frontend, write backend/.env
 # for the chosen tiers, and recreate the containers. The AI + Application tiers
 # are REQUIRED (no defaults). See tools/deploy/README.md for the three-tier model.
+# Optional --infra=own|shared --name=NAME (passed to configure.sh): run this
+# checkout's own backing services (default) or share another checkout's
+# (DEPLOYMENT.md, "Several installations on one server").
 # Next: tools/deploy/start.sh (serve — terminal 1) then tools/deploy/first_install.sh
 # (seed — terminal 2). start.sh owns service startup; first_install assumes it's up.
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: install.sh <cloud|ollama-host|ollama-docker> <host|docker> [-f] [--no-force-env] [--fresh]
+Usage: install.sh <cloud|ollama-host|ollama-docker> <host|docker>
+                  [--infra=own|shared] [--name=NAME] [-f] [--no-force-env] [--fresh]
 
 One-time DEV setup: install deps + build frontend + write backend/.env + recreate
 containers. 
@@ -19,6 +23,14 @@ Redis) ALWAYS run in Docker; you only choose where these two tiers run:
   AI  tier   cloud | ollama-host (host, GPU) | ollama-docker (CPU only)
   APP tier   host (PHP/nginx + queue on the host) | docker (in containers)
 
+  --infra=own       (default) run this checkout's own backing services
+  --infra=shared --name=NAME
+                    use the backing services another checkout already runs
+                    (several installations on one server — DEPLOYMENT.md);
+                    NAME derives the database, index/Redis prefixes, container
+                    names and ports. --slot/--infra-stack/--infra-network/
+                    --no-provision are passed to configure.sh as well
+                    (see 'configure.sh --help').
   -f, --force       skip the confirmation prompt (required in CI / non-interactive)
   --no-force-env    keep an existing backend/.env instead of rewriting it
   --fresh           DELETE existing data volumes (mysql/es/redis/ollama) for a
@@ -37,6 +49,7 @@ lose data). A clean clone can therefore still serve a previous install's databas
 install.sh does NOT seed the DB (run first_install.sh for a minimal starting dataset).
 
 e.g.  install.sh ollama-host docker   ·   install.sh cloud host -f
+      install.sh cloud docker --infra=shared --name=staging
 
 EOF
 }
@@ -47,6 +60,7 @@ TOPO_ARG=""
 FORCE=false        # -f/--force : skip the confirmation prompt
 FORCE_ENV=true     # rewrite backend/.env by default; --no-force-env opts out
 FRESH=false        # --fresh : delete data volumes (down -v) instead of preserving
+INFRA_ARGS=()      # --infra/--name/--slot/--infra-stack/--infra-network/--no-provision → configure.sh
 for arg in "$@"; do
   case "$arg" in
     -h|--help)        usage; exit 0 ;;
@@ -54,6 +68,8 @@ for arg in "$@"; do
     --no-force-env)   FORCE_ENV=false ;;
     --force-env)      FORCE_ENV=true ;;   # explicit (already the default)
     --fresh)          FRESH=true ;;
+    --infra=*|--name=*|--slot=*|--infra-stack=*|--infra-network=*|--no-provision)
+                      INFRA_ARGS+=("$arg") ;;
     cloud|aicloud|ollama|ollama-host|ollama-docker) AI_ARG="$arg" ;;
     host|native|docker)                              TOPO_ARG="$arg" ;;
     *) echo "install.sh: unknown argument '$arg'" >&2; echo >&2; usage >&2; exit 1 ;;
@@ -112,7 +128,11 @@ fi
 # exist and offer to wipe them. Compose derives the project name from the dir
 # holding the compose file, so its data volumes are "<project>_<name>".
 COMPOSE="$ROOT/docker-compose.yml"
-if [ "$FRESH" = false ] && docker info >/dev/null 2>&1; then
+# A shared-infrastructure installation has no data volumes of its own (its data
+# lives in the shared MySQL/ES/Redis, kept apart by name), so skip the check.
+SHARED_INSTALL=false
+case " ${INFRA_ARGS[*]-} " in *" --infra=shared "*) SHARED_INSTALL=true ;; esac
+if [ "$FRESH" = false ] && [ "$SHARED_INSTALL" = false ] && docker info >/dev/null 2>&1; then
   PROJECT="$(basename "$ROOT" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')"
   _vols="$(docker volume ls -q 2>/dev/null \
             | grep -E "^${PROJECT}_(mysql_data|elasticsearch_data|redis_data|ollama_data)$" || true)"
@@ -136,9 +156,14 @@ fi
 
 # --- configure .env files (fast; no deps) ---
 # Pass -f so configure.sh doesn't prompt again (install already confirmed above).
-cfg_args=("$AI_ARG" "$TOPO_ARG" -f)
+cfg_args=("$AI_ARG" "$TOPO_ARG" -f ${INFRA_ARGS[@]+"${INFRA_ARGS[@]}"})
 [ "$FORCE_ENV" = false ] && cfg_args+=(--no-force-env)
 "$SCRIPT_DIR/configure.sh" "${cfg_args[@]}"
+
+# Installation names/ports as configure.sh just recorded them (root .env).
+. "$SCRIPT_DIR/../lib/stack.lib.sh"
+stack_load "$ROOT"
+OLLAMA_CONTAINER="$(infra_container ollama)"
 
 # --- tier-aware execution helpers ---
 # On the `docker` application tier the host may have NO PHP/Composer/Node at
@@ -168,7 +193,12 @@ recreate_containers() {
       echo "Recreating containers (docker compose down --remove-orphans && up -d)…"
       docker compose -f "$COMPOSE" down --remove-orphans
     fi
-    docker compose -f "$COMPOSE" up -d --remove-orphans
+    # A shared installation on the host tier has no Compose services of its own
+    # (its backing services run in the infrastructure stack): nothing to start.
+    if [ "$TYDAL_INFRA_MODE" != "shared" ] || \
+       [ -n "$(docker compose -f "$COMPOSE" config --services 2>/dev/null)" ]; then
+      docker compose -f "$COMPOSE" up -d --remove-orphans
+    fi
 
     # --- pull Ollama models for the ollama-docker tier ------------------------
     # A fresh install (the ollama_data volume was wiped, or this is a clean clone)
@@ -187,25 +217,25 @@ recreate_containers() {
       done
       if [ -n "$MODELS" ]; then
         echo
-        echo "Waiting for the Ollama container (tydal_ollama) to be ready…"
+        echo "Waiting for the Ollama container ($OLLAMA_CONTAINER) to be ready…"
         _t=0
-        until docker exec tydal_ollama ollama list >/dev/null 2>&1; do
+        until docker exec "$OLLAMA_CONTAINER" ollama list >/dev/null 2>&1; do
           _t=$((_t+1))
           if [ "$_t" -ge 60 ]; then
             echo "  Ollama not ready after 60s — skipping model pull."
-            echo "  Pull manually later: docker exec tydal_ollama ollama pull <model>"
+            echo "  Pull manually later: docker exec $OLLAMA_CONTAINER ollama pull <model>"
             break
           fi
           sleep 1
         done
-        if docker exec tydal_ollama ollama list >/dev/null 2>&1; then
-          _have="$(docker exec tydal_ollama ollama list 2>/dev/null | awk 'NR>1{print $1}')"
+        if docker exec "$OLLAMA_CONTAINER" ollama list >/dev/null 2>&1; then
+          _have="$(docker exec "$OLLAMA_CONTAINER" ollama list 2>/dev/null | awk 'NR>1{print $1}')"
           for _m in $MODELS; do
             if printf '%s\n' "$_have" | grep -qxE "$_m(:latest)?"; then
               echo "  ✓ $_m already present"
             else
               echo "  ↓ pulling $_m …"
-              docker exec tydal_ollama ollama pull "$_m" \
+              docker exec "$OLLAMA_CONTAINER" ollama pull "$_m" \
                 || echo "    ⚠️  failed to pull $_m — pull it manually later."
             fi
           done
@@ -217,9 +247,9 @@ recreate_containers() {
     echo "  Run 'docker compose down --remove-orphans && docker compose up -d' once Docker is up."
     if [ "$AI_ARG" = "ollama-docker" ]; then
       echo "  Then pull the Ollama models, e.g.:"
-      echo "    docker exec tydal_ollama ollama pull mxbai-embed-large"
-      echo "    docker exec tydal_ollama ollama pull llama3.2"
-      echo "    docker exec tydal_ollama ollama pull llama3.2-vision"
+      echo "    docker exec $OLLAMA_CONTAINER ollama pull mxbai-embed-large"
+      echo "    docker exec $OLLAMA_CONTAINER ollama pull llama3.2"
+      echo "    docker exec $OLLAMA_CONTAINER ollama pull llama3.2-vision"
     fi
   fi
 }
@@ -243,7 +273,7 @@ if [ "$TOPO" = "docker" ]; then
   until app_exec php -v >/dev/null 2>&1; do
     _t=$((_t+1))
     if [ "$_t" -ge 60 ]; then
-      echo "install.sh: app container not ready after 60s — check 'docker compose logs app'." >&2
+      echo "install.sh: app container ($(stack_container app)) not ready after 60s — check 'docker compose logs app'." >&2
       exit 1
     fi
     sleep 1

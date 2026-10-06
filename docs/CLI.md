@@ -5,6 +5,10 @@ string them together. All commands run from `backend/`:
 `php artisan <command>`. On the docker application tier run them inside the
 app container: `docker exec -w /var/www/html tydal_app php artisan <command>`
 (the `-w` matters; without it you get `Could not open input file: artisan`).
+`tydal_app` is the default container name; an installation configured with
+`configure.sh … --infra=shared --name=NAME` uses `tydal_NAME_app` (see
+[DEPLOYMENT.md](../DEPLOYMENT.md#several-installations-on-one-server)), and
+`docker compose exec -w /var/www/html app php artisan <command>` works for both.
 Commands that check integrity exit **non-zero on findings**, so they slot into
 CI as-is. For a one-line-per-command cheat sheet with both forms and
 preconditions, see [QUICK_REFERENCE.md](../QUICK_REFERENCE.md); for the shell
@@ -226,7 +230,8 @@ prefix the pattern is `tydal_*,vault_*`, which also matches **any other
 unprefixed installation on the same cluster**, and the command warns. It never
 matches a prefixed installation (a prefix can't start with `tydal_`/`vault_`).
 Never run it, or `first_install.sh`, against a cluster another unprefixed
-installation uses.
+installation uses. (A shared-infrastructure installation, `configure.sh
+--infra=shared --name=NAME`, always has the prefix `NAME_`.)
 
 Exists because `migrate:fresh` only touches MySQL — Elasticsearch is a
 separate service with no hook into Laravel's migrator, so an index for a
@@ -505,7 +510,8 @@ The scheduler needs `php artisan schedule:work` (dev) or a system cron
 running `php artisan schedule:run` every minute (prod, see
 [DEPLOYMENT.md](../DEPLOYMENT.md#scheduler-cron)). In dev, `start.sh` takes
 care of it and prints a notice saying where the daemon runs. On the docker tier
-that's the `tydal_scheduler` compose service, toggled with app/queue by
+that's the `tydal_scheduler` compose service (`tydal_NAME_scheduler` on a
+shared-infrastructure installation), toggled with app/queue by
 `configure.sh`. On the host tier it's a background `schedule:work` that stops
 with Ctrl-C. Check what's scheduled with `php artisan schedule:list`.
 
