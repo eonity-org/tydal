@@ -92,7 +92,7 @@ if [ -z "$AI" ] || [ -z "$INFRA" ]; then
   echo "configure.sh: you must specify both an AI tier (cloud|ollama-host|ollama-docker)" >&2
   echo "and an application tier (host|docker). See 'configure.sh --help'." >&2
   echo >&2 
-  #usage >&2 
+  usage >&2
   exit 1
 fi
 
