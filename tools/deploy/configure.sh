@@ -703,29 +703,33 @@ if [ "$INFRA_MODE" = "shared" ]; then
 fi
 
 # --- next-step hint (per application tier) ---
-echo
-echo "Next — start.sh owns startup, so run it FIRST (then the rest in another terminal):"
-if [ "$INFRA_MODE" = "shared" ]; then
-  APP_C="tydal_${NAME}_app"; SHOW_HTTP="$HTTP_PORT"; SHOW_VITE="$VITE_PORT"
-else
-  APP_C="tydal_app"; SHOW_HTTP=8000; SHOW_VITE=3005
-fi
-if [ "$INFRA" = "docker" ]; then
-  echo "  tools/deploy/start.sh      # bring up the stack + serve (app :$SHOW_HTTP in a container + Vite :$SHOW_VITE)"
-  echo "  tools/deploy/reload.sh     # if the stack was already up, to apply this .env change"
-  if [ "$CONFIGURED_NEW_ENV" = true ]; then
-    echo "  # first run without install.sh? install deps in the container once it's up:"
-    echo "  #   docker exec -it $APP_C composer install && docker exec -it $APP_C php artisan key:generate"
+# install.sh prints its own summary at the very end (TYDAL_FROM_INSTALL=1), so
+# this hint would only scroll away under the dependency output there.
+if [ "${TYDAL_FROM_INSTALL:-}" != 1 ]; then
+  echo
+  echo "Next — start.sh owns startup, so run it FIRST (then the rest in another terminal):"
+  if [ "$INFRA_MODE" = "shared" ]; then
+    APP_C="tydal_${NAME}_app"; SHOW_HTTP="$HTTP_PORT"; SHOW_VITE="$VITE_PORT"
+  else
+    APP_C="tydal_app"; SHOW_HTTP=8000; SHOW_VITE=3005
   fi
-else
-  echo "  tools/deploy/start.sh      # bring up backing services + serve (app :$SHOW_HTTP + queue + scheduler + Vite :$SHOW_VITE on host)"
-  echo "  tools/deploy/reload.sh     # if the stack was already up, to apply this .env change"
-fi
+  if [ "$INFRA" = "docker" ]; then
+    echo "  tools/deploy/start.sh      # bring up the stack + serve (app :$SHOW_HTTP in a container + Vite :$SHOW_VITE)"
+    echo "  tools/deploy/reload.sh     # if the stack was already up, to apply this .env change"
+    if [ "$CONFIGURED_NEW_ENV" = true ]; then
+      echo "  # first run without install.sh? install deps in the container once it's up:"
+      echo "  #   docker exec -it $APP_C composer install && docker exec -it $APP_C php artisan key:generate"
+    fi
+  else
+    echo "  tools/deploy/start.sh      # bring up backing services + serve (app :$SHOW_HTTP + queue + scheduler + Vite :$SHOW_VITE on host)"
+    echo "  tools/deploy/reload.sh     # if the stack was already up, to apply this .env change"
+  fi
 
-if [ -n "$PUBLIC_URL" ]; then
-  echo "  Public URL $PUBLIC_URL: point your web server for that host at app :$SHOW_HTTP"
-  echo "  (or PHP-FPM) and serve the built SPA (npm run build — VITE_API_BASE_URL is"
-  echo "  baked in); DEPLOYMENT.md, \"Production deployment\"."
+  if [ -n "$PUBLIC_URL" ]; then
+    echo "  Public URL $PUBLIC_URL: point your web server for that host at app :$SHOW_HTTP"
+    echo "  (or PHP-FPM) and serve the built SPA (npm run build — VITE_API_BASE_URL is"
+    echo "  baked in); DEPLOYMENT.md, \"Production deployment\"."
+  fi
 fi
 
 # --- ollama placement reminder ---

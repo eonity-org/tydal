@@ -173,7 +173,7 @@ fi
 # Pass -f so configure.sh doesn't prompt again (install already confirmed above).
 cfg_args=("$AI_ARG" "$TOPO_ARG" -f ${INFRA_ARGS[@]+"${INFRA_ARGS[@]}"})
 [ "$FORCE_ENV" = false ] && cfg_args+=(--no-force-env)
-"$SCRIPT_DIR/configure.sh" "${cfg_args[@]}"
+TYDAL_FROM_INSTALL=1 "$SCRIPT_DIR/configure.sh" "${cfg_args[@]}"
 
 # Installation names/ports as configure.sh just recorded them (root .env).
 . "$SCRIPT_DIR/../lib/stack.lib.sh"
@@ -293,7 +293,8 @@ if [ "$TOPO" = "docker" ]; then
     fi
     sleep 1
   done
-  app_exec composer install
+  echo "Installing PHP dependencies (composer, in $(stack_container app))…"
+  app_exec composer install --no-interaction --no-progress --quiet
   grep -q '^APP_KEY=base64:' "$ROOT/backend/.env" || app_exec php artisan key:generate
   app_exec php artisan storage:link || true
 else
@@ -303,7 +304,8 @@ else
     exit 1
   fi
   cd "$ROOT/backend"
-  composer install
+  echo "Installing PHP dependencies (composer)…"
+  composer install --no-interaction --no-progress --quiet
   grep -q '^APP_KEY=base64:' .env || php artisan key:generate
   php artisan storage:link || true
 fi
@@ -314,7 +316,8 @@ fi
 # compiles — the SPA imports client/dist/, which is not committed. mcp/ and
 # vault-mcp/ aren't built here (most devs never touch either MCP server) — see
 # install_mcp.sh.
-run_npm "$ROOT" . install
+echo "Installing JS dependencies (npm workspace)…"
+run_npm "$ROOT" . install --no-audit --no-fund --loglevel=error
 run_npm "$ROOT" client run build
 run_npm "$ROOT" frontend run build
 
@@ -327,9 +330,38 @@ else
   docker compose -f "$COMPOSE" restart queue >/dev/null 2>&1 || true
 fi
 
+# --- final summary: what was installed and where it answers ---------------------
+# Everything above scrolls (composer, npm, vite); this is what to read.
+benv() { awk -v k="$1" 'index($0, k"=") == 1 { v = substr($0, length(k) + 2); gsub(/^"|"$/, "", v); print v; exit }' "$ROOT/backend/.env" 2>/dev/null; }
+_slot="$(stack_env_get TYDAL_SLOT "$ROOT/.env" 2>/dev/null || true)"
+_db="$(benv DB_DATABASE)"; _prefix="$(benv ELASTICSEARCH_INDEX_PREFIX)"; _url="$(benv TYDAL_PUBLIC_URL)"
+_status() {
+  local c="$1" st
+  st="$(docker inspect -f '{{.State.Status}}' "$c" 2>/dev/null || echo 'not created')"
+  printf '    %-28s %s\n' "$c" "$st"
+}
+
 echo
 echo "================================================================================"
 echo "Install complete."
+echo
+if [ "$TYDAL_INFRA_MODE" = "shared" ]; then
+  echo "  Installation  '$TYDAL_INSTALLATION' — shared infrastructure from the '$TYDAL_INFRA_STACK' stack (slot ${_slot:-?})"
+else
+  echo "  Installation  own infrastructure (default names)"
+fi
+echo "  Tiers         AI $AI_ARG · app $TOPO_ARG"
+echo "  App / API     http://localhost:$TYDAL_HTTP_PORT   (API: /api/v1)"
+echo "  Web (Vite)    http://localhost:$TYDAL_VITE_PORT   (after start.sh)"
+[ -n "$_url" ] && echo "  Public URL    $_url   (your web server routes it to app :$TYDAL_HTTP_PORT)"
+echo "  Database      ${_db:-?}   · index prefix ${_prefix:-(none)}"
+if docker info >/dev/null 2>&1; then
+  echo "  Containers"
+  if [ "$TOPO" = "docker" ]; then
+    for _s in app queue scheduler; do _status "$(stack_container "$_s")"; done
+  fi
+  for _s in mysql elasticsearch redis tika; do _status "$(infra_container "$_s")"; done
+fi
 echo
 echo ">>> Review backend/.env — fill the vars in its '# Min VARS to"
 echo "    personalize' header (API keys, superadmin password) if you"

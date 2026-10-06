@@ -41,6 +41,9 @@ All notable changes to TYDAL are documented here. The format follows
   `tydal_*` container names (it names that checkout's folder) — instead of
   failing halfway through `docker compose up`. `--name=NAME` alone now
   implies `--infra=shared`.
+- `install.sh` ends with a summary of what it installed (installation, slot,
+  app and Vite URLs, public URL, database and index prefix, container status)
+  instead of letting it scroll away; composer and npm run quieter.
 - **`ELASTICSEARCH_INDEX_PREFIX`** (#14): a per-installation prefix applied to
   every physical index name — collection indices, their `_chunks`
   companions and `vault_<uuid>` — through one helper,
