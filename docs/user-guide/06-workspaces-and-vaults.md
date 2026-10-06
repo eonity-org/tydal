@@ -12,9 +12,13 @@ also has **All Resources**, which holds everything.
 **Who does what**
 
 - Editors add resources to workspaces and take them out (in the resource editor,
-  or with the basket's **Workspace** action).
-- Administrators and owners create, rename and delete workspaces, and connect
-  them to vaults.
+  or with the basket's **Workspace** action) — except in a workspace connected to
+  a vault. Changing what such a workspace holds publishes or unpublishes
+  resources outside TYDAL, so only administrators and owners can do it; editors
+  see it greyed out, with the hint *Shared through a vault — ask an
+  administrator*.
+- Administrators and owners create, rename and delete workspaces, connect them
+  to vaults, and add or remove resources in any workspace.
 
 ### Managing workspaces
 

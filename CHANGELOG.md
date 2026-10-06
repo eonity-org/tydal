@@ -53,8 +53,43 @@ All notable changes to TYDAL are documented here. The format follows
   **Set all live**, both through `POST /resources/bulk/state` in batches of
   up to 200, reporting skipped resources like the basket and leaving them
   listed. User guide chapters 5 and 7.
+- **When a resource was archived** (`resources.archived_at`): stamped when a
+  resource moves to `archived` (single update, bulk state, any save — the
+  model's `saving` hook, called explicitly by the quiet bulk write), cleared
+  when it leaves. Migration `2026_10_06_000000_add_archived_at_to_resources`
+  backfills existing archived rows from `updated_at`. `GET /resources/archived`
+  sorts by `archived_at` by default (`sort_by` accepts `archived_at`, `name`,
+  `id`, and still `updated_at`), and the Archived page's cards read
+  "Archived <date>".
+- **`aity:purge-batches`**: deletes AiTy Review batches reviewed (opened from
+  the AiTy Review page) or whose auto-approve job finished more than
+  `AITY_BATCH_RETENTION_DAYS` (default 30; `0` disables) days ago — the batch
+  workspace only, through `WorkspaceService::deleteWorkspace`, never its
+  resources. Batches still waiting, running or being analysed are kept.
+  `--days=N`, `--dry-run`; scheduled daily at 04:00. docs/CLI.md.
+
+### Changed
+
+- **Only administrators change what a vault shows.** Adding resources to, or
+  removing them from, a workspace attached to a vault publishes or unpublishes
+  them outside TYDAL, so it now takes the new ability
+  `workspaces.manage-vault-resources` (admins and owners, via `workspaces.*`)
+  on top of `workspaces.manage-resources`. Enforced in
+  `WorkspacePolicy::manageResources`, so it covers the single add/remove
+  endpoints (resource editor chips, org-mcp tools) and the basket's
+  bulk-attach/detach, which report every id skipped as `vault_connected`.
+  Editors keep curating plain workspaces and AiTy Review batches; vault write
+  ops are unaffected. `GET /workspaces` now returns `vaults_count`, and the
+  basket's Workspace dialog and the resource editor's workspace chips show
+  vault-connected workspaces disabled ("Shared through a vault — ask an
+  administrator") to users without the ability. The basket's empty Workspace
+  list now says how to get one (ask an administrator, or Manage workspaces).
 
 ### Fixed
+
+- **Unbounded page size on the trash and Archived listings**:
+  `GET /resources/trashed` and `GET /resources/archived` now clamp `limit` to
+  1..200, the bulk endpoints' cap.
 
 - **Resources without a description couldn't be edited** (#24). The built-in
   schemes (multimedia, documents, general) required `description`, but only

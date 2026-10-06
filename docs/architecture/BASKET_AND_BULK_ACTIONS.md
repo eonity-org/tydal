@@ -47,8 +47,8 @@ the twelve they can see.
 
 | Method | Path | Permission |
 |---|---|---|
-| `POST` | `/workspaces/{id}/resources/bulk-attach` | `workspaces.manage-resources` |
-| `POST` | `/workspaces/{id}/resources/bulk-detach` | `workspaces.manage-resources` |
+| `POST` | `/workspaces/{id}/resources/bulk-attach` | `workspaces.manage-resources`; plus `workspaces.manage-vault-resources` when the workspace is attached to a vault |
+| `POST` | `/workspaces/{id}/resources/bulk-detach` | same as bulk-attach |
 | `POST` | `/resources/bulk/state` | `resources.update` |
 | `POST` | `/resources/bulk/semantic-tags` | `resources.update` |
 
@@ -77,6 +77,11 @@ cannot touch, and refusing all forty because of two would be useless.
 
 `200` for any partial success; `403` only when **not one** id could be applied.
 The UI keeps the skipped ids in the basket so a retry is one click.
+
+A workspace attached to a vault refuses an editor as a whole: every id comes
+back skipped with reason `vault_connected` and a `message`, status `403`
+([ROLES_AND_PERMISSIONS.md](ROLES_AND_PERMISSIONS.md#vault-connected-workspaces)).
+The Workspace dialog already lists such workspaces disabled for them.
 
 ### Tags are additive, not a replacement
 

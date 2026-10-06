@@ -16,6 +16,7 @@ use App\Models\Collection;
 use App\Models\Resource;
 use App\Models\SemanticTag;
 use App\Models\Workspace;
+use App\Policies\WorkspacePolicy;
 use App\Services\ElasticsearchService;
 use App\Services\Interfaces\VaultServiceInterface;
 use App\Services\Interfaces\WorkspaceServiceInterface;
@@ -23,6 +24,7 @@ use App\Services\RagService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 
 class WorkspaceController extends Controller
@@ -518,7 +520,15 @@ class WorkspaceController extends Controller
             return response()->json(['success' => false, 'message' => 'Workspace not found'], 404);
         }
 
-        $this->authorize('manageResources', $workspace);
+        // A vault-connected workspace refused for lack of
+        // `workspaces.manage-vault-resources` answers in the bulk shape —
+        // every id skipped as `vault_connected` — so the basket can say why.
+        // Any other refusal is the plain 403.
+        $decision = Gate::inspect('manageResources', $workspace);
+        if ($decision->denied() && $decision->code() === WorkspacePolicy::VAULT_CONNECTED) {
+            return $this->bulkResponse($request->resourceIds(), [], WorkspacePolicy::VAULT_CONNECTED, message: $decision->message());
+        }
+        $decision->authorize();
 
         if ($workspace->is_default) {
             return response()->json([

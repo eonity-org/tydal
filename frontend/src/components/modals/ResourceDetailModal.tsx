@@ -29,7 +29,8 @@ import { Close, Edit, Save, Cancel, Star, Search, Hub, HubOutlined, ExpandMore, 
 import resourceService, { type ResourceData, type ResourceState, type ResourceFile, type SemanticTag, type ActivityEvent } from '../../api/resourceService'
 import authService from '../../api/authService'
 import collectionService, { type Collection, getSchemeFields } from '../../api/collectionService'
-import workspaceService, { type Workspace } from '../../api/workspaceService'
+import workspaceService, { type Workspace, VAULT_CONNECTED_HINT, isVaultConnected } from '../../api/workspaceService'
+import { usePermissions } from '../../hooks/usePermissions'
 import semanticTagService from '../../api/semanticTagService'
 import { ENTITY_TYPES, type EntityTypeKey } from '../../constants/entityTypes'
 import MediaViewer from '../ui/MediaViewer'
@@ -383,6 +384,10 @@ function ResourceDetailModal(props: ResourceDetailModalProps) {
   const [availableWorkspaces, setAvailableWorkspaces] = useState<Workspace[]>([])
   const [resourceWorkspaceIds, setResourceWorkspaceIds] = useState<Set<string>>(new Set())
   const [originalWorkspaceIds, setOriginalWorkspaceIds] = useState<Set<string>>(new Set())
+  // Vault-connected workspaces: changing their members publishes/unpublishes,
+  // an admin act (WorkspacePolicy::manageResources) — shown disabled otherwise.
+  const { can: canDo, ready: permissionsReady } = usePermissions()
+  const mayVaultWorkspace = permissionsReady && canDo('workspaces.manage-vault-resources')
   const [selectedTagsData, setSelectedTagsData] = useState<SemanticTag[]>([])
   const [resourceTagIds, setResourceTagIds] = useState<Set<number>>(new Set())
   const [originalTagIds, setOriginalTagIds] = useState<Set<number>>(new Set())
@@ -3423,6 +3428,27 @@ ${Array.isArray(resource.semanticTags) && resource.semanticTags.length > 0
                             {availableWorkspaces.map((ws) => {
                               const wsId = String(ws.id)
                               const isIn = resourceWorkspaceIds.has(wsId)
+                              if (isVaultConnected(ws) && !mayVaultWorkspace) {
+                                // The span carries the tooltip: a disabled Chip ignores the pointer.
+                                return (
+                                  <Tooltip key={wsId} title={VAULT_CONNECTED_HINT} describeChild>
+                                    <span>
+                                      <Chip
+                                        label={ws.name}
+                                        size="small"
+                                        disabled
+                                        variant={isIn ? 'filled' : 'outlined'}
+                                        sx={{
+                                          fontWeight: isIn ? 600 : 400,
+                                          bgcolor: isIn ? 'secondary.main' : undefined,
+                                          color: isIn ? 'white' : 'text.secondary',
+                                          borderColor: isIn ? 'secondary.main' : 'divider',
+                                        }}
+                                      />
+                                    </span>
+                                  </Tooltip>
+                                )
+                              }
                               return (
                                 <Chip
                                   key={wsId}

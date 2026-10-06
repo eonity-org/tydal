@@ -32,6 +32,10 @@ class WorkspaceService implements WorkspaceServiceInterface
         return Workspace::where('organization_id', $organizationId)
             ->when(! $includeSystem, fn ($q) => $q->where('is_system', false))
             ->withCount('resources')
+            // How many vaults project this workspace: the SPA disables
+            // vault-connected workspaces in its membership pickers for users
+            // without `workspaces.manage-vault-resources` (WorkspacePolicy).
+            ->withCount('vaults')
             ->orderBy('created_at', 'desc')
             ->paginate($perPage, ['*'], 'page', $page);
     }
