@@ -91,3 +91,6 @@ backend/resources/views/vendor/media-library/*
 # Keep required empty directories
 # ------------------------
 !**/.gitkeep
+
+# Written by tools/deploy/configure.sh --prod for the host's nginx
+/nginx-site.conf

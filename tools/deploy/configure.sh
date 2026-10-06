@@ -16,6 +16,7 @@ usage() {
   cat <<'EOF'
 Usage: configure.sh <cloud|ollama-host|ollama-docker> <host|docker>
                     [--infra=own|shared] [--name=NAME] [--url=URL] [-f] [--no-force-env]
+                    [--prod|--dev] [--data-dir=DIR]
                     [--slot=N] [--infra-stack=STACK] [--infra-network=NET] [--no-provision]
 
 Writes backend/.env and toggles docker-compose.yml to match two tiers (config
@@ -58,6 +59,20 @@ Public URL (own or shared):
                     the app — nginx/TLS stay yours (DEPLOYMENT.md). Not for
                     the Vite dev server, which doesn't proxy /api.
 
+Production (docker tier; DEPLOYMENT.md "Production with the deploy scripts"):
+  --prod            a server installation: every port published on 127.0.0.1
+                    only (nginx on the host is the way in), APP_ENV=production
+                    and debug off, TRUSTED_PROXIES=*, generated MySQL/Redis
+                    passwords (own infrastructure), Kibana off, queue and
+                    scheduler as uid 1000. Needs a public URL (--url, or one
+                    kept from before). Writes nginx-site.conf for the host's
+                    nginx. Kept on later runs; --dev goes back.
+  --data-dir=DIR    with --prod: keep the data in host directories under DIR
+                    instead of Docker volumes — DIR/mysql, DIR/elasticsearch,
+                    DIR/redis (own infrastructure) and DIR/<stack>/storage
+                    (uploads, logs). Created with the right owners (sudo when
+                    not root). Kept on later runs.
+
   -f, --force       skip the confirmation prompt (required in CI / non-interactive)
   --no-force-env    keep an existing backend/.env instead of rewriting it
   --check           only validate the arguments and the machine (name, slot,
@@ -72,6 +87,7 @@ tiers, then toggles compose — hence the confirmation prompt.
 e.g.  configure.sh cloud docker   ·   configure.sh ollama-host host -f
       configure.sh cloud docker --infra=shared --name=staging
       configure.sh cloud docker --infra=shared --name=staging --url=https://staging.example.org
+      configure.sh cloud docker --prod --url=https://tydal.example.org --data-dir=/srv/tydal-data
 EOF
 }
 
@@ -91,6 +107,9 @@ URL_SET=false      # --url given (even empty: --url= clears a kept one)
 URL_ARG=""         # --url=URL
 INFRA_GIVEN=false  # --infra= given explicitly (else --name implies shared)
 CHECK=false        # --check: validate + resolve, print the plan, change nothing
+PROD_FLAG=""       # --prod → on, --dev → off, neither → kept from the root .env
+DATA_DIR_SET=false # --data-dir given
+DATA_DIR_ARG=""    # --data-dir=DIR
 for arg in "$@"; do
   case "$arg" in
     -h|--help)          usage; exit 0 ;;
@@ -110,6 +129,9 @@ for arg in "$@"; do
     --no-provision)     PROVISION=false ;;
     --url=*)            URL_SET=true; URL_ARG="${arg#--url=}" ;;
     --check)            CHECK=true ;;
+    --prod)             PROD_FLAG=on ;;
+    --dev)              PROD_FLAG=off ;;
+    --data-dir=*)       DATA_DIR_SET=true; DATA_DIR_ARG="${arg#--data-dir=}" ;;
     *) echo "configure.sh: unknown argument '$arg'" >&2; echo >&2; usage >&2; exit 1 ;;
   esac
 done
@@ -175,6 +197,36 @@ if [ "$INFRA_MODE" = "shared" ] && [ "$FORCE_ENV" = false ]; then
   die "--infra=shared rewrites backend/.env with this installation's identity; drop --no-force-env (secrets are kept, a backup is saved)."
 fi
 
+# --- production (--prod / --dev, kept as TYDAL_ENV in the root .env) ---
+PREV_ROOT_ENV=""
+[ -f "$ROOT/.env" ] && PREV_ROOT_ENV="$ROOT/.env"
+prev_root() { [ -n "$PREV_ROOT_ENV" ] && env_get "$1" "$PREV_ROOT_ENV" || true; }
+case "$PROD_FLAG" in
+  on)  PROD=true ;;
+  off) PROD=false ;;
+  *)   PROD=false; [ "$(prev_root TYDAL_ENV)" = "production" ] && PROD=true ;;
+esac
+DATA_DIR=""
+if [ "$DATA_DIR_SET" = true ]; then
+  DATA_DIR="${DATA_DIR_ARG%/}"
+elif [ "$PROD" = true ]; then
+  DATA_DIR="$(prev_root TYDAL_DATA_DIR)"
+fi
+if [ "$PROD" = true ]; then
+  [ "$INFRA" = "docker" ] || die "--prod runs the application in containers: use the docker application tier (configure.sh <ai> docker --prod)."
+  [ "$FORCE_ENV" = true ] || die "--prod rewrites backend/.env for production; drop --no-force-env (secrets are kept, a backup is saved)."
+  if [ "$URL_SET" = true ]; then
+    [ -n "$URL_ARG" ] || die "--prod needs a public URL; --url= would drop it."
+  elif [ -z "$( [ -f "$ROOT/backend/.env" ] && env_get TYDAL_PUBLIC_URL "$ROOT/backend/.env" )" ]; then
+    die "--prod needs the public URL people will use: add --url=https://your-host.example.org"
+  fi
+  if [ -n "$DATA_DIR" ]; then
+    case "$DATA_DIR" in /*) ;; *) die "--data-dir='$DATA_DIR': use an absolute path." ;; esac
+  fi
+else
+  [ -z "$DATA_DIR" ] || die "--data-dir is for --prod (development keeps its data in Docker volumes)."
+fi
+
 # --- shared: the slot (ports + Redis DBs), resolved before anything is written ---
 # Order: --slot=N, else the slot this installation already had (root .env),
 # else the lowest free one. "Free" means no other container publishes its
@@ -202,7 +254,7 @@ if [ "$INFRA_MODE" = "shared" ]; then
       # Another installation's keys in this slot's Redis DBs.
       if [ "$REDIS_OK" = true ]; then
         for db in $((2 * n)) $((2 * n + 1)); do
-          key="$(docker exec "${INFRA_STACK}_redis" redis-cli -n "$db" --scan --count 1000 2>/dev/null \
+          key="$(docker exec "${INFRA_STACK}_redis" sh -c '[ -n "${REDIS_PASSWORD:-}" ] && export REDISCLI_AUTH="$REDIS_PASSWORD"; exec redis-cli -n "$1" --scan --count 1000' sh "$db" 2>/dev/null \
                    | grep -v "^${STACK}_" | head -1 || true)"
           if [ -n "$key" ]; then echo "Redis DB $db holds another installation's keys (e.g. '$key')"; return; fi
         done
@@ -281,6 +333,7 @@ if [ "$CHECK" = true ]; then
   else
     echo "Check OK: own infrastructure (tydal_* containers, app :8000, Vite :3005)."
   fi
+  [ "$PROD" = true ] && echo "  production$( [ -n "$DATA_DIR" ] && echo ", data in $DATA_DIR")"
   exit 0
 fi
 
@@ -307,6 +360,13 @@ if [ "$FORCE" = false ]; then
     echo "  • leave an existing backend/.env untouched (--no-force-env)"
   fi
   echo "  • toggle the matching docker-compose.yml services"
+  if [ "$PROD" = true ]; then
+    echo "  • PRODUCTION: ports on 127.0.0.1 only, APP_ENV=production, debug off$( [ "$INFRA_MODE" = own ] && echo ', generated MySQL/Redis passwords, Kibana off')"
+    [ -n "$DATA_DIR" ] && echo "    data in $DATA_DIR (created with the right owners; sudo if needed)"
+    echo "    and nginx-site.conf for the host's nginx"
+  elif [ "$(prev_root TYDAL_ENV)" = "production" ]; then
+    echo "  • back to DEVELOPMENT (--dev): the production root .env is retired (backup saved)"
+  fi
   if [ "$URL_SET" = true ] && [ -n "$URL_ARG" ]; then
     echo "  • public URL $URL_ARG (APP_URL, Sanctum domain, the SPA's API base URL)"
   elif [ "$URL_SET" = true ]; then
@@ -505,6 +565,7 @@ fi
 #           (an own-infrastructure install keeps 0/1)
 #   ports   app 8000+100·slot, Vite 3005+100·slot
 #   names   containers tydal_NAME_*, Compose project tydal_NAME
+ROOT_ENV_NEW="$(mktemp)"   # the root .env being assembled (shared and/or --prod)
 if [ "$INFRA_MODE" = "shared" ]; then
   ENV_OUT="$ROOT/backend/.env"
   # SLOT, SLOT_NOTE, HTTP_PORT, VITE_PORT and STACK were resolved (and checked
@@ -545,13 +606,17 @@ if [ "$INFRA_MODE" = "shared" ]; then
     fi
   fi
 
-  # Root .env — Compose's project env file. docker-compose.yml interpolates it;
-  # tools/lib/stack.lib.sh reads it for the scripts.
-  if [ -f "$ROOT/.env" ]; then
-    ROOT_BACKUP="$ROOT/.env.bak.$(date +%Y%m%d-%H%M%S)"
-    cp "$ROOT/.env" "$ROOT_BACKUP"
-    echo "Backed up existing root .env → $(basename "$ROOT_BACKUP")"
+  # The infrastructure's Redis password (production infra has one; read from
+  # its container, so no copy of the other checkout's secrets is needed).
+  INFRA_REDIS_PASS="$(docker exec "${INFRA_STACK}_redis" sh -c 'printf %s "${REDIS_PASSWORD:-}"' 2>/dev/null || true)"
+  if [ -n "$INFRA_REDIS_PASS" ]; then
+    upsert_env_var REDIS_PASSWORD "$INFRA_REDIS_PASS" "$ENV_OUT"
+    echo "  Redis password: taken from ${INFRA_STACK}_redis"
   fi
+
+  # Root .env — Compose's project env file. docker-compose.yml interpolates it;
+  # tools/lib/stack.lib.sh reads it for the scripts. Assembled here, written
+  # (with a backup of the old one) after the production settings below.
   {
     echo "# Written by tools/deploy/configure.sh — shared-infrastructure installation (#23)."
     echo "# Compose reads it for docker-compose.yml; the tools/ scripts read it through"
@@ -582,15 +647,118 @@ if [ "$INFRA_MODE" = "shared" ]; then
       echo "TYDAL_NETWORK=$INFRA_NETWORK"
       echo "TYDAL_NETWORK_EXTERNAL=true"
     fi
-  } >"$ROOT/.env"
-  echo "Wrote the root .env (Compose project $STACK, containers ${STACK}_*)."
-elif [ -f "$ROOT/.env" ] && grep -q '^TYDAL_INFRA_MODE=shared' "$ROOT/.env"; then
-  # Back to own infrastructure: the shared setup's root .env would keep the
-  # infrastructure services switched off and the names/ports offset.
-  ROOT_BACKUP="$ROOT/.env.bak.$(date +%Y%m%d-%H%M%S)"
-  mv "$ROOT/.env" "$ROOT_BACKUP"
-  echo "Retired the shared-infrastructure root .env → $(basename "$ROOT_BACKUP") (own infrastructure, default names)."
-  RETIRED_SHARED=true
+  } >"$ROOT_ENV_NEW"
+fi
+
+# --- production settings (--prod) ---
+# Own infrastructure: generated passwords (kept across runs — MySQL and Redis
+# only read them when their data is first created), loopback-only ports, data
+# directories, Kibana off. Every installation: production .env, uid-1000
+# workers, its storage directory.
+if [ "$PROD" = true ]; then
+  [ "$INFRA_MODE" = "shared" ] || STACK="tydal"
+  gen_secret() { od -An -N18 -tx1 /dev/urandom | tr -d ' \n'; }
+  if [ "$INFRA_MODE" = "own" ]; then
+    MYSQL_ROOT_PASS="$(prev_root TYDAL_MYSQL_ROOT_PASSWORD)"; [ -n "$MYSQL_ROOT_PASS" ] || MYSQL_ROOT_PASS="$(gen_secret)"
+    MYSQL_APP_PASS="$(prev_root TYDAL_MYSQL_PASSWORD)";       [ -n "$MYSQL_APP_PASS" ]  || MYSQL_APP_PASS="$(gen_secret)"
+    REDIS_PASS="$(prev_root TYDAL_REDIS_PASSWORD)";           [ -n "$REDIS_PASS" ]      || REDIS_PASS="$(gen_secret)"
+    ES_HEAP="$(prev_root TYDAL_ES_HEAP)";                     [ -n "$ES_HEAP" ]         || ES_HEAP="768m"
+    {
+      echo "# Written by tools/deploy/configure.sh — production installation running its own"
+      echo "# infrastructure (MySQL/ES/Redis/Tika). Compose reads it for docker-compose.yml;"
+      echo "# the tools/ scripts read it through tools/lib/stack.lib.sh. Re-run configure.sh"
+      echo "# to change it. Holds secrets: keep it 600."
+      echo "TYDAL_INFRA_MODE=own"
+    } >"$ROOT_ENV_NEW"
+  fi
+  STORAGE_DIR=""; [ -n "$DATA_DIR" ] && STORAGE_DIR="$DATA_DIR/$STACK/storage"
+  {
+    echo "#"
+    echo "# --- production (--prod) ---"
+    echo "TYDAL_ENV=production"
+    echo "# Every published port on loopback only: the host's nginx is the way in."
+    echo "TYDAL_PORT_BIND=127.0.0.1:"
+    echo "# Queue and scheduler run as the image's uid-1000 user, not root."
+    echo "TYDAL_WORKER_EXEC=gosu application"
+    if [ -n "$DATA_DIR" ]; then
+      echo "# --data-dir: host directories instead of Docker volumes."
+      echo "TYDAL_DATA_DIR=$DATA_DIR"
+      echo "TYDAL_STORAGE=$STORAGE_DIR"
+    fi
+    if [ "$INFRA_MODE" = "own" ]; then
+      echo "# Infrastructure secrets, generated once (MySQL/Redis only read them when"
+      echo "# their data is first created — changing them here later has no effect)."
+      echo "TYDAL_MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASS"
+      echo "TYDAL_MYSQL_PASSWORD=$MYSQL_APP_PASS"
+      echo "TYDAL_REDIS_PASSWORD=$REDIS_PASS"
+      echo "TYDAL_ES_HEAP=$ES_HEAP"
+      echo "# Kibana only on request: docker compose --profile kibana up -d kibana"
+      echo "TYDAL_KIBANA_PROFILE=kibana"
+      if [ -n "$DATA_DIR" ]; then
+        echo "TYDAL_MYSQL_DATA=$DATA_DIR/mysql"
+        echo "TYDAL_ES_DATA=$DATA_DIR/elasticsearch"
+        echo "TYDAL_REDIS_DATA=$DATA_DIR/redis"
+      fi
+    fi
+  } >>"$ROOT_ENV_NEW"
+
+  ENV_OUT="$ROOT/backend/.env"
+  set_env_var    APP_ENV         production "$ENV_OUT"
+  set_env_var    APP_DEBUG       false      "$ENV_OUT"
+  set_env_var    LOG_LEVEL       info       "$ENV_OUT"
+  set_env_var    AI_DEBUG        false      "$ENV_OUT"
+  # The app port is published on 127.0.0.1 only, so the one proxy in front
+  # (the host's nginx) is the only peer: trust it for https/host headers.
+  upsert_env_var TRUSTED_PROXIES '*'        "$ENV_OUT"
+  if [ "$INFRA_MODE" = "own" ]; then
+    set_env_var DB_PASSWORD    "$MYSQL_APP_PASS" "$ENV_OUT"
+    set_env_var REDIS_PASSWORD "$REDIS_PASS"     "$ENV_OUT"
+  fi
+  echo "  production: APP_ENV=production, debug off, TRUSTED_PROXIES=*, ports on 127.0.0.1$( [ "$INFRA_MODE" = own ] && echo ', generated MySQL/Redis passwords, Kibana off')"
+
+  # Data directories, owned as the containers expect: Elasticsearch and PHP
+  # (php-fpm, queue, scheduler) run as uid 1000; MySQL and Redis fix their own.
+  if [ -n "$DATA_DIR" ]; then
+    as_root() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
+    DIRS=("$STORAGE_DIR/app/public" "$STORAGE_DIR/framework/cache/data" "$STORAGE_DIR/framework/sessions"
+          "$STORAGE_DIR/framework/views" "$STORAGE_DIR/logs")
+    [ "$INFRA_MODE" = "own" ] && DIRS+=("$DATA_DIR/mysql" "$DATA_DIR/elasticsearch" "$DATA_DIR/redis")
+    if mkdir -p "${DIRS[@]}" 2>/dev/null || as_root mkdir -p "${DIRS[@]}"; then
+      as_root chown -R 1000:1000 "$DATA_DIR/$STACK"
+      [ "$INFRA_MODE" = "own" ] && as_root chown 1000:0 "$DATA_DIR/elasticsearch"
+      echo "  data: $DATA_DIR$( [ "$INFRA_MODE" = own ] && echo ' (mysql, elasticsearch, redis)'), storage $STORAGE_DIR"
+    else
+      die "couldn't create the data directories under $DATA_DIR (needs root or sudo)."
+    fi
+  fi
+fi
+
+# --- root .env: write what was assembled, or retire a configure-written one ---
+if [ -s "$ROOT_ENV_NEW" ]; then
+  if [ -f "$ROOT/.env" ]; then
+    ROOT_BACKUP="$ROOT/.env.bak.$(date +%Y%m%d-%H%M%S)"
+    cp "$ROOT/.env" "$ROOT_BACKUP"
+    chmod 600 "$ROOT_BACKUP"
+    echo "Backed up existing root .env → $(basename "$ROOT_BACKUP")"
+  fi
+  mv "$ROOT_ENV_NEW" "$ROOT/.env"
+  chmod 600 "$ROOT/.env"
+  if [ "$INFRA_MODE" = "shared" ]; then
+    echo "Wrote the root .env (Compose project $STACK, containers ${STACK}_*$( [ "$PROD" = true ] && echo ', production'))."
+  else
+    echo "Wrote the root .env (own infrastructure, production; holds secrets — mode 600)."
+  fi
+else
+  rm -f "$ROOT_ENV_NEW"
+  if [ -f "$ROOT/.env" ] && grep -q '^TYDAL_INFRA_MODE=\|^TYDAL_ENV=' "$ROOT/.env"; then
+    # Back to own infrastructure and/or development: the old root .env would keep
+    # the infrastructure off, the names/ports offset, or production settings.
+    grep -q '^TYDAL_INFRA_MODE=shared' "$ROOT/.env" && RETIRED_SHARED=true
+    ROOT_BACKUP="$ROOT/.env.bak.$(date +%Y%m%d-%H%M%S)"
+    mv "$ROOT/.env" "$ROOT_BACKUP"
+    chmod 600 "$ROOT_BACKUP"
+    echo "Retired the configure-written root .env → $(basename "$ROOT_BACKUP") (own infrastructure, development defaults)."
+  fi
 fi
 
 # --- public URL (--url, kept as TYDAL_PUBLIC_URL in backend/.env) ---
@@ -651,6 +819,51 @@ if [ -n "$PUBLIC_URL" ]; then
   upsert_env_var VITE_API_BASE_URL "$PUBLIC_URL/api/v1" "$ROOT/frontend/.env"
 fi
 
+# --- production: a server block for the host's nginx (nginx-site.conf) ---
+# nginx serves the built SPA from frontend/build and passes the API, the vault
+# grammar (/h, /v, /vault) and the health check to the app container on
+# 127.0.0.1. HTTP only: certbot adds TLS (certbot --nginx -d HOST).
+if [ "$PROD" = true ] && [ -n "$PUBLIC_URL" ]; then
+  SITE_HOST="${PUBLIC_URL#*://}"; SITE_HOST="${SITE_HOST%%:*}"
+  SITE_PORT="$( [ "$INFRA_MODE" = shared ] && echo "$HTTP_PORT" || echo 8000 )"
+  cat >"$ROOT/nginx-site.conf" <<NGINX
+# Written by tools/deploy/configure.sh --prod for $PUBLIC_URL.
+# Install:  sudo cp nginx-site.conf /etc/nginx/sites-available/$SITE_HOST.conf
+#           sudo ln -s /etc/nginx/sites-available/$SITE_HOST.conf /etc/nginx/sites-enabled/
+#           sudo nginx -t && sudo systemctl reload nginx
+#           sudo certbot --nginx -d $SITE_HOST
+server {
+    listen 80;
+    listen [::]:80;
+    server_name $SITE_HOST;
+
+    # The SPA (npm run build). Unknown paths fall back to index.html (client routing).
+    root $ROOT/frontend/build;
+    index index.html;
+    location / {
+        try_files \$uri /index.html;
+    }
+
+    # Uploads up to the app's PHP_POST_MAX_SIZE.
+    client_max_body_size 310m;
+
+    # The app container: API, vault surfaces, health check.
+    location ~ ^/(api|h|v|vault|up)(/|\$) {
+        proxy_pass http://127.0.0.1:$SITE_PORT;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-Port \$server_port;
+        proxy_read_timeout 360s;   # AI analysis and streamed answers
+        proxy_buffering off;       # streamed responses (ask, auto-approve)
+    }
+}
+NGINX
+  echo "Wrote nginx-site.conf ($SITE_HOST → frontend/build + app 127.0.0.1:$SITE_PORT)."
+fi
+
 # --- docker-compose.yml service toggles ---
 # The app/queue/scheduler services follow the app topology; the ollama service
 # follows the AI arg (ollama-docker) — the two are independent, so e.g.
@@ -705,7 +918,13 @@ fi
 # --- next-step hint (per application tier) ---
 # install.sh prints its own summary at the very end (TYDAL_FROM_INSTALL=1), so
 # this hint would only scroll away under the dependency output there.
-if [ "${TYDAL_FROM_INSTALL:-}" != 1 ]; then
+if [ "${TYDAL_FROM_INSTALL:-}" != 1 ] && [ "$PROD" = true ]; then
+  echo
+  echo "Next (production):"
+  echo "  tools/deploy/reload.sh     # if the stack is up: recreate the containers with this configuration"
+  echo "  tools/deploy/install.sh …  # first time: dependencies (no dev packages), SPA build, config cache"
+  echo "  nginx-site.conf            # install it in the host's nginx (instructions at its top) + certbot"
+elif [ "${TYDAL_FROM_INSTALL:-}" != 1 ]; then
   echo
   echo "Next — start.sh owns startup, so run it FIRST (then the rest in another terminal):"
   if [ "$INFRA_MODE" = "shared" ]; then

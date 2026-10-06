@@ -24,6 +24,7 @@ Usage: reload.sh [-h|--help]
 Reload the backend after editing code or .env (NON-destructive — no data loss).
 Topology-aware:
   docker — docker compose restart app queue
+           (production: up -d, config:cache, restart app queue scheduler)
   host   — php artisan queue:restart (web hot-reloads on its own)
 
 Only the queue worker (and php-fpm config) need this; controllers/routes/views
@@ -42,7 +43,18 @@ done
 INFRA="$(detect_infra "$BACKEND_DIR/.env" "$COMPOSE")"
 echo "Application tier: $INFRA"
 
-if [ "$INFRA" = "docker" ]; then
+# Production (configure.sh --prod) caches the config, so .env edits only apply
+# once it's rebuilt; and the root .env may have changed (recreate, not restart).
+. "$SCRIPT_DIR/../lib/stack.lib.sh"
+stack_load "$ROOT"
+
+if [ "$INFRA" = "docker" ] && [ "$TYDAL_ENV" = "production" ]; then
+  echo "Production: recreating changed containers, rebuilding the config cache…"
+  docker compose -f "$COMPOSE" up -d --remove-orphans
+  docker compose -f "$COMPOSE" exec -T -u application -w /var/www/html app php artisan config:cache
+  docker compose -f "$COMPOSE" restart app queue scheduler
+  echo "Done — code, .env and the config cache reloaded. (Data untouched.)"
+elif [ "$INFRA" = "docker" ]; then
   echo "Restarting app + queue containers…"
   docker compose -f "$COMPOSE" restart app queue
   echo "Done — containers reloaded code + .env. (Data volumes untouched.)"

@@ -18,6 +18,7 @@
 #                         infrastructure (= TYDAL_STACK in own mode)  (tydal)
 #     TYDAL_HTTP_PORT     app host port (artisan serve / app container) (8000)
 #     TYDAL_VITE_PORT     Vite dev server port                         (3005)
+#     TYDAL_ENV           development | production (configure.sh --prod) (development)
 #
 # stack_container SVC   → this installation's container, e.g. tydal_app
 # infra_container SVC   → the infrastructure's container, e.g. tydal_mysql
@@ -44,7 +45,7 @@ stack_env_get() {
 stack_load() {
   local env_file="$1/.env" key val
   for key in TYDAL_STACK TYDAL_INFRA_MODE TYDAL_INSTALLATION TYDAL_INFRA_STACK \
-             TYDAL_HTTP_PORT TYDAL_VITE_PORT; do
+             TYDAL_HTTP_PORT TYDAL_VITE_PORT TYDAL_ENV; do
     if [ -z "${!key:-}" ]; then
       val="$(stack_env_get "$key" "$env_file")"
       [ -n "$val" ] && printf -v "$key" '%s' "$val"
@@ -55,6 +56,7 @@ stack_load() {
   TYDAL_INSTALLATION="${TYDAL_INSTALLATION:-}"
   TYDAL_HTTP_PORT="${TYDAL_HTTP_PORT:-8000}"
   TYDAL_VITE_PORT="${TYDAL_VITE_PORT:-3005}"
+  TYDAL_ENV="${TYDAL_ENV:-development}"    # production after configure.sh --prod
   if [ "$TYDAL_INFRA_MODE" = "shared" ]; then
     TYDAL_INFRA_STACK="${TYDAL_INFRA_STACK:-tydal}"
   else
@@ -82,9 +84,17 @@ infra_mysql_ping() {
 # many there were.
 infra_redis_del_prefix() {
   docker exec "$(infra_container redis)" sh -c '
+    [ -n "${REDIS_PASSWORD:-}" ] && export REDISCLI_AUTH="$REDIS_PASSWORD"   # production Redis
     n=$(redis-cli -n "$1" --scan --pattern "$2*" | wc -l)
     redis-cli -n "$1" --scan --pattern "$2*" | xargs -r -n 100 redis-cli -n "$1" DEL >/dev/null
     echo $n' sh "$1" "$2"
+}
+
+# infra_redis_password : the infrastructure Redis's password (empty when it has
+# none, as in development). Read from the container, so a shared installation
+# never needs a copy of the infrastructure checkout's secrets file.
+infra_redis_password() {
+  docker exec "$(infra_container redis)" sh -c 'printf %s "${REDIS_PASSWORD:-}"' 2>/dev/null || true
 }
 
 # infra_running : succeed when the infrastructure's MySQL container is running

@@ -153,6 +153,15 @@ fi
 echo "   Production: a cron entry '* * * * * php artisan schedule:run' instead (DEPLOYMENT.md)."
 echo
 
+# Production (configure.sh --prod): no Vite dev server — the host's nginx serves
+# the built SPA (frontend/build, see nginx-site.conf). The containers are up and
+# restart with Docker, so there's nothing to keep in the foreground.
+if [ "$TYDAL_ENV" = "production" ]; then
+  echo "Production: containers are up (app on 127.0.0.1:$TYDAL_HTTP_PORT). The host's nginx serves"
+  echo "frontend/build and proxies the API to it — see nginx-site.conf. No Vite here."
+  exit 0
+fi
+
 # Vite runs in the foreground; Ctrl-C here triggers the cleanup trap above.
 # Docker-only host (no npm): run Vite in a disposable node container instead.
 # Plain port mapping (works on every Docker install — no host-networking
