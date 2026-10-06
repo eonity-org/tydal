@@ -504,6 +504,7 @@ never changed; `--curator-password` is ignored for it, with a warning.
 | `resource:prune` | daily 03:00 | permanently delete abandoned drafts (`--draft-hours=24`) and expired soft-deletes (`--deleted-days=30`); `--dry-run` supported |
 | `files:purge-uncommitted` | daily 03:30 | hard-delete files left by crashed edit sessions (`--older-than=24` hours) |
 | `resources:purge-drafts` | hourly | hard-delete abandoned create-mode drafts (`--older-than=1` hour) |
+| `aity:purge-batches` | daily 04:00 | delete AiTy Review batches reviewed or finished more than `AITY_BATCH_RETENTION_DAYS` (30) days ago — the batch workspace only, never its resources (`--days=N`, `0` disables; `--dry-run`) |
 | `aity:purge-stale` | manual | mark stale AITY file states failed and purge matching Redis jobs (`--hours=24 --queue=default --dry-run`) |
 
 The scheduler needs `php artisan schedule:work` (dev) or a system cron
@@ -514,6 +515,33 @@ that's the `tydal_scheduler` compose service (`tydal_NAME_scheduler` on a
 shared-infrastructure installation), toggled with app/queue by
 `configure.sh`. On the host tier it's a background `schedule:work` that stops
 with Ctrl-C. Check what's scheduled with `php artisan schedule:list`.
+
+### `aity:purge-batches`
+
+Every Auto upload opens an AiTy Review batch, so the AiTy Review page grows by
+one row per upload. This command deletes the old ones:
+
+```bash
+php artisan aity:purge-batches             # retention from AITY_BATCH_RETENTION_DAYS (default 30)
+php artisan aity:purge-batches --days=7    # override the retention for this run
+php artisan aity:purge-batches --dry-run   # list what would go, delete nothing
+```
+
+A batch is deleted when it was **reviewed** (opened with *Review* on the AiTy
+Review page) or its **auto-approve job ended** (done or failed), and that
+happened more than N days ago — counted from the review date, or from the
+batch's last change when it was never opened. Batches whose job is still
+waiting or running, or whose resources are still being analysed, are kept, and
+so is any batch nobody has reviewed yet in manual mode.
+
+AiTy Review batches are deleted automatically 30 days after they were reviewed
+or finished (an administrator can change the period); only the batch goes, the
+resources stay in the library and in every other workspace.
+
+Deleting a batch goes through the same path as its Delete button
+(`WorkspaceService::deleteWorkspace`): the membership rows are detached and the
+members reindexed. `AITY_BATCH_RETENTION_DAYS=0` (or `--days=0`) turns the
+cleanup off.
 
 ## Debug helpers
 

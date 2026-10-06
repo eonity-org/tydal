@@ -102,6 +102,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md#several-installations-on-one-server).
 | `docker exec -w /var/www/html tydal_app php artisan resource:prune` | `cd backend && php artisan resource:prune` | ⚠ Hard-delete drafts > 24 h and soft-deletes > 30 d (scheduled daily) | stack |
 | `docker exec -w /var/www/html tydal_app php artisan resources:purge-drafts` | `cd backend && php artisan resources:purge-drafts` | ⚠ Hard-delete abandoned create-mode drafts > 1 h (scheduled hourly) | stack |
 | `docker exec -w /var/www/html tydal_app php artisan files:purge-uncommitted` | `cd backend && php artisan files:purge-uncommitted` | ⚠ Hard-delete files from crashed edit sessions > 24 h (scheduled daily) | stack |
+| `docker exec -w /var/www/html tydal_app php artisan aity:purge-batches [--days=N] [--dry-run]` | `cd backend && php artisan aity:purge-batches` | Delete AiTy Review batches reviewed/finished more than `AITY_BATCH_RETENTION_DAYS` (30) days ago; resources kept (scheduled daily) | stack |
 | `docker exec -w /var/www/html tydal_app php artisan aity:purge-stale` | `cd backend && php artisan aity:purge-stale` | Mark stuck AITY states failed, purge their Redis jobs (manual) | stack |
 
 ## Debugging & inspection

@@ -115,8 +115,12 @@ automatically after a while, files and all.
 name, how many resources and files they hold, how far the analysis has got, and
 whether they're done. **Review** opens the batch's resources so you can check
 what was applied, with **Auto-approve all** to apply any remaining suggestions
-and **View log** to see what was done. The bin removes a batch that hasn't been
-reviewed yet.
+and **View log** to see what was done. The bin removes a batch, whether or not
+it has been reviewed.
+
+Batches are also deleted automatically 30 days after they were reviewed or
+finished (an administrator can change the period). Only the batch goes: the
+resources stay in the library and in every other workspace.
 
 ![A finished Auto batch](images/03-aity-review.png)
 

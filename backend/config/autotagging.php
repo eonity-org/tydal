@@ -66,6 +66,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | AiTy Review batch retention
+    |--------------------------------------------------------------------------
+    |
+    | Every Auto upload opens an AiTy Review batch (an `aity_review` system
+    | workspace). `aity:purge-batches`, scheduled daily, deletes a batch once it
+    | was reviewed (opened from the AiTy Review page) or its auto-approve job
+    | finished more than this many days ago. Only the batch goes — never its
+    | resources. 0 disables the cleanup.
+    |
+    */
+    'aity_batch_retention_days' => (int) env('AITY_BATCH_RETENTION_DAYS', 30),
+
+    /*
+    |--------------------------------------------------------------------------
     | AI Activity Debug Log
     |--------------------------------------------------------------------------
     |
