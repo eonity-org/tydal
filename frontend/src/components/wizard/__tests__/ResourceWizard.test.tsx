@@ -277,6 +277,114 @@ describe('ResourceWizard — leaving and orphaned drafts', () => {
     expect(api.deleteResource).not.toHaveBeenCalled()
   })
 
+  it('retries only the failed row on Back → Next with the same selection, and updates the counts', async () => {
+    api.createResource
+      .mockResolvedValueOnce({ id: 'r1' } as never)
+      .mockResolvedValueOnce({ id: 'r2' } as never)
+      .mockResolvedValueOnce({ id: 'r3' } as never)
+    api.uploadFile
+      .mockResolvedValueOnce({ id: 'f1' } as never)
+      .mockRejectedValueOnce(new Error('The file type is not accepted.'))
+      .mockResolvedValueOnce({ id: 'f3' } as never)
+    const user = userEvent.setup()
+    render(<ResourceWizard open collectionId={1} onClose={() => {}} onSaved={() => {}} />)
+    await chooseBatchAndFile(user)
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    await user.upload(input, photo('army-0002.jpg'))
+    await screen.findByText('army-0002.jpg')
+    await user.click(nextButton())
+
+    expect(await screen.findByText('1 uploaded, 1 failed')).not.toBeNull()
+    expect(api.deleteResource).toHaveBeenCalledWith('r2')
+
+    await user.click(screen.getByRole('button', { name: /Back/ }))
+    await user.click(nextButton())
+
+    expect(await screen.findByText('2 resources uploaded')).not.toBeNull()
+    // Only the failed row is created and uploaded again; army-0001 is reused.
+    expect(api.createResource).toHaveBeenCalledTimes(3)
+    expect(api.createResource).toHaveBeenLastCalledWith(expect.objectContaining({ name: 'army-0002' }))
+    expect(api.uploadFile).toHaveBeenCalledTimes(3)
+    expect(api.uploadFile.mock.calls.map((c) => c[0])).toEqual(['r1', 'r2', 'r3'])
+    expect((api.uploadFile.mock.calls[2][1] as File).name).toBe('army-0002.jpg')
+    expect(api.deleteResource).toHaveBeenCalledTimes(1)
+  })
+
+  it('Keep pressed mid-upload waits for the upload in flight and publishes the resource it creates', async () => {
+    let finishCreate: (v: unknown) => void = () => {}
+    api.createResource.mockReturnValueOnce(new Promise((resolve) => { finishCreate = resolve }) as never)
+    const onClose = vi.fn()
+    const user = userEvent.setup()
+    render(<ResourceWizard open collectionId={1} onClose={onClose} onSaved={() => {}} />)
+    await chooseBatchAndFile(user)
+    await user.click(nextButton())
+    await waitFor(() => expect(api.createResource).toHaveBeenCalledTimes(1))
+
+    // The resource is still being created when the wizard is closed.
+    await closeWizard(user)
+    await user.click(await screen.findByRole('button', { name: 'Keep' }))
+
+    expect(await screen.findByText(/Finishing uploads… The file being uploaded is completed first/)).not.toBeNull()
+    for (const name of [/Finishing uploads/, 'Cancel', 'Delete all']) {
+      expect(screen.getByRole('button', { name })).toHaveProperty('disabled', true)
+    }
+    expect(api.updateResource).not.toHaveBeenCalled()
+
+    finishCreate({ id: 'r1' })
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledWith(true))
+    expect(api.uploadFile).toHaveBeenCalledWith('r1', expect.any(File), 'canonical')
+    expect(api.updateResource).toHaveBeenCalledTimes(1)
+    expect(api.updateResource).toHaveBeenCalledWith('r1', { state: 'live' })
+    expect(api.deleteResource).not.toHaveBeenCalled()
+  })
+
+  it('Keep pressed mid-upload starts no new resource after the one in flight', async () => {
+    let finishCreate: (v: unknown) => void = () => {}
+    api.createResource.mockReturnValueOnce(new Promise((resolve) => { finishCreate = resolve }) as never)
+    const onClose = vi.fn()
+    const user = userEvent.setup()
+    render(<ResourceWizard open collectionId={1} onClose={onClose} onSaved={() => {}} />)
+    await chooseBatchAndFile(user)
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    await user.upload(input, photo('army-0002.jpg'))
+    await screen.findByText('army-0002.jpg')
+    await user.click(nextButton())
+    await waitFor(() => expect(api.createResource).toHaveBeenCalledTimes(1))
+
+    await closeWizard(user)
+    await user.click(await screen.findByRole('button', { name: 'Keep' }))
+    finishCreate({ id: 'r1' })
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledWith(true))
+    expect(api.createResource).toHaveBeenCalledTimes(1)
+    expect(api.updateResource).toHaveBeenCalledTimes(1)
+    expect(api.updateResource).toHaveBeenCalledWith('r1', { state: 'live' })
+  })
+
+  it('Delete all pressed mid-upload waits for the upload in flight, then deletes that resource too', async () => {
+    let finishUpload: (v: unknown) => void = () => {}
+    api.uploadFile.mockReturnValueOnce(new Promise((resolve) => { finishUpload = resolve }) as never)
+    const onClose = vi.fn()
+    const user = userEvent.setup()
+    render(<ResourceWizard open collectionId={1} onClose={onClose} onSaved={() => {}} />)
+    await chooseBatchAndFile(user)
+    await user.click(nextButton())
+    await waitFor(() => expect(api.uploadFile).toHaveBeenCalledTimes(1))
+
+    await closeWizard(user)
+    await user.click(await screen.findByRole('button', { name: 'Delete all' }))
+    expect(await screen.findByText(/Finishing uploads…/, { selector: '[role="status"] *' })).not.toBeNull()
+    expect(api.deleteResource).not.toHaveBeenCalled()
+
+    finishUpload({ id: 'f1' })
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledWith(true))
+    expect(api.deleteResource).toHaveBeenCalledTimes(1)
+    expect(api.deleteResource).toHaveBeenCalledWith('r1')
+    expect(api.updateResource).not.toHaveBeenCalled()
+  })
+
   it('deletes the earlier drafts before uploading a changed selection', async () => {
     api.createResource
       .mockResolvedValueOnce({ id: 'r1' } as never)

@@ -100,7 +100,10 @@ collection's own fields, already filled with anything you entered at step 1.
 If you close the wizard after files have uploaded, it asks whether to **keep**
 the resources (they're added to the collection as they are, named after their
 files) or **delete them all**. Until the wizard finishes, the new resources are
-drafts that nobody else sees. If some of them can't be kept or deleted, the
+drafts that nobody else sees. If you choose while a file is still uploading,
+the dialog shows **Finishing uploads…** and waits for that file, so its resource
+is kept or deleted with the others; files that hadn't started uploading are
+left out. If some of them can't be kept or deleted, the
 wizard doesn't close: it lists them with the reason and offers **Retry**, or
 **Leave anyway**, in which case those stay drafts. If the wizard is interrupted
 (a closed tab, a lost connection) or you leave anyway, TYDAL clears those drafts
