@@ -16,7 +16,9 @@ All notable changes to TYDAL are documented here. The format follows
   prefix `tydal_NAME_` plus its own Redis DB numbers, session cookie, the
   SPA's login-token cookie (`VITE_AUTH_COOKIE`, default `JWT`),
   containers `tydal_NAME_*` (Compose project `tydal_NAME`), and app/Vite ports
-  offset by 100·slot. The infrastructure services carry a Compose profile that
+  offset by 100·slot (`--slot=N`, else kept from the last run, else the lowest
+  free slot; a slot whose ports or Redis DBs another installation uses is
+  refused). The infrastructure services carry a Compose profile that
   is empty (always on) by default and switched on only in shared mode; on the
   docker tier the app services join the infrastructure stack's network.
   New `tools/deploy/provision-shared.sh` creates the database, test database

@@ -424,8 +424,22 @@ segment). It derives everything that has to differ:
 | app, queue, scheduler, Vite | ✗ | containers `tydal_NAME_app`, `_queue`, `_scheduler`, `_vite`; ports app `8000+100·slot`, Vite `3005+100·slot` |
 | storage (uploads, logs) | ✗ | per checkout, as always |
 
-The **slot** (1–7) is derived from the name; pick one with `--slot=N` when two
-names land on the same one (the ports would clash). `configure.sh` prints it.
+The **slot** (1–7) fixes the ports and Redis DBs. `configure.sh` picks, in
+order: `--slot=N`; the slot this installation already had (kept in the root
+`.env`, so re-runs never move it); else the **lowest free** slot. A slot is
+taken when another container publishes its app or Vite port (stopped ones
+count), something else listens on them, or its Redis DBs hold another
+installation's keys; an explicit `--slot=N` that is taken is refused, naming
+what holds it. For installations you keep, **pass `--slot=N` explicitly** and
+note it down: an installation removed with `docker compose down` and idle in
+Redis leaves no trace, so "lowest free" could hand its slot to a newcomer.
+
+| slot | app | Vite | Redis DBs |
+|---|---|---|---|
+| 1 | 8100 | 3105 | 2 / 3 |
+| 2 | 8200 | 3205 | 4 / 5 |
+| … | … | … | … |
+| 7 | 8700 | 3705 | 14 / 15 |
 
 What `configure.sh --infra=shared` does:
 

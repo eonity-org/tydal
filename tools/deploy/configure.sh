@@ -36,7 +36,10 @@ Infrastructure (several installations on one server — DEPLOYMENT.md):
                     and offset ports. Writes the root .env (Compose's).
   --slot=N          shared only: 1–7, picks the port offset (app 8000+100·N,
                     Vite 3005+100·N) and Redis DBs (2N, 2N+1). Default: kept
-                    from a previous run, else derived from NAME.
+                    from a previous run, else the lowest free slot. A slot whose
+                    ports or Redis DBs another installation uses is refused.
+                    Pass it explicitly for installations you keep, so their
+                    ports never depend on what else runs.
   --infra-stack=S   shared only: container-name prefix of the stack running the
                     infrastructure (default tydal → tydal_mysql, tydal_redis, …)
   --infra-network=N shared + docker tier: that stack's Docker network (default:
@@ -76,7 +79,7 @@ FORCE=false        # -f/--force : skip the confirmation prompt
 FORCE_ENV=true     # rewrite backend/.env by default; --no-force-env opts out
 INFRA_MODE="own"   # --infra=own|shared (#23)
 NAME=""            # --name=NAME (shared only)
-SLOT=""            # --slot=N (shared only; default: kept, else derived from NAME)
+SLOT=""            # --slot=N (shared only; default: kept, else the lowest free one)
 INFRA_STACK=""     # --infra-stack=S (shared only; default tydal)
 INFRA_NETWORK=""   # --infra-network=N (shared + docker; default: detected)
 PROVISION=true     # --no-provision skips provision-shared.sh
@@ -113,6 +116,17 @@ fi
 
 # --- infrastructure mode (#23) ---
 die() { echo "configure.sh: $*" >&2; exit 1; }
+# env_get KEY FILE : print KEY's value (inline comment + surrounding quotes
+# stripped). Empty if KEY is absent or commented out.
+env_get() {
+  awk -v k="$1" 'index($0, k"=") == 1 {
+    v = substr($0, length(k) + 2)
+    sub(/[[:space:]]*#.*/, "", v)                 # strip inline comment
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)    # trim
+    gsub(/^"|"$/, "", v)                          # strip surrounding quotes
+    print v; exit
+  }' "$2"
+}
 case "$INFRA_MODE" in
   own)
     [ -z "$NAME" ] || die "--name is only for --infra=shared (an own-infrastructure installation keeps the default names)."
@@ -149,6 +163,84 @@ if [ "$INFRA_MODE" = "shared" ] && [ "$FORCE_ENV" = false ]; then
   die "--infra=shared rewrites backend/.env with this installation's identity; drop --no-force-env (secrets are kept, a backup is saved)."
 fi
 
+# --- shared: the slot (ports + Redis DBs), resolved before anything is written ---
+# Order: --slot=N, else the slot this installation already had (root .env),
+# else the lowest free one. "Free" means no other container publishes its
+# ports, nothing else listens on them, and its Redis DBs hold no other
+# installation's keys. An explicit or new slot that's taken is refused; a kept
+# one only warns (it's this installation's own, the other one moved in).
+if [ "$INFRA_MODE" = "shared" ]; then
+  STACK="tydal_$NAME"
+
+  # slot_taken N : print who uses slot N (empty = free). Docker and Redis are
+  # asked when reachable; without Docker only the port probe runs.
+  slot_taken() {
+    local n="$1" http=$((8000 + 100 * $1)) vite=$((3005 + 100 * $1)) port line who db key
+    if [ "$DOCKER_OK" = true ]; then
+      # Containers of other Compose projects publishing either port (stopped
+      # ones too: they get the port back on start).
+      while IFS='|' read -r who proj ports; do
+        [ "$proj" = "$STACK" ] && continue
+        for port in $ports; do
+          if [ "$port" = "$http" ] || [ "$port" = "$vite" ]; then
+            echo "port $port is published by container ${who#/}"; return
+          fi
+        done
+      done < <(docker ps -aq | xargs docker inspect -f '{{.Name}}|{{index .Config.Labels "com.docker.compose.project"}}|{{range $p, $b := .HostConfig.PortBindings}}{{range $b}}{{.HostPort}} {{end}}{{end}}' 2>/dev/null || true)
+      # Another installation's keys in this slot's Redis DBs.
+      if [ "$REDIS_OK" = true ]; then
+        for db in $((2 * n)) $((2 * n + 1)); do
+          key="$(docker exec "${INFRA_STACK}_redis" redis-cli -n "$db" --scan --count 1000 2>/dev/null \
+                   | grep -v "^${STACK}_" | head -1 || true)"
+          if [ -n "$key" ]; then echo "Redis DB $db holds another installation's keys (e.g. '$key')"; return; fi
+        done
+      fi
+    fi
+    # Something else (artisan serve / Vite on the host, any other program).
+    if [ "$PORTS_MINE" != "$n" ]; then
+      for port in "$http" "$vite"; do
+        if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
+          echo "port $port is in use on this machine"; return
+        fi
+      done
+    fi
+  }
+
+  DOCKER_OK=false; REDIS_OK=false
+  if docker info >/dev/null 2>&1; then
+    DOCKER_OK=true
+    [ "$(docker inspect -f '{{.State.Running}}' "${INFRA_STACK}_redis" 2>/dev/null)" = "true" ] && REDIS_OK=true
+  fi
+  KEPT_SLOT=""
+  if [ -f "$ROOT/.env" ] && [ "$(env_get TYDAL_INSTALLATION "$ROOT/.env")" = "$NAME" ]; then
+    KEPT_SLOT="$(env_get TYDAL_SLOT "$ROOT/.env")"
+    case "$KEPT_SLOT" in [1-7]) ;; *) KEPT_SLOT="" ;; esac
+  fi
+  # This installation's own processes may hold its kept slot's ports (a re-run
+  # while it's up): the port probe doesn't count them as someone else.
+  PORTS_MINE="$KEPT_SLOT"
+
+  if [ -n "$SLOT" ]; then
+    SLOT_NOTE="from --slot"
+    TAKEN="$(slot_taken "$SLOT")"
+    [ -z "$TAKEN" ] || die "--slot=$SLOT is taken: $TAKEN. Pick another slot (1–7) or stop that installation."
+  elif [ -n "$KEPT_SLOT" ]; then
+    SLOT="$KEPT_SLOT"; SLOT_NOTE="kept from the previous configuration"
+    TAKEN="$(slot_taken "$SLOT")"
+    [ -z "$TAKEN" ] || echo "⚠️  slot $SLOT (kept) is also used elsewhere: $TAKEN — pass --slot=N to move." >&2
+  else
+    for n in 1 2 3 4 5 6 7; do
+      if [ -z "$(slot_taken "$n")" ]; then SLOT="$n"; break; fi
+    done
+    [ -n "$SLOT" ] || die "no free slot (1–7): every slot's ports or Redis DBs are in use. Stop an installation or pass --slot=N."
+    SLOT_NOTE="the lowest free slot; kept on later runs"
+  fi
+  [ "$DOCKER_OK" = true ] || SLOT_NOTE="$SLOT_NOTE; Docker unreachable, only the ports were checked"
+  [ "$DOCKER_OK" = false ] || [ "$REDIS_OK" = true ] || SLOT_NOTE="$SLOT_NOTE; ${INFRA_STACK}_redis not running, its DBs weren't checked"
+  HTTP_PORT=$((8000 + 100 * SLOT))
+  VITE_PORT=$((3005 + 100 * SLOT))
+fi
+
 # Human-readable label for messages, e.g. "ollama-host (GPU)".
 case "$AI/$OLLAMA_PLACEMENT" in
   cloud/*)        AI_LABEL="cloud" ;;
@@ -179,7 +271,7 @@ if [ "$FORCE" = false ]; then
   fi
   if [ "$INFRA_MODE" = "shared" ]; then
     echo "  • SHARED infrastructure from the '$INFRA_STACK' stack, as installation '$NAME':"
-    echo "    write the root .env (containers tydal_${NAME}_*, offset ports), point"
+    echo "    write the root .env (containers tydal_${NAME}_*, slot $SLOT: app :$HTTP_PORT, Vite :$VITE_PORT), point"
     echo "    backend/.env at database/user tydal_$NAME, index prefix ${NAME}_ and its own"
     echo "    Redis DBs/prefix$( [ "$PROVISION" = true ] && echo ", and create that database + user in ${INFRA_STACK}_mysql")"
   elif [ -f "$ROOT/.env" ] && grep -q '^TYDAL_INFRA_MODE=shared' "$ROOT/.env"; then
@@ -313,17 +405,6 @@ upsert_env_var() {
   set_env_var "$key" "$val" "$file"
 }
 
-# env_get KEY FILE : print KEY's value (inline comment + surrounding quotes
-# stripped). Empty if KEY is absent or commented out.
-env_get() {
-  awk -v k="$1" 'index($0, k"=") == 1 {
-    v = substr($0, length(k) + 2)
-    sub(/[[:space:]]*#.*/, "", v)                 # strip inline comment
-    gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)    # trim
-    gsub(/^"|"$/, "", v)                          # strip surrounding quotes
-    print v; exit
-  }' "$2"
-}
 
 # embed_signature FILE : a fingerprint of the embedding identity. If this
 # changes between two .env files, stored vectors are stale (different model,
@@ -383,18 +464,8 @@ fi
 #   names   containers tydal_NAME_*, Compose project tydal_NAME
 if [ "$INFRA_MODE" = "shared" ]; then
   ENV_OUT="$ROOT/backend/.env"
-  SLOT_NOTE="from --slot"
-  if [ -z "$SLOT" ] && [ -f "$ROOT/.env" ] && [ "$(env_get TYDAL_INSTALLATION "$ROOT/.env")" = "$NAME" ]; then
-    SLOT="$(env_get TYDAL_SLOT "$ROOT/.env")"
-    case "$SLOT" in [1-7]) SLOT_NOTE="kept from the previous configuration" ;; *) SLOT="" ;; esac
-  fi
-  if [ -z "$SLOT" ]; then
-    SLOT=$(( $(printf '%s' "$NAME" | cksum | cut -d' ' -f1) % 7 + 1 ))
-    SLOT_NOTE="derived from the name — pass --slot=N if it clashes with another installation"
-  fi
-  HTTP_PORT=$((8000 + 100 * SLOT))
-  VITE_PORT=$((3005 + 100 * SLOT))
-  STACK="tydal_$NAME"
+  # SLOT, SLOT_NOTE, HTTP_PORT, VITE_PORT and STACK were resolved (and checked
+  # against the other installations) before the confirmation prompt.
 
   # Keep the database password across re-runs (the user already exists in the
   # shared MySQL with it); generate one the first time.
