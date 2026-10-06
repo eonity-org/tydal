@@ -29,7 +29,7 @@ Infrastructure (several installations on one server — DEPLOYMENT.md):
   --infra=own       (default) this checkout runs its own MySQL/ES/Kibana/Tika/
                     Redis under the usual names (tydal_mysql, …, app :8000).
   --infra=shared    use the infrastructure another checkout runs; requires
-  --name=NAME       NAME: lowercase letters/digits/_ , starts with a letter or
+  --name=NAME       (--name alone implies --infra=shared). NAME: lowercase letters/digits/_ , starts with a letter or
                     digit, at most 16 chars. Derives database + user tydal_NAME
                     (test DB tydal_NAME_test), index prefix NAME_, Redis prefix
                     tydal_NAME_ + its own Redis DBs, containers tydal_NAME_*,
@@ -60,6 +60,10 @@ Public URL (own or shared):
 
   -f, --force       skip the confirmation prompt (required in CI / non-interactive)
   --no-force-env    keep an existing backend/.env instead of rewriting it
+  --check           only validate the arguments and the machine (name, slot,
+                    a clash with another installation's containers), print
+                    the plan and exit — nothing is written (install.sh runs
+                    it before asking anything)
   -h, --help        show this help
 
 Rewrites backend/.env by default (backup saved, secrets kept) so it matches your
@@ -85,6 +89,8 @@ INFRA_NETWORK=""   # --infra-network=N (shared + docker; default: detected)
 PROVISION=true     # --no-provision skips provision-shared.sh
 URL_SET=false      # --url given (even empty: --url= clears a kept one)
 URL_ARG=""         # --url=URL
+INFRA_GIVEN=false  # --infra= given explicitly (else --name implies shared)
+CHECK=false        # --check: validate + resolve, print the plan, change nothing
 for arg in "$@"; do
   case "$arg" in
     -h|--help)          usage; exit 0 ;;
@@ -96,13 +102,14 @@ for arg in "$@"; do
     cloud|aicloud)      AI="cloud";  OLLAMA_PLACEMENT="none" ;;
     host|native)        INFRA="host" ;;   # 'native' kept as a deprecated alias
     docker)             INFRA="docker" ;;
-    --infra=*)          INFRA_MODE="${arg#--infra=}" ;;
+    --infra=*)          INFRA_MODE="${arg#--infra=}"; INFRA_GIVEN=true ;;
     --name=*)           NAME="${arg#--name=}" ;;
     --slot=*)           SLOT="${arg#--slot=}" ;;
     --infra-stack=*)    INFRA_STACK="${arg#--infra-stack=}" ;;
     --infra-network=*)  INFRA_NETWORK="${arg#--infra-network=}" ;;
     --no-provision)     PROVISION=false ;;
     --url=*)            URL_SET=true; URL_ARG="${arg#--url=}" ;;
+    --check)            CHECK=true ;;
     *) echo "configure.sh: unknown argument '$arg'" >&2; echo >&2; usage >&2; exit 1 ;;
   esac
 done
@@ -116,6 +123,11 @@ fi
 
 # --- infrastructure mode (#23) ---
 die() { echo "configure.sh: $*" >&2; exit 1; }
+# A name only means something for a shared installation: --name=NAME alone
+# implies --infra=shared (an explicit --infra=own with a name stays an error).
+if [ -n "$NAME" ] && [ "$INFRA_GIVEN" = false ]; then
+  INFRA_MODE="shared"
+fi
 # env_get KEY FILE : print KEY's value (inline comment + surrounding quotes
 # stripped). Empty if KEY is absent or commented out.
 env_get() {
@@ -239,6 +251,37 @@ if [ "$INFRA_MODE" = "shared" ]; then
   [ "$DOCKER_OK" = false ] || [ "$REDIS_OK" = true ] || SLOT_NOTE="$SLOT_NOTE; ${INFRA_STACK}_redis not running, its DBs weren't checked"
   HTTP_PORT=$((8000 + 100 * SLOT))
   VITE_PORT=$((3005 + 100 * SLOT))
+fi
+
+# --- own: the fixed names must be free (or this checkout's own) ---
+# An own-infrastructure installation uses tydal_mysql, tydal_app, … — if another
+# Compose project already holds one, `docker compose up` would fail halfway
+# with a name conflict. Stop here instead and say whose they are.
+if [ "$INFRA_MODE" = "own" ] && docker info >/dev/null 2>&1; then
+  for svc in mysql elasticsearch redis kibana tika app queue scheduler vite ollama; do
+    c="tydal_$svc"
+    dir="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' "$c" 2>/dev/null || true)"
+    [ -n "$(docker ps -aq --filter "name=^${c}\$")" ] || continue
+    [ "$dir" = "$ROOT" ] && continue
+    proj="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$c" 2>/dev/null || true)"
+    {
+      echo "configure.sh: container $c already exists$( [ -n "$proj" ] && echo " — Compose project '$proj'")$( [ -n "$dir" ] && echo " in $dir")."
+      echo "  Only one installation per machine can run its own infrastructure under the"
+      echo "  default names. Either join it as a shared installation:"
+      echo "    --infra=shared --name=NAME     (e.g. --name=dev)"
+      echo "  or stop it first$( [ -n "$dir" ] && echo ": (cd $dir && docker compose down)")."
+    } >&2
+    exit 1
+  done
+fi
+
+if [ "$CHECK" = true ]; then
+  if [ "$INFRA_MODE" = "shared" ]; then
+    echo "Check OK: shared installation '$NAME' on the '$INFRA_STACK' stack — slot $SLOT ($SLOT_NOTE): app :$HTTP_PORT, Vite :$VITE_PORT."
+  else
+    echo "Check OK: own infrastructure (tydal_* containers, app :8000, Vite :3005)."
+  fi
+  exit 0
 fi
 
 # Human-readable label for messages, e.g. "ollama-host (GPU)".

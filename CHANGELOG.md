@@ -36,6 +36,11 @@ All notable changes to TYDAL are documented here. The format follows
   and the SPA's `VITE_API_BASE_URL`, and keeps it as `TYDAL_PUBLIC_URL` in
   `backend/.env` so a later re-run no longer resets it to `localhost`;
   `--url=` drops it. DEPLOYMENT.md: "The public URL".
+- **`configure.sh --check`**, run by `install.sh` before its prompt: validates
+  the flags, the slot and, in own mode, that no other checkout holds the
+  `tydal_*` container names (it names that checkout's folder) — instead of
+  failing halfway through `docker compose up`. `--name=NAME` alone now
+  implies `--infra=shared`.
 - **`ELASTICSEARCH_INDEX_PREFIX`** (#14): a per-installation prefix applied to
   every physical index name — collection indices, their `_chunks`
   companions and `vault_<uuid>` — through one helper,

@@ -441,6 +441,13 @@ Redis leaves no trace, so "lowest free" could hand its slot to a newcomer.
 | … | … | … | … |
 | 7 | 8700 | 3705 | 14 / 15 |
 
+`--name=NAME` alone implies `--infra=shared`. Before asking anything,
+`install.sh` runs `configure.sh --check` (validate and print the plan, write
+nothing), so a bad flag, a taken slot or a clash stops it up front. The same
+check refuses an **own**-infrastructure install when another checkout already
+holds the `tydal_*` container names, and says which folder: join that one with
+`--infra=shared --name=NAME`, or stop it first.
+
 What `configure.sh --infra=shared` does:
 
 - writes `backend/.env` as for any tier, plus the values above, `APP_URL` and

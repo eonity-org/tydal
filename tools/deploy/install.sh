@@ -24,7 +24,7 @@ Redis) ALWAYS run in Docker; you only choose where these two tiers run:
   APP tier   host (PHP/nginx + queue on the host) | docker (in containers)
 
   --infra=own       (default) run this checkout's own backing services
-  --infra=shared --name=NAME
+  --infra=shared --name=NAME   (--name alone implies --infra=shared)
                     use the backing services another checkout already runs
                     (several installations on one server — DEPLOYMENT.md);
                     NAME derives the database, index/Redis prefixes, container
@@ -94,6 +94,12 @@ ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 echo "Development setup ..."
 echo ""
 
+# Validate everything configure.sh would refuse (flags, name, slot, a clash with
+# another installation's containers) BEFORE asking anything or installing.
+"$SCRIPT_DIR/configure.sh" "$AI_ARG" "$TOPO_ARG" --check ${INFRA_ARGS[@]+"${INFRA_ARGS[@]}"} \
+  $( [ "$FORCE_ENV" = false ] && echo --no-force-env ) || exit 1
+echo ""
+
 # --- confirmation (skipped with -f/--force) ---
 if [ "$FORCE" = false ]; then
   echo "One-time DEV setup... install.sh will:"
@@ -136,7 +142,11 @@ COMPOSE="$ROOT/docker-compose.yml"
 # A shared-infrastructure installation has no data volumes of its own (its data
 # lives in the shared MySQL/ES/Redis, kept apart by name), so skip the check.
 SHARED_INSTALL=false
-case " ${INFRA_ARGS[*]-} " in *" --infra=shared "*) SHARED_INSTALL=true ;; esac
+case " ${INFRA_ARGS[*]-} " in
+  *" --infra=shared "*) SHARED_INSTALL=true ;;
+  *" --infra=own "*)    ;;
+  *" --name="*)         SHARED_INSTALL=true ;;   # --name implies shared
+esac
 if [ "$FRESH" = false ] && [ "$SHARED_INSTALL" = false ] && docker info >/dev/null 2>&1; then
   PROJECT="$(basename "$ROOT" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')"
   _vols="$(docker volume ls -q 2>/dev/null \
