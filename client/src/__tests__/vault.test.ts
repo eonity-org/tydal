@@ -250,6 +250,24 @@ describe('createVaultConsumer', () => {
     expect(caps).toEqual({ ok: true, methods: ['activate', 'open', 'close'] })
   })
 
+  it('reads AITY suggestions for ingested resources over GET /w/suggestions', async () => {
+    const body = {
+      ok: true,
+      suggestions: { h1: { status: 'done', name: 'Pier at dawn', description: 'A pier.' } },
+    }
+    const { fn, calls } = fakeFetch(() => json(body))
+    const vault = createVaultConsumer({ baseUrl: root, vault: { hash: 'AbC123' }, key: 'tvk_write', fetch: fn })
+
+    const result = await vault.suggestions(['h1', 'h2'])
+
+    const url = new URL(calls[0].url)
+    expect(url.pathname).toBe('/h/AbC123/w/suggestions')
+    expect(url.searchParams.get('resources')).toBe('h1,h2')
+    expect(calls[0].init.method ?? 'GET').toBe('GET')
+    expect((calls[0].init.headers as Record<string, string>)['X-Vault-Key']).toBe('tvk_write')
+    expect(result).toEqual(body)
+  })
+
   it('throws when the probed key cannot write (403)', async () => {
     const { fn } = fakeFetch(() => json({ ok: false, error: 'Key not authorized to write on this vault' }, 403))
     const vault = createVaultConsumer({ baseUrl: root, vault: { hash: 'AbC123' }, key: 'tvk_read', fetch: fn })

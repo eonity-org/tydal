@@ -420,6 +420,53 @@ class VaultNamespaceController extends Controller
         return $this->vaultJson($body);
     }
 
+    /**
+     * AITY's proposals for resources this vault ingested (VAULT_WRITE_METHODS.md
+     * §5) — a read beside the write probe, for a key that may `update`: whoever
+     * can apply a suggestion may see it. Not a write, so it isn't audited and a
+     * consumer can poll it while the pipeline runs. `resources` is a
+     * comma-separated list of the hashes `ingest` returned. Reading never
+     * starts AITY: only an `ingest` with `suggest` does.
+     */
+    public function hashVaultSuggestions(string $vaultHash, Request $request, VaultIngest $ingest): JsonResponse
+    {
+        return $this->suggestions(Vault::findByHashCached($vaultHash), $request, $ingest);
+    }
+
+    /** Human-form suggestions read — same gate as the hash form. */
+    public function vaultSuggestions(string $orgSlug, string $vaultSlug, Request $request, VaultIngest $ingest): JsonResponse
+    {
+        return $this->suggestions(Vault::findBySlugsCached($orgSlug, $vaultSlug), $request, $ingest);
+    }
+
+    private function suggestions(?Vault $vault, Request $request, VaultIngest $ingest): JsonResponse
+    {
+        $probe = $this->links->writeCapabilities($vault, $request->ip(), $this->vaultKey($request));
+
+        if ($probe['status'] !== 200 || ! $vault) {
+            return $this->vaultJson(
+                ['ok' => false, 'error' => $probe['error'] ?? 'Not found or expired'],
+                $probe['status'] === 200 ? 404 : $probe['status'],
+            );
+        }
+        if (! in_array('update', $probe['methods'], true)) {
+            return $this->vaultJson(['ok' => false, 'error' => 'This key may not update resources here.'], 403);
+        }
+
+        $hashes = array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) $request->query('resources', '')),
+        )));
+        if ($hashes === [] || count($hashes) > VaultIngest::MAX_SUGGESTION_RESOURCES) {
+            return $this->vaultJson([
+                'ok' => false,
+                'error' => 'Give 1 to '.VaultIngest::MAX_SUGGESTION_RESOURCES.' resource hashes in `resources`.',
+            ], 400);
+        }
+
+        return $this->vaultJson(['ok' => true, 'suggestions' => (object) $ingest->suggestions($vault, $hashes)]);
+    }
+
     private function dispatchWrite(?Vault $vault, string $method, Request $request, GalleryVaultWriter $writer, AiVaultWriter $aiWriter, VaultIngest $ingest): JsonResponse
     {
         $auth = $this->links->authorizeWrite($vault, $method, $request->ip(), $this->vaultKey($request));
@@ -526,7 +573,9 @@ class VaultNamespaceController extends Controller
             return $aiWriter->ingest($vault, $document, $descriptor, $image);
         }
 
-        return $writer->ingest($vault, $document, $image);
+        // AITY runs only when the consumer asks: it may hold the photographer's
+        // consent for some photographs and not for others.
+        return $writer->ingest($vault, $document, $image, $request->boolean('suggest'));
     }
 
     public function hashEntry(string $vaultHash, string $linkHash, Request $request): StreamedResponse|JsonResponse

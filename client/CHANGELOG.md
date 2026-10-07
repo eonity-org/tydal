@@ -17,6 +17,13 @@ The SDK versions independently of the TYDAL product release documented in
 
 ## [Unreleased]
 
+### Added
+- `suggestions(resources)` — `GET …/w/suggestions`: AITY's proposed title and
+  description for resources the vault ingested (`VaultSuggestions`), for a key
+  that may `update` them. `off` unless the ingest sent `suggest: true`;
+  `pending` while the pipeline runs; nothing is applied until the consumer
+  sends `update`.
+
 ## [1.6.0] — 2026-10-02
 
 ### Added

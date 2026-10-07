@@ -46,6 +46,8 @@ export type {
   VaultPagination,
   VaultWriteResult,
   VaultWriteCapabilities,
+  VaultSuggestion,
+  VaultSuggestions,
 } from './vault.js'
 
 export type { AuthNamespace } from './auth-endpoints.js'

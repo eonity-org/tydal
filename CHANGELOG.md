@@ -6,6 +6,19 @@ All notable changes to TYDAL are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **AITY suggestions at the vault write boundary.** A gallery `ingest` with
+  `suggest: true` runs AITY on the stored photograph — opt-in per photograph,
+  because the consumer may hold the photographer's consent for some and not
+  others. AITY only proposes; what the consumer sent is never changed, and
+  AITY failing never fails the ingest. `GET …/w/suggestions?resources=…`
+  returns the proposed title and description per ingested resource (`off`,
+  `pending`, `done`, `failed`) to a key that may `update`; reading never
+  starts AITY.
+  `@tydal/client` gets `suggestions(resources)`. See
+  `docs/architecture/VAULT_WRITE_METHODS.md` §3.
+
 ## [1.4.1] — 2026-10-06
 
 ### Added
