@@ -15,7 +15,14 @@ The SDK versions independently of the TYDAL product release documented in
 > `1.1.0` tarball) but never released. `1.3.0` is the first release to carry
 > them, so upgrading from `1.0.1` picks up the whole vault write surface.
 
-## [Unreleased]
+## [1.7.0] — 2026-10-08
+
+### Added
+- `suggestions(resources)` — `GET …/w/suggestions`: AITY's proposed title and
+  description for resources the vault ingested (`VaultSuggestions`), for a key
+  that may `update` them. `off` unless the ingest sent `suggest: true`;
+  `pending` while the pipeline runs; nothing is applied until the consumer
+  sends `update`.
 
 ## [1.6.0] — 2026-10-02
 

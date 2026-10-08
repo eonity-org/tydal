@@ -8,6 +8,7 @@ use App\Enums\VaultCapability;
 use App\Models\Collection;
 use App\Models\File;
 use App\Models\Resource;
+use App\Models\SystemFile;
 use App\Models\Vault;
 use App\Models\VaultLink;
 use App\Models\VaultWrite;
@@ -29,6 +30,8 @@ use Illuminate\Validation\ValidationException;
  *   keys naming a resource column (`name`, `description`) are lifted into it,
  *   the rest are stored in `resources.metadata` as given. No AI and no scheme
  *   check touch it — the scheme only decides which keys get indexed/faceted.
+ *   AITY may *propose* values when the consumer asks (`ingest` with `suggest`,
+ *   read back with `suggestions`); only the consumer applies them.
  * - **Provenance.** `update`/`withdraw` act only on resources this vault's
  *   `ingest` created; the `vault_writes` audit is the record.
  */
@@ -40,6 +43,9 @@ class VaultIngest
     private const MAX_KEYS = 50;
 
     private const MAX_VALUE_LENGTH = 5000;
+
+    /** Most resources one `suggestions` read reports on. */
+    public const MAX_SUGGESTION_RESOURCES = 100;
 
     public function __construct(
         private ResourceServiceInterface $resources,
@@ -285,6 +291,73 @@ class VaultIngest
         $this->resources->deleteResource($resource->id);
 
         return ['withdrawn' => $hash];
+    }
+
+    /**
+     * What AITY proposes for resources this vault ingested — the read beside
+     * the write probe (VAULT_WRITE_METHODS.md §5), for a consumer that may
+     * `update` them. Per hash: `status` (`off` when AITY was never asked to
+     * run on it, `pending` while the pipeline runs, `done` once it has
+     * finished — with or without a proposal — or `failed`) and the latest
+     * proposed `name` / `description` (null when none). Reading never starts
+     * AITY: whether a photograph may reach an AI service is the consumer's
+     * call, made at `ingest`. Hashes this vault did not ingest are left out,
+     * like everywhere else on the boundary.
+     *
+     * @param  list<string>  $hashes
+     * @return array<string, array{status: string, name: ?string, description: ?string}>
+     */
+    public function suggestions(Vault $vault, array $hashes): array
+    {
+        $ingested = array_values(array_intersect(array_unique($hashes), $this->ingested($vault)));
+        if ($ingested === []) {
+            return [];
+        }
+
+        $links = VaultLink::where('vault_id', $vault->id)
+            ->whereNull('file_id')
+            ->whereIn('hash', $ingested)
+            ->pluck('resource_id', 'hash');
+
+        $files = File::whereIn('resource_id', $links->values())
+            ->committed()
+            ->where('role', FileRole::CANONICAL)
+            ->with([
+                'latestAiSuggestedNameSystemFileForDisplay',
+                'latestAiSuggestedDescriptionSystemFileForDisplay',
+            ])
+            ->get()
+            ->keyBy('resource_id');
+
+        $report = [];
+        foreach ($links as $hash => $resourceId) {
+            $file = $files->get($resourceId);
+            if (! $file) {
+                continue;
+            }
+
+            $stage = $file->processing_status['stage'] ?? null;
+
+            $report[$hash] = [
+                'status' => match ($stage) {
+                    null => 'off',
+                    'done', 'not_applicable' => 'done',
+                    'failed' => 'failed',
+                    default => 'pending',
+                },
+                'name' => $this->suggested($file->latestAiSuggestedNameSystemFileForDisplay),
+                'description' => $this->suggested($file->latestAiSuggestedDescriptionSystemFileForDisplay),
+            ];
+        }
+
+        return $report;
+    }
+
+    private function suggested(?SystemFile $suggestion): ?string
+    {
+        $value = $suggestion?->metadata['value'] ?? null;
+
+        return is_string($value) && trim($value) !== '' ? trim($value) : null;
     }
 
     private function ingestedResource(Vault $vault, string $hash): Resource

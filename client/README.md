@@ -122,11 +122,19 @@ const { result } = await writer.write('ingest', {
   image,
   metadata: { name: 'Morning at the Pier', author: 'Ana Ruiz', technique: 'Silver gelatin print' },
 })                                                          // ai vaults also send `descriptor`
+// `suggest: true` on a gallery ingest also runs AITY on the photograph (only
+// with the photographer's consent): it proposes a title and a description.
 await writer.write('update', { resource: hash, metadata: { dimensions: '50 × 70 cm' } }) // null removes a key
 await writer.write('withdraw', { resource: hash })         // to TYDAL's trash
 
 // Which ops may this key invoke, and (with w:update/w:withdraw) on what?
 const { methods, ingested } = await writer.writeCapabilities()
+
+// What AITY proposes for ingested photographs (a key that may update them).
+// `off` without `suggest`; `pending` while it runs — poll; apply a proposal
+// yourself with `update`.
+const { suggestions } = await writer.suggestions([hash])
+// → { [hash]: { status: 'off' | 'pending' | 'done' | 'failed', name, description } }
 ```
 
 > `writer.gallery.activate/open/close` still work as thin shims but are

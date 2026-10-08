@@ -4,7 +4,27 @@ All notable changes to TYDAL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.5.0] — 2026-10-08
+
+### Added
+
+- **AITY suggestions at the vault write boundary.** A gallery `ingest` with
+  `suggest: true` runs AITY on the stored photograph — opt-in per photograph,
+  because the consumer may hold the photographer's consent for some and not
+  others. AITY only proposes; what the consumer sent is never changed, and
+  AITY failing never fails the ingest. `GET …/w/suggestions?resources=…`
+  returns the proposed title and description per ingested resource (`off`,
+  `pending`, `done`, `failed`) to a key that may `update`; reading never
+  starts AITY.
+  `@tydal/client` gets `suggestions(resources)`. See
+  `docs/architecture/VAULT_WRITE_METHODS.md` §3.
+
+### Upgrading
+
+No migrations and no new configuration. Suggestions run on the existing AITY
+pipeline, so they need what AITY already needs: a configured LLM driver and a
+queue worker. `@tydal/client` goes to `1.7.0` (`suggestions`);
+`@tydal/org-mcp` and `@tydal/vault-mcp` keep their versions.
 
 ## [1.4.1] — 2026-10-06
 
@@ -642,7 +662,8 @@ layer); as a shipped product it is version 1.0.0.
   [`MIGRATION_V1_V2.md`](docs/planning/MIGRATION_V1_V2.md), CLI guide, and
   OpenAPI 3.0 spec.
 
-[Unreleased]: https://github.com/eonity-org/tydal/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/eonity-org/tydal/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/eonity-org/tydal/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/eonity-org/tydal/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/eonity-org/tydal/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/eonity-org/tydal/compare/v1.2.0...v1.3.0
