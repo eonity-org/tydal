@@ -15,7 +15,7 @@ The SDK versions independently of the TYDAL product release documented in
 > `1.1.0` tarball) but never released. `1.3.0` is the first release to carry
 > them, so upgrading from `1.0.1` picks up the whole vault write surface.
 
-## [Unreleased]
+## [1.7.0] — 2026-10-08
 
 ### Added
 - `suggestions(resources)` — `GET …/w/suggestions`: AITY's proposed title and
