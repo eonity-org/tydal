@@ -3,12 +3,16 @@
 namespace Tests\Feature;
 
 use App\Enums\ResourceState;
+use App\Enums\SystemFilePurpose;
 use App\Enums\VaultPurpose;
 use App\Enums\VaultState;
+use App\Jobs\ExtractFileText;
 use App\Models\Collection;
 use App\Models\CollectionScheme;
+use App\Models\File;
 use App\Models\Organization;
 use App\Models\Resource;
+use App\Models\SystemFile;
 use App\Models\User;
 use App\Models\Vault;
 use App\Models\VaultKey;
@@ -18,6 +22,7 @@ use App\Services\VaultLinkService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -45,6 +50,8 @@ class VaultIngestOpsTest extends TestCase
         parent::setUp();
 
         Storage::fake('public'); // the media-library disk
+        // Ingest starts AITY; its pipeline (Tika, vision) is not under test here.
+        Queue::fake([ExtractFileText::class]);
 
         $this->org = Organization::factory()->create();
         $user = User::factory()->create();
@@ -85,11 +92,12 @@ class VaultIngestOpsTest extends TestCase
     }
 
     /** @param  array<string, mixed>|null  $metadata */
-    private function ingest(?string $key, ?array $metadata = null, ?UploadedFile $image = null): TestResponse
+    private function ingest(?string $key, ?array $metadata = null, ?UploadedFile $image = null, bool $suggest = false): TestResponse
     {
         $headers = $key !== null ? ['X-Vault-Key' => $key] : [];
 
         return $this->post("/h/{$this->vault->hash}/w/ingest", [
+            ...($suggest ? ['suggest' => 'true'] : []),
             'image' => $image ?? UploadedFile::fake()->image('199008_Jane_Doe_K23.jpg', 60, 40),
             'metadata' => json_encode($metadata ?? [
                 'name' => 'Morning at the Pier',
@@ -152,14 +160,6 @@ class VaultIngestOpsTest extends TestCase
             'filename' => 'morning-at-the-pier.jpg',
         ]);
         $this->assertDatabaseMissing('files', ['filename' => '199008_Jane_Doe_K23.jpg']);
-    }
-
-    public function test_ingest_does_not_start_ai_enrichment(): void
-    {
-        $resource = $this->resourceFor($this->ingest($this->writeKey())->json('result.hash'));
-
-        // enrich() stamps a processing stage on the file; nothing touched it.
-        $this->assertNull($resource->files()->firstOrFail()->processing_status);
     }
 
     public function test_gallery_ingest_requires_a_title(): void
@@ -336,5 +336,113 @@ class VaultIngestOpsTest extends TestCase
             ->assertJsonPath('max_upload_bytes', 1024 * 1024);
         $this->getJson("/h/{$this->vault->hash}/w", ['X-Vault-Key' => $this->writeKey(['w:activate'])])
             ->assertJsonMissingPath('max_upload_bytes');
+    }
+
+    // =========================================================================
+    // AITY suggestions
+    // =========================================================================
+
+    private function suggestions(string $key, string $resources): TestResponse
+    {
+        return $this->getJson(
+            "/h/{$this->vault->hash}/w/suggestions?resources={$resources}",
+            ['X-Vault-Key' => $key],
+        );
+    }
+
+    private function canonicalFile(string $hash): File
+    {
+        return File::where('resource_id', $this->resourceFor($hash)->id)->firstOrFail();
+    }
+
+    private function suggest(File $file, SystemFilePurpose $purpose, string $value): void
+    {
+        SystemFile::create([
+            'resource_id' => $file->resource_id,
+            'source_file_id' => $file->id,
+            'purpose' => $purpose->value,
+            'filename' => 'suggestion.json',
+            'mime_type' => 'application/json',
+            'size' => 1,
+            'path' => 'suggestion.json',
+            'disk' => 'public',
+            'metadata' => ['value' => $value],
+            'is_active' => true,
+        ]);
+    }
+
+    public function test_ingest_starts_aity_only_when_asked(): void
+    {
+        $key = $this->writeKey();
+        $plain = $this->ingest($key)->json('result.hash');
+
+        // Without `suggest` the photograph never reaches an AI service.
+        Queue::assertNothingPushed();
+        $this->assertNull($this->canonicalFile($plain)->processing_status);
+
+        $asked = $this->ingest($key, null, null, true)->json('result.hash');
+
+        Queue::assertPushed(ExtractFileText::class, 1);
+        $this->assertSame('queued', $this->canonicalFile($asked)->processing_status['stage']);
+        // AITY only proposes: what the consumer sent stays.
+        $this->assertSame('Morning at the Pier', $this->resourceFor($asked)->name);
+    }
+
+    public function test_suggestions_report_pending_then_the_proposals(): void
+    {
+        $key = $this->writeKey();
+        $hash = $this->ingest($key, null, null, true)->json('result.hash');
+
+        $this->suggestions($key, $hash)
+            ->assertStatus(200)
+            ->assertJsonPath("suggestions.{$hash}", ['status' => 'pending', 'name' => null, 'description' => null]);
+
+        $file = $this->canonicalFile($hash);
+        $this->suggest($file, SystemFilePurpose::AI_SUGGESTED_NAME, 'Pier at dawn');
+        $this->suggest($file, SystemFilePurpose::AI_SUGGESTED_DESCRIPTION, 'A wooden pier stretches into calm water.');
+        $file->updateProcessingStage('done');
+
+        $this->suggestions($key, $hash)
+            ->assertStatus(200)
+            ->assertJsonPath("suggestions.{$hash}", [
+                'status' => 'done',
+                'name' => 'Pier at dawn',
+                'description' => 'A wooden pier stretches into calm water.',
+            ]);
+    }
+
+    public function test_reading_suggestions_never_starts_aity(): void
+    {
+        $key = $this->writeKey();
+        $hash = $this->ingest($key)->json('result.hash');
+
+        $this->suggestions($key, $hash)
+            ->assertStatus(200)
+            ->assertJsonPath("suggestions.{$hash}", ['status' => 'off', 'name' => null, 'description' => null]);
+
+        Queue::assertNothingPushed();
+        $this->assertNull($this->canonicalFile($hash)->processing_status);
+    }
+
+    public function test_suggestions_only_cover_what_this_vault_ingested_for_a_key_that_may_update(): void
+    {
+        $key = $this->writeKey();
+        $hash = $this->ingest($key)->json('result.hash');
+
+        // Unknown hashes are left out, not refused.
+        $this->suggestions($key, "{$hash},nope")
+            ->assertStatus(200)
+            ->assertJsonCount(1, 'suggestions')
+            ->assertJsonMissingPath('suggestions.nope');
+
+        $this->suggestions($this->writeKey(['w:ingest']), $hash)->assertStatus(403);
+        $this->getJson("/h/{$this->vault->hash}/w/suggestions?resources={$hash}")->assertStatus(403);
+        $this->suggestions($key, '')->assertStatus(400);
+
+        // The human form reaches the same read.
+        $this->getJson(
+            "/v/{$this->org->slug}/show/w/suggestions?resources={$hash}",
+            ['X-Vault-Key' => $key],
+        )->assertStatus(200)->assertJsonPath("suggestions.{$hash}.status", 'off');
     }
 }

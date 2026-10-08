@@ -117,7 +117,8 @@ writer decides only **which files an `ingest` carries and how they're stored**.
   resource column (`name`, `description`) are **lifted** onto the resource;
   every other key is stored in `resources.metadata` **as given**. Values are
   text, numbers or booleans (≤ 50 keys, ≤ 5000 chars; `name` ≤ 255); keys are
-  `lower_snake_case`. No AI and no scheme check rewrites it — the collection's
+  `lower_snake_case`. No AI and no scheme check rewrites it (AITY only
+  *proposes* values — see **Suggestions** below) — the collection's
   scheme only decides which keys are indexed, faceted and shown on vault cards
   (undeclared keys are still returned by `…/meta`). Each fact lives once: the
   title is the resource's `name`, never also a metadata copy.
@@ -134,7 +135,13 @@ writer decides only **which files an `ingest` carries and how they're stored**.
     formulae, stored as the canonical `descriptor.json`). `name` is optional;
     provenance such as `source_hash` is just metadata. A companion `delivery`
     vault over the target workspace then exports the JSON to a renderer.
-  - No AI enrichment runs on ingested content.
+  - `gallery` runs AITY on the stored photograph when the ingest carries
+    `suggest: true` (2026-10-07) — opt-in per photograph, because the consumer
+    may hold the photographer's consent to AI processing for some photographs
+    and not others; without it the photograph never reaches an AI service.
+    `ai` never does — its content already comes from an external AI. AITY
+    never changes what the consumer sent: it only proposes, and a failure to
+    start it never fails the `ingest`.
 - **Size limit.** An `ingest` file larger than `MAX_MEDIA_FILE_SIZE` (bounded by
   PHP's `upload_max_filesize`/`post_max_size`) is refused with a 400 naming both
   sizes; the probe reports the limit as `max_upload_bytes` to keys holding
@@ -152,6 +159,18 @@ writer decides only **which files an `ingest` carries and how they're stored**.
   (`GET …/w`) lists them as `ingested` when the key holds `w:update` or
   `w:withdraw`, so a consumer offers those actions on the right items with no
   bookkeeping of its own.
+
+- **Suggestions** (2026-10-07) — `GET …/w/suggestions?resources=h1,h2` (≤ 100
+  hashes), for a key that may `update`: whoever can apply a proposal may see
+  it. A read beside the probe, not a write — not audited, throttled 60/min, so
+  a consumer polls it while AITY runs. Per ingested hash:
+  `{ status: off | pending | done | failed, name, description }` — the latest
+  AITY title/description proposals (null when none); `off` when it was
+  ingested without `suggest`. Reading never starts AITY. Hashes the vault
+  didn't ingest are left out. Proposals live where every AITY suggestion lives (`system_files`); the
+  consumer applies one by sending it in an `update`, and nothing on TYDAL's
+  side records that choice (the suggestion store stays deferred). FullFrame
+  offers them beside the title and description in its curator's edit form.
 
 A new purpose that takes content only defines its file composition; the target,
 the metadata document, `update`, `withdraw` and provenance come with it.
@@ -201,6 +220,10 @@ POST /h/{vaultHash}/w/{method}
   400 { "ok": false, "error": "…" }   malformed body / unknown ref
   403 { "ok": false, "error": "…" }   key lacks ability, or method not in purpose
   404                                  vault not found / disabled (indistinguishable)
+
+GET /h/{vaultHash}/w                    write probe — methods, ingested, limits
+GET /h/{vaultHash}/w/suggestions        AITY proposals for ingested resources (§3)
+  (and /v/{org}/{vault}/w, /v/{org}/{vault}/w/suggestions — same gate)
 ```
 
 Lives beside the existing machine surface in `VaultNamespaceController`

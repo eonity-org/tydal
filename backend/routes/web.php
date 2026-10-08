@@ -58,6 +58,13 @@ Route::get('/h/{vaultHash}/w', [VaultNamespaceController::class, 'hashVaultWrite
     ->middleware('throttle:30,1')
     ->name('h.vault.write.info');
 
+// AITY's proposals for ingested resources — a read beside the write probe,
+// gated by a key that may `update`. Polled while the pipeline runs, hence the
+// looser throttle.
+Route::get('/h/{vaultHash}/w/suggestions', [VaultNamespaceController::class, 'hashVaultSuggestions'])
+    ->middleware('throttle:60,1')
+    ->name('h.vault.write.suggestions');
+
 Route::get('/h/{vaultHash}/{linkHash}', [VaultNamespaceController::class, 'hashEntry'])
     ->name('h.serve');
 
@@ -93,6 +100,11 @@ Route::prefix('v/{orgSlug}/{vaultSlug}')
         Route::get('/w', 'vaultWriteInfo')
             ->middleware('throttle:30,1')
             ->name('v.write.info');
+
+        // Before {resourceSlug}/{fileSlug}, which would read it as a file.
+        Route::get('/w/suggestions', 'vaultSuggestions')
+            ->middleware('throttle:60,1')
+            ->name('v.write.suggestions');
 
         Route::get('/{resourceSlug}', 'resourceEntry')->name('v.resource');
 

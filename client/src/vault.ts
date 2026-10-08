@@ -268,6 +268,25 @@ export interface VaultWriteCapabilities {
   organization?: { id: string; slug: string; name: string }
 }
 
+/**
+ * What AITY proposes for one ingested resource (`GET …/w/suggestions`):
+ * `off` when it was ingested without `suggest: true` (AITY never ran),
+ * `pending` while its pipeline runs, `done` once finished (with or without a
+ * proposal), `failed` if it broke. A proposal is never applied by TYDAL — the
+ * consumer applies it, or not, with `write('update', …)`.
+ */
+export interface VaultSuggestion {
+  status: 'off' | 'pending' | 'done' | 'failed'
+  name: string | null
+  description: string | null
+}
+
+/** The suggestions read: one entry per requested hash this vault ingested. */
+export interface VaultSuggestions {
+  ok: boolean
+  suggestions: Record<string, VaultSuggestion>
+}
+
 export interface VaultWriteResult {
   ok: boolean
   result?: unknown
@@ -359,6 +378,13 @@ export interface VaultConsumer {
    * vault 404s — the same opacity a real write has.
    */
   writeCapabilities(): Promise<VaultWriteCapabilities>
+  /**
+   * AITY's proposed title and description for resources this vault ingested
+   * (`GET /w/suggestions`, at most 100 hashes). Needs a key that may `update`
+   * them; hashes the vault didn't ingest are left out. AITY runs only on what
+   * was ingested with `suggest: true`; poll a `pending` one until `done`.
+   */
+  suggestions(resources: string[]): Promise<VaultSuggestions>
   /**
    * @deprecated Per-purpose sugar is retired in favor of the generic
    * `write(op, payload)` — `write('activate', { resources })` / `write('open')` /
@@ -538,6 +564,9 @@ export function createVaultConsumer(config: VaultConsumerConfig): VaultConsumer 
     write: (method, body) => write(method, body),
 
     writeCapabilities: () => get<VaultWriteCapabilities>('/w'),
+
+    suggestions: (resources) =>
+      get<VaultSuggestions>('/w/suggestions', { resources: resources.join(',') }),
 
     gallery: {
       activate: (linkHashes) => write('activate', { resources: linkHashes }),

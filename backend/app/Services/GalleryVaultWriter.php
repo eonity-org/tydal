@@ -13,6 +13,7 @@ use App\Models\Workspace;
 use App\Services\Interfaces\ResourceServiceInterface;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -33,6 +34,7 @@ class GalleryVaultWriter
         private ResourceServiceInterface $resources,
         private VaultLinkService $links,
         private VaultIngest $ingest,
+        private AityEnrichmentService $aity,
     ) {}
 
     /**
@@ -41,8 +43,12 @@ class GalleryVaultWriter
      * preview. The metadata document is already split by VaultIngest; the
      * gallery requires `name` (the author owns the title). The stored filename
      * is derived from it, so the uploader's filename (often a person's name)
-     * never reaches TYDAL. Nothing here rewrites what the consumer sent — no AI
-     * enrichment runs on it.
+     * never reaches TYDAL. Nothing here rewrites what the consumer sent. With
+     * `$suggest` (the consumer holds the photographer's consent to it), AITY
+     * runs on the stored photograph, but only *proposes* a title and a
+     * description, which the consumer reads back through `suggestions`
+     * (VaultIngest::suggestions) and applies, or not, with `update`. Without
+     * it, the photograph never reaches an AI service.
      *
      * Refused when the target workspace isn't projected by this vault — the
      * photo would be written but never shown (e.g. after an `activate`, whose
@@ -51,7 +57,7 @@ class GalleryVaultWriter
      * @param  array{columns: array<string, string|null>, metadata: array<string, scalar|null>}  $document
      * @return array{hash: string, name: string}
      */
-    public function ingest(Vault $vault, array $document, UploadedFile $image): array
+    public function ingest(Vault $vault, array $document, UploadedFile $image, bool $suggest = false): array
     {
         $name = $document['columns']['name'] ?? null;
         if ($name === null) {
@@ -76,7 +82,7 @@ class GalleryVaultWriter
             ]);
         }
 
-        return DB::transaction(function () use ($vault, $document, $name, $image, $workspace, $collection): array {
+        [$summary, $file] = DB::transaction(function () use ($vault, $document, $name, $image, $workspace, $collection): array {
             $metadata = array_filter($document['metadata'], fn ($v) => $v !== null);
 
             $resource = $this->resources->createResource([
@@ -94,7 +100,7 @@ class GalleryVaultWriter
             $stem = Str::slug($name) ?: 'photograph';
 
             // Images are their own snapshot (the preview every card shows).
-            $this->ingest->attachFile(
+            $file = $this->ingest->attachFile(
                 $resource,
                 (string) $image->getRealPath(),
                 "{$stem}.{$extension}",
@@ -111,8 +117,23 @@ class GalleryVaultWriter
 
             $link = $this->links->getOrCreateLink($vault, null, $resource->id, null);
 
-            return ['hash' => $link->hash, 'name' => $name];
+            return [['hash' => $link->hash, 'name' => $name], $file];
         });
+
+        if (! $suggest) {
+            return $summary;
+        }
+
+        // After the commit, so the queued jobs find the rows. The photograph is
+        // stored either way: AITY failing (e.g. on a sync queue) must not turn
+        // a done ingest into an error the consumer would retry into a duplicate.
+        try {
+            $this->aity->enrich($file);
+        } catch (\Throwable $e) {
+            Log::warning('Vault ingest: AITY could not start', ['file_id' => $file->id, 'error' => $e->getMessage()]);
+        }
+
+        return $summary;
     }
 
     /**
