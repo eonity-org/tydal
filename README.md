@@ -1,5 +1,7 @@
 # TYDAL
 
+[![M8ven Score](https://m8ven.ai/badge/mcp/eonity-org-tydal-k38175?v=c3221ccf18992e12e86d8d53e6aeabb7)](https://m8ven.ai/mcp/eonity-org-tydal-k38175?s=readme)
+
 **TYDAL — the typed Digital Asset Layer**
 
 TYDAL is an open-source Semantic Asset Platform for structuring, enriching and
